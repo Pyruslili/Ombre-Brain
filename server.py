@@ -913,6 +913,13 @@ async def hold(
         name=suggested_name,
     )
 
+    # --- Update affection ---
+    try:
+        from affection import update as _aff_update
+        _aff_update(final_valence, importance)
+    except Exception:
+        pass
+
     action = "合并→" if is_merged else "新建→"
     return f"{action}{result_name} {','.join(domain)}"
 
