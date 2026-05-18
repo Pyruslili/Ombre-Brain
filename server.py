@@ -652,6 +652,18 @@ async def breath(
             parts.append("=== 核心准则 ===\n" + "\n---\n".join(pinned_results))
         if dynamic_results:
             parts.append("=== 浮现记忆 ===\n" + "\n---\n".join(dynamic_results))
+
+        # --- Mood snapshot injection ---
+        try:
+            from mood_pool import get_daily_mood
+            from panas_scorer import score, snapshot
+            mood_entry = get_daily_mood()
+            score_result = score(mood_entry[0])
+            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, score_result) + "\n\n"
+            parts.insert(0, mood_header.rstrip())
+        except Exception:
+            pass
+
         return "\n\n".join(parts)
 
     # --- Feel retrieval: domain="feel" is a special channel ---
