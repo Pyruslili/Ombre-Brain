@@ -30,3 +30,13 @@ def snapshot(mood_entry: tuple, score_result: dict) -> str:
         f"装饰心情：{event} — {mood_label}\n"
         f"近期高唤醒词：{score_result['matched_word']}"
     )
+def score_from_memory(content: str, valence: float = -1, arousal: float = -1) -> dict:
+    """从记忆内容自动评分，用户传入的valence/arousal优先"""
+    result = score(content)
+    if 0 <= valence <= 1:
+        result["valence"] = valence
+        result["PA"] = round(valence, 2)
+        result["NA"] = round(-(1 - valence) * 0.5, 2)
+    if 0 <= arousal <= 1:
+        result["arousal"] = arousal
+    return result
