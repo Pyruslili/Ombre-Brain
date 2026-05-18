@@ -668,7 +668,10 @@ async def breath(
                 base_score["PA"] = live.get("PA", base_score["PA"])
                 base_score["NA"] = live.get("NA", base_score["NA"])
                 base_score["matched_word"] = live.get("matched_word", base_score["matched_word"])
-            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, base_score) + "\n\n"
+            from affection import load as _aff_load, describe as _aff_desc
+            aff_level = _aff_load()
+            aff_text = f"对她的在意程度：{_aff_desc(aff_level)}（{aff_level}）"
+            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, base_score) + "\n" + aff_text + "\n\n"
             parts.insert(0, mood_header.rstrip())
         except Exception:
             pass
