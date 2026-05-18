@@ -657,9 +657,18 @@ async def breath(
         try:
             from mood_pool import get_daily_mood
             from panas_scorer import score, snapshot
+            import json as _json, os as _os
             mood_entry = get_daily_mood()
-            score_result = score(mood_entry[0])
-            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, score_result) + "\n\n"
+            base_score = score(mood_entry[0])
+            # 读取最新feel评分覆盖底色
+            mood_path = "/app/buckets/current_mood.json"
+            if _os.path.exists(mood_path):
+                with open(mood_path) as _f:
+                    live = _json.load(_f)
+                base_score["PA"] = live.get("PA", base_score["PA"])
+                base_score["NA"] = live.get("NA", base_score["NA"])
+                base_score["matched_word"] = live.get("matched_word", base_score["matched_word"])
+            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, base_score) + "\n\n"
             parts.insert(0, mood_header.rstrip())
         except Exception:
             pass
@@ -830,6 +839,16 @@ async def hold(
             pass
         # --- Mark source memory as digested + store model's valence perspective ---
         # --- 标记源记忆为已消化 + 存储模型视角的 valence ---
+        # --- Auto mood scoring on feel ---
+    try:
+        from panas_scorer import score_from_memory
+        import json as _json
+        mood_result = score_from_memory(content, feel_valence, feel_arousal)
+        mood_path = "/app/buckets/current_mood.json"
+        with open(mood_path, "w") as _f:
+            _json.dump(mood_result, _f)
+    except Exception:
+        pass
         if source_bucket and source_bucket.strip():
             try:
                 update_kwargs = {"digested": True}
