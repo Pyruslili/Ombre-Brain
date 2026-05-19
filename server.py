@@ -851,16 +851,16 @@ async def hold(
         with open(mood_path, "w") as _f:
             _json.dump(mood_result, _f)
     except Exception:
-            pass
-        if source_bucket and source_bucket.strip():
-            try:
-                update_kwargs = {"digested": True}
-                if 0 <= valence <= 1:
-                    update_kwargs["model_valence"] = feel_valence
-                await bucket_mgr.update(source_bucket.strip(), **update_kwargs)
-            except Exception as e:
-                logger.warning(f"Failed to mark source as digested / 标记已消化失败: {e}")
-        return f"🫧feel→{bucket_id}"
+        pass
+    if source_bucket and source_bucket.strip():
+        try:
+            update_kwargs = {"digested": True}
+            if 0 <= valence <= 1:
+                update_kwargs["model_valence"] = feel_valence
+            await bucket_mgr.update(source_bucket.strip(), **update_kwargs)
+        except Exception as e:
+            logger.warning(f"Failed to mark source as digested / 标记已消化失败: {e}")
+    return f"🫧feel→{bucket_id}"
 
     # --- Step 1: auto-tagging / 自动打标 ---
     try:
