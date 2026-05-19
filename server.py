@@ -302,6 +302,26 @@ async def root_redirect(request):
     return RedirectResponse(url="/dashboard")
 
 
+@mcp.custom_route("/mood", methods=["GET"])
+async def mood_endpoint(request):
+    import json, os
+    from starlette.responses import JSONResponse
+    data = {}
+    try:
+        mood_path = "/app/buckets/current_mood.json"
+        if os.path.exists(mood_path):
+            with open(mood_path) as f:
+                data["mood"] = json.load(f)
+    except Exception:
+        pass
+    try:
+        aff_path = "/app/buckets/affection.json"
+        if os.path.exists(aff_path):
+            with open(aff_path) as f:
+                data["affection"] = json.load(f)
+    except Exception:
+        pass
+    return JSONResponse(data)
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request):
     from starlette.responses import JSONResponse
