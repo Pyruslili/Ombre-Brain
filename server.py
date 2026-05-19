@@ -843,24 +843,24 @@ async def hold(
         # --- Mark source memory as digested + store model's valence perspective ---
         # --- 标记源记忆为已消化 + 存储模型视角的 valence ---
         # --- Auto mood scoring on feel ---
-    try:
-        from panas_scorer import score_from_memory
-        import json as _json
-        mood_result = score_from_memory(content, feel_valence, feel_arousal)
-        mood_path = "/app/buckets/current_mood.json"
-        with open(mood_path, "w") as _f:
-            _json.dump(mood_result, _f)
-    except Exception:
-        pass
-    if source_bucket and source_bucket.strip():
         try:
-            update_kwargs = {"digested": True}
-            if 0 <= valence <= 1:
-                update_kwargs["model_valence"] = feel_valence
-            await bucket_mgr.update(source_bucket.strip(), **update_kwargs)
-        except Exception as e:
-            logger.warning(f"Failed to mark source as digested / 标记已消化失败: {e}")
-    return f"🫧feel→{bucket_id}"
+            from panas_scorer import score_from_memory
+            import json as _json
+            mood_result = score_from_memory(content, feel_valence, feel_arousal)
+            mood_path = "/app/buckets/current_mood.json"
+            with open(mood_path, "w") as _f:
+                _json.dump(mood_result, _f)
+        except Exception:
+            pass
+        if source_bucket and source_bucket.strip():
+            try:
+                update_kwargs = {"digested": True}
+                if 0 <= valence <= 1:
+                    update_kwargs["model_valence"] = feel_valence
+                await bucket_mgr.update(source_bucket.strip(), **update_kwargs)
+            except Exception as e:
+                logger.warning(f"Failed to mark source as digested / 标记已消化失败: {e}")
+        return f"🫧feel→{bucket_id}"
 
     # --- Step 1: auto-tagging / 自动打标 ---
     try:
