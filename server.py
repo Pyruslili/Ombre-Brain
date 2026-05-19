@@ -851,8 +851,8 @@ async def hold(
         with open(mood_path, "w") as _f:
             _json.dump(mood_result, _f)
     except Exception:
-    pass
-    if source_bucket and source_bucket.strip():
+            pass
+        if source_bucket and source_bucket.strip():
             try:
                 update_kwargs = {"digested": True}
                 if 0 <= valence <= 1:
