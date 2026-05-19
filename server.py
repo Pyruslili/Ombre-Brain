@@ -526,6 +526,14 @@ async def breath(
 ) -> str:
     """检索/浮现记忆。不传query或传空=自动浮现,有query=关键词检索。max_tokens控制返回总token上限(默认10000)。domain逗号分隔,valence/arousal 0~1(-1忽略)。max_results控制返回数量上限(默认20,最大50)。importance_min>=1时按重要度批量拉取(不走语义搜索,按importance降序返回最多20条)。"""
     await decay_engine.ensure_started()
+    # --- Restore affection from bucket on first breath ---
+    try:
+        from affection import restore_from_bucket as _aff_restore
+        import os as _os
+        if not _os.path.exists("/app/buckets/affection.json"):
+            await _aff_restore(bucket_mgr)
+    except Exception:
+        pass
     max_results = min(max_results, 50)
     max_tokens = min(max_tokens, 20000)
 
@@ -939,7 +947,7 @@ async def hold(
     # --- Update affection ---
     try:
         from affection import update as _aff_update
-        _aff_update(final_valence, importance)
+        _aff_update(final_valence, importance, bucket_mgr)
     except Exception:
         pass
 
