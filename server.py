@@ -321,7 +321,7 @@ async def mood_endpoint(request):
                 data["affection"] = json.load(f)
     except Exception:
         pass
-    return JSONResponse(data)
+    return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request):
     from starlette.responses import JSONResponse
