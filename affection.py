@@ -82,3 +82,44 @@ def describe(level: float) -> str:
         return "有些距离"
     else:
         return "淡"
+        
+import json, os
+
+MOOD_PATH = "/app/buckets/current_mood.json"
+MOOD_BUCKET_TAG = "current_mood_state"
+
+async def persist_mood_to_bucket(mood_result: dict, bucket_mgr):
+    try:
+        all_buckets = await bucket_mgr.list_all(include_archive=False)
+        existing = [b for b in all_buckets if MOOD_BUCKET_TAG in b["metadata"].get("tags", [])]
+        content = json.dumps(mood_result, ensure_ascii=False)
+        if existing:
+            await bucket_mgr.update(existing[0]["id"], content=content)
+        else:
+            await bucket_mgr.create(
+                content=content,
+                tags=[MOOD_BUCKET_TAG],
+                importance=10,
+                domain=["系统"],
+                valence=mood_result.get("valence", 0.5),
+                arousal=mood_result.get("arousal", 0.3),
+                name="current_mood_state",
+                bucket_type="permanent",
+                pinned=True,
+            )
+    except Exception:
+        pass
+
+async def restore_mood_from_bucket(bucket_mgr):
+    try:
+        all_buckets = await bucket_mgr.list_all(include_archive=False)
+        existing = [b for b in all_buckets if MOOD_BUCKET_TAG in b["metadata"].get("tags", [])]
+        if existing:
+            mood = json.loads(existing[0]["content"])
+            os.makedirs(os.path.dirname(MOOD_PATH), exist_ok=True)
+            with open(MOOD_PATH, "w") as f:
+                json.dump(mood, f)
+            return mood
+    except Exception:
+        pass
+    return None
