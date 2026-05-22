@@ -526,12 +526,14 @@ async def breath(
 ) -> str:
     """检索/浮现记忆。不传query或传空=自动浮现,有query=关键词检索。max_tokens控制返回总token上限(默认10000)。domain逗号分隔,valence/arousal 0~1(-1忽略)。max_results控制返回数量上限(默认20,最大50)。importance_min>=1时按重要度批量拉取(不走语义搜索,按importance降序返回最多20条)。"""
     await decay_engine.ensure_started()
-    # --- Restore affection from bucket on first breath ---
+    # --- Restore affection and mood from bucket on first breath ---
     try:
-        from affection import restore_from_bucket as _aff_restore
+        from affection import restore_from_bucket as _aff_restore, restore_mood_from_bucket as _mood_restore
         import os as _os
         if not _os.path.exists("/app/buckets/affection.json"):
             await _aff_restore(bucket_mgr)
+        if not _os.path.exists("/app/buckets/current_mood.json"):
+            await _mood_restore(bucket_mgr)
     except Exception:
         pass
     max_results = min(max_results, 50)
@@ -873,11 +875,13 @@ async def hold(
         # --- Auto mood scoring on feel ---
         try:
             from panas_scorer import score_from_memory
-            import json as _json
+            import json as _json, asyncio as _asyncio
+            from affection import persist_mood_to_bucket
             mood_result = score_from_memory(content, feel_valence, feel_arousal)
             mood_path = "/app/buckets/current_mood.json"
             with open(mood_path, "w") as _f:
                 _json.dump(mood_result, _f)
+            _asyncio.ensure_future(persist_mood_to_bucket(mood_result, bucket_mgr))
         except Exception:
             pass
         if source_bucket and source_bucket.strip():
