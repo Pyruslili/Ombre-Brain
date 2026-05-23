@@ -1320,7 +1320,36 @@ async def dream() -> str:
         except Exception as e:
             logger.warning(f"Dream crystallization hint failed: {e}")
 
-    final_text = header + "\n---\n".join(parts) + connection_hint + crystal_hint
+    # --- DeepSeek dream generation ---
+    dream_text = ""
+    try:
+        import httpx as _httpx, os as _os
+        _api_key = _os.environ.get("DEEPSEEK_API_KEY", "")
+        if _api_key and parts:
+            _fragments = "\n---\n".join(parts[:6])
+            _prompt = (
+                "以下是一些记忆碎片。把它们打散、重新组合，用第一人称写一段梦境。\n"
+                "梦的特征：非线性、意象化、情感驱动。不要解释，不要总结，不要问题清单。\n"
+                "直接写梦里发生的事——画面、感觉、对话片段、不合逻辑的跳跃。150字以内。\n\n"
+                f"记忆碎片：\n{_fragments}"
+            )
+            async with _httpx.AsyncClient(timeout=15) as _client:
+                _resp = await _client.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {_api_key}"},
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": [{"role": "user", "content": _prompt}],
+                        "max_tokens": 300,
+                        "temperature": 0.9,
+                    }
+                )
+                _data = _resp.json()
+                dream_text = _data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        pass
+
+    final_text = header + (f"{dream_text}\n\n---\n" if dream_text else "") + "\n---\n".join(parts) + connection_hint + crystal_hint
     await _fire_webhook("dream", {"recent": len(recent), "chars": len(final_text)})
     return final_text
 
