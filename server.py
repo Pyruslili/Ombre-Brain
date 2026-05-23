@@ -322,6 +322,23 @@ async def mood_endpoint(request):
     except Exception:
         pass
     return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
+@mcp.custom_route("/dream_latest", methods=["GET"])
+async def dream_latest_endpoint(request):
+    import json, os
+    from starlette.responses import JSONResponse
+    try:
+        dream_path = "/app/buckets/latest_dream.json"
+        if os.path.exists(dream_path):
+            with open(dream_path) as f:
+                data = json.load(f)
+            return JSONResponse({
+                "dream": data.get("dream", ""),
+                "ts": data.get("ts", 0),
+                "fragments": []
+            }, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception:
+        pass
+    return JSONResponse({"dream": "", "ts": 0, "fragments": []}, headers={"Access-Control-Allow-Origin": "*"})    
 @mcp.custom_route("/recent_moods", methods=["GET"])
 async def recent_moods_endpoint(request):
     from starlette.responses import JSONResponse
@@ -334,11 +351,16 @@ async def recent_moods_endpoint(request):
         recent = normal[:10]
         result = []
         for b in recent:
+            v = float(b["metadata"].get("valence", 0.5))
+            a = float(b["metadata"].get("arousal", 0.3))
             result.append({
                 "id": b["id"],
-                "content": b["content"][:100],
-                "valence": b["metadata"].get("valence", 0.5),
-                "arousal": b["metadata"].get("arousal", 0.3),
+                "content": b["content"][:80],
+                "valence": v,
+                "arousal": a,
+                "PA": round(v, 2),
+                "NA": round(-(1 - v) * 0.5, 2),
+                "affection": 0.5,
                 "created": b["metadata"].get("created", ""),
                 "importance": b["metadata"].get("importance", 5),
             })
