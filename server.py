@@ -1254,15 +1254,8 @@ async def dream() -> str:
         )
 
     header = (
-        "=== Dreaming ===\n"
-        "以下是你最近的记忆。用第一人称想：\n"
-        "- 这些东西里有什么在你这里留下了重量？\n"
-        "- 有什么还没想清楚？\n"
-        "- 有什么可以放下了？\n"
-        "想完之后：值得放下的用 trace(bucket_id, resolved=1)；\n"
-        "有沉淀的用 hold(content=\"...\", feel=True, source_bucket=\"bucket_id\", valence=你的感受) 写下来。\n"
-        "valence 是你对这段记忆的感受，不是事件本身的情绪。\n"
-        "没有沉淀就不写，不强迫产出。\n"
+        "=== 梦境 ===\n"
+        "以下是你最近的记忆碎片。\n"
     )
 
     # --- Connection hint: find most similar pair via embeddings ---
