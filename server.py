@@ -322,6 +322,53 @@ async def mood_endpoint(request):
     except Exception:
         pass
     return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
+@mcp.custom_route("/recent_moods", methods=["GET"])
+async def recent_moods_endpoint(request):
+    from starlette.responses import JSONResponse
+    try:
+        all_buckets = await bucket_mgr.list_all(include_archive=False)
+        normal = [b for b in all_buckets 
+                  if b["metadata"].get("type") not in ("feel", "permanent")
+                  and not b["metadata"].get("pinned")]
+        normal.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
+        recent = normal[:10]
+        result = []
+        for b in recent:
+            result.append({
+                "id": b["id"],
+                "content": b["content"][:100],
+                "valence": b["metadata"].get("valence", 0.5),
+                "arousal": b["metadata"].get("arousal", 0.3),
+                "created": b["metadata"].get("created", ""),
+                "importance": b["metadata"].get("importance", 5),
+            })
+        return JSONResponse(result, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, headers={"Access-Control-Allow-Origin": "*"})
+@mcp.custom_route("/density", methods=["GET"])
+async def density_endpoint(request):
+    from starlette.responses import JSONResponse
+    from collections import defaultdict
+    import datetime
+    try:
+        days = int(request.query_params.get("days", 30))
+        all_buckets = await bucket_mgr.list_all(include_archive=True)
+        counts = defaultdict(int)
+        cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
+        for b in all_buckets:
+            created_str = b["metadata"].get("created", "")
+            if not created_str:
+                continue
+            try:
+                dt = datetime.datetime.fromisoformat(created_str[:19])
+                if dt >= cutoff:
+                    day = dt.strftime("%Y-%m-%d")
+                    counts[day] += 1
+            except Exception:
+                continue
+        return JSONResponse(dict(counts), headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, headers={"Access-Control-Allow-Origin": "*"})    
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request):
     from starlette.responses import JSONResponse
@@ -1349,6 +1396,13 @@ async def dream() -> str:
     except Exception:
         pass
 
+    if dream_text:
+        try:
+            import json as _j, time as _t
+            with open("/app/buckets/latest_dream.json", "w") as _f:
+                _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
+        except Exception:
+            pass
     final_text = header + (f"{dream_text}\n\n---\n" if dream_text else "") + "\n---\n".join(parts) + connection_hint + crystal_hint
     await _fire_webhook("dream", {"recent": len(recent), "chars": len(final_text)})
     return final_text
