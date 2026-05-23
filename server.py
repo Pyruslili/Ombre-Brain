@@ -322,7 +322,7 @@ async def mood_endpoint(request):
     except Exception:
         pass
     return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
-@mcp.custom_route("/dream_latest", methods=["GET"])
+@mcp.custom_route("/dream", methods=["GET"])
 async def dream_latest_endpoint(request):
     import json, os
     from starlette.responses import JSONResponse
