@@ -1431,6 +1431,13 @@ async def dream() -> str:
                 _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
         except Exception:
             pass        
+    if dream_text:
+        try:
+            import json as _j, time as _t
+            with open("/app/buckets/latest_dream.json", "w") as _f:
+                _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
+        except Exception:
+            pass
     final_text = header + (f"{dream_text}\n\n---\n" if dream_text else "") + "\n---\n".join(parts) + connection_hint + crystal_hint
     await _fire_webhook("dream", {"recent": len(recent), "chars": len(final_text)})
     return final_text
