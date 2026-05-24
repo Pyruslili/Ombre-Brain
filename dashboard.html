@@ -1230,7 +1230,6 @@ a { color: var(--accent-deep); text-decoration: none; }
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem('nocturne_theme', theme);
-  // toggle icon: 当前是sakura，按钮显示月亮（点击切到夜曲）；当前是nocturne，按钮显示太阳
   const sun = document.getElementById('theme-icon-sun');
   const moon = document.getElementById('theme-icon-moon');
   if (sun && moon) {
@@ -1238,7 +1237,7 @@ function applyTheme(theme) {
     moon.style.display = theme === 'sakura' ? 'block' : 'none';
   }
   startParticles(theme);
-  if (typeof networkData !== 'undefined' && networkData) {
+  if (window.networkData) {
     setTimeout(() => loadNetwork(), 50);
   }
 }
@@ -1797,7 +1796,6 @@ function closeDetail() {
 /* ============================================================
    Network View
    ============================================================ */
-let networkData = null;
 async function loadNetwork() {
   const canvas2 = document.getElementById('network-canvas');
   const ctx = canvas2.getContext('2d');
@@ -1819,8 +1817,8 @@ async function loadNetwork() {
 
   try {
     const res = await fetch(BASE + '/api/network');
-    networkData = await res.json();
-    drawNetwork(ctx, W, H, networkData, isDark, bgColor, labelColor);
+    window.networkData = await res.json();
+    drawNetwork(ctx, W, H, window.networkData, isDark, bgColor, labelColor);
   } catch(e) { ctx.fillText('加载失败: ' + e.message, W/2, H/2 + 24); }
 }
 
