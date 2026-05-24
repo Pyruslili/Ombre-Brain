@@ -1224,6 +1224,8 @@ a { color: var(--accent-deep); text-decoration: none; }
 <div class="toast-msg" id="toast"></div>
 
 <script>
+const BASE = location.origin;
+
 /* ============================================================
    Theme System
    ============================================================ */
@@ -1631,7 +1633,6 @@ async function authFetch(url, options) {
 /* ============================================================
    Main Logic
    ============================================================ */
-const BASE = location.origin;
 let allBuckets = [];
 let currentFilter = 'all';
 
