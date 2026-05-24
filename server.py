@@ -1324,7 +1324,6 @@ async def dream() -> str:
 
     header = (
         "=== 梦境 ===\n"
-        "以下是你最近的记忆碎片。\n"
     )
 
     # --- Connection hint: find most similar pair via embeddings ---
