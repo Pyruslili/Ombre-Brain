@@ -1187,12 +1187,12 @@ a { color: var(--accent-deep); text-decoration: none; }
     <p class="sub" id="auth-subtitle">验证身份</p>
     <div id="auth-setup-form" style="display:none;">
       <p style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;font-family:'Shippori Mincho',serif;">首次使用，请设置访问密码</p>
-      <input type="password" id="auth-setup-pwd" placeholder="设置密码（至少6位）">
-      <input type="password" id="auth-setup-pwd2" placeholder="确认密码" onkeydown="if(event.key==='Enter')doSetup()">
+      <input type="password" id="auth-setup-pwd" placeholder="设置密码（至少6位）" autocomplete="new-password">
+      <input type="password" id="auth-setup-pwd2" placeholder="确认密码" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetup()">
       <button class="btn-primary" onclick="doSetup()">设置并进入</button>
     </div>
-    <div id="auth-login-form" style="display:none;">
-      <input type="password" id="auth-login-pwd" placeholder="输入访问密码" onkeydown="if(event.key==='Enter')doLogin()">
+    <div id="auth-login-form">
+      <input type="password" id="auth-login-pwd" placeholder="输入访问密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       <button class="btn-primary" onclick="doLogin()">登录</button>
     </div>
     <div id="auth-error" style="color:var(--negative);font-size:0.72rem;margin-top:0.7rem;display:none;font-family:'Shippori Mincho',serif;"></div>
@@ -1484,11 +1484,13 @@ async function checkAuth() {
     const data = await resp.json();
     if (data.setup_needed) {
       document.getElementById('auth-subtitle').textContent = '首次设置';
+      document.getElementById('auth-login-form').style.display = 'none';
       document.getElementById('auth-setup-form').style.display = 'block';
     } else if (data.authenticated) {
       document.getElementById('auth-overlay').style.display = 'none';
     } else {
       document.getElementById('auth-subtitle').textContent = '请输入访问密码';
+      document.getElementById('auth-setup-form').style.display = 'none';
       document.getElementById('auth-login-form').style.display = 'block';
     }
   } catch {
