@@ -439,16 +439,19 @@ body::before {
   right: 1.5rem;
   width: 32px;
   height: 32px;
-  background: transparent;
+  background: var(--paper);
   border: 0.5px solid var(--line);
   color: var(--mute);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
   transition: all 0.2s;
+  z-index: 2;
 }
-.close-btn:hover { border-color: var(--accent); color: var(--accent-deep); }
+.close-btn:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--tint-soft); }
+.close-btn svg { width: 14px; height: 14px; display: block; }
 
 .detail-panel h2 {
   font-family: 'Cormorant Garamond', serif;
@@ -1239,6 +1242,15 @@ let allBuckets = [];
 let currentFilter = 'all';
 let searchTimer;
 let importPollTimer;
+let particles = [];
+let stars = [];
+let mouseTrail = [];
+let pAnimId;
+let currentTheme;
+const mouse = { x: -1000, y: -1000 };
+let canvas = null;
+let pctx = null;
+let sakuraPath2D = null;
 
 const ICONS = {
   pinned: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="17" x2="12" y2="22"/><path d="M9 10V5a3 3 0 0 1 6 0v5l3 4H6l3-4z"/></svg>',
@@ -1269,43 +1281,48 @@ function applyTheme(theme) {
   }
 }
 
-const savedTheme = localStorage.getItem('nocturne_theme') || 'sakura';
-applyTheme(savedTheme);
+function initParticles() {
+  canvas = document.getElementById('particles');
+  if (!canvas) return;
+  pctx = canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('mousemove', (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    if (currentTheme === 'nocturne') {
+      const last = mouseTrail[mouseTrail.length - 1];
+      if (!last || (Math.abs(e.clientX - last.x) > 4 || Math.abs(e.clientY - last.y) > 4)) {
+        mouseTrail.push({
+          x: e.clientX, y: e.clientY,
+          life: 1, size: 0.8 + Math.random() * 1.0
+        });
+        if (mouseTrail.length > 80) mouseTrail.shift();
+      }
+    }
+  });
+  const savedTheme = localStorage.getItem('nocturne_theme') || 'sakura';
+  applyTheme(savedTheme);
+}
 
 /* ============================================================
    Particles Background
    - sakura: falling petals
    - nocturne: floating musical notes + stars + mouse-trail
    ============================================================ */
-const canvas = document.getElementById('particles');
-const pctx = canvas.getContext('2d');
-let particles = [], stars = [], mouseTrail = [], pAnimId, currentTheme;
-const mouse = { x: -1000, y: -1000 };
 
 function resizeCanvas() {
+  if (!canvas) return;
   canvas.width = window.innerWidth * window.devicePixelRatio;
   canvas.height = window.innerHeight * window.devicePixelRatio;
   canvas.style.width = window.innerWidth + 'px';
   canvas.style.height = window.innerHeight + 'px';
   pctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 }
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-window.addEventListener('mousemove', (e) => {
-  mouse.x = e.clientX;
-  mouse.y = e.clientY;
-  if (currentTheme === 'nocturne' && Math.random() < 0.3) {
-    mouseTrail.push({
-      x: e.clientX, y: e.clientY,
-      life: 1, size: 1.5 + Math.random() * 2
-    });
-    if (mouseTrail.length > 30) mouseTrail.shift();
-  }
-});
 
 function startParticles(theme) {
   currentTheme = theme;
+  if (!pctx) return;
   cancelAnimationFrame(pAnimId);
   particles = [];
   stars = [];
@@ -1314,16 +1331,18 @@ function startParticles(theme) {
   const W = window.innerWidth, H = window.innerHeight;
 
   if (theme === 'sakura') {
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 16; i++) {
       particles.push({
         x: Math.random() * W,
         y: Math.random() * H - H,
         vy: 0.4 + Math.random() * 0.6,
-        vx: -0.3 + Math.random() * 0.6,
-        size: 14 + Math.random() * 10,
+        vx: -0.2 + Math.random() * 0.4,
+        size: 18 + Math.random() * 12,
         rot: Math.random() * Math.PI * 2,
         vr: -0.012 + Math.random() * 0.024,
-        opacity: 0.5 + Math.random() * 0.4,
+        opacity: 0.55 + Math.random() * 0.35,
+        // mouse-trail惯性偏移
+        ox: 0, oy: 0,
       });
     }
   } else {
@@ -1356,68 +1375,28 @@ function startParticles(theme) {
   animateParticles();
 }
 
+// 樱花path缓存（来自嘉嘉提供的SVG）
+function getSakuraPath() {
+  if (!sakuraPath2D) {
+    sakuraPath2D = new Path2D('M19,8.10110778 C18.3621538,7.78521164 17.910872,7.40623729 17.910872,7.40623729 C17.910872,7.40623729 18.0733199,6.78463617 18.4347585,6.11196042 C17.3131919,5.37171997 15.7773111,4.86979808 13.8015842,5.5436326 C13.1178053,5.77684167 12.5539182,6.21130798 12.0667696,6.71049904 C12.0025551,6.77630094 11.939674,6.84322749 11.8780274,6.91096595 C11.6823972,7.12592831 11.5839847,7.12885114 11.7066514,6.89400995 C11.7581941,6.79533313 11.8077764,6.69472804 11.8549654,6.59232756 C12.1516277,5.94856894 12.3537067,5.23385266 12.3537067,4.48119711 C12.3537067,2.27476715 11.5463644,0.889839494 10.4661528,0 C9.98214937,0.540458125 9.49800443,0.874775598 9.49800443,0.874775598 C9.49800443,0.874775598 9.04072183,0.558968593 8.57070156,0.0450728409 C7.55947154,0.936397926 6.63952821,2.31169895 6.63952821,4.48119711 C6.63952821,5.25705205 6.82976126,5.98727439 7.13558341,6.64503798 C7.2095116,6.80404307 7.15939347,6.92164071 6.9962519,6.75673537 C6.50298181,6.25813239 5.9151855,5.83217219 5.22946739,5.59830236 C3.20519578,4.90791836 1.68833661,5.3042147 0.543219459,6.12842077 C0.843998468,6.73314558 0.980404835,7.25491496 0.980404835,7.25491496 C0.980404835,7.25491496 0.579790745,7.59128255 0,7.8944026 C0.482305058,9.21188442 1.44201824,10.613213 3.4636857,11.3027057 C4.13587357,11.531952 4.83528675,11.5537871 5.50151776,11.4612427 C5.88527709,11.4079358 5.85812935,11.5143829 5.49589425,11.7305137 C4.94435878,12.0595921 4.43104612,12.4907385 4.04010804,13.0555549 C2.81649849,14.8233788 2.6847343,16.4278472 3.04716367,17.8052577 C3.65330725,17.7063174 4.12907364,17.7295223 4.12907364,17.7295223 C4.12907364,17.7295223 4.32523386,18.2758337 4.41683191,18.9898683 C5.77868771,18.9336238 7.38621083,18.4256704 8.66295064,16.5810711 C9.0619751,16.0045762 9.29537921,15.343881 9.42132553,14.6778917 C9.43103491,14.6265497 9.44111999,14.5795077 9.44957875,14.5281389 C9.48240145,14.3288116 9.61871547,14.3483093 9.65324834,14.5472114 C9.65993016,14.5856973 9.66696108,14.6241784 9.6743523,14.6626393 C9.70332733,14.8134135 9.73783943,14.9638788 9.77856328,15.1131189 C9.91602804,15.6168838 10.124271,16.1066879 10.4292418,16.5472887 C11.6199599,18.2675738 12.9900527,18.9079825 14.3161015,19 C14.4115491,18.3272351 14.5926223,17.8230254 14.5926223,17.8230254 C14.5926223,17.8230254 15.2118998,17.7928679 15.9374945,17.9482905 C16.2931021,16.5798826 16.3113595,14.8410871 15.0520844,13.0217428 C14.5794728,12.3389283 13.9279772,11.8514364 13.2463358,11.5034859 C13.1661312,11.4625446 13.1981778,11.3496767 13.3215073,11.3713236 C14.0494971,11.4991011 14.824407,11.5014648 15.5673942,11.2480656 C17.5062385,10.5867992 18.5102222,9.40622948 19,8.10110778 Z');
+  }
+  return sakuraPath2D;
+}
+
 function drawSakuraPetal(x, y, size, rot, opacity) {
   pctx.save();
   pctx.translate(x, y);
   pctx.rotate(rot);
+  // SVG viewBox是19x19，要居中
+  const scale = size / 19;
+  pctx.scale(scale, scale);
+  pctx.translate(-9.5, -9.5);
   pctx.globalAlpha = opacity;
-  const r = size / 2;
-
-  // 5瓣花瓣，每瓣顶端有V型凹陷
-  pctx.fillStyle = '#f5d8e1';
-  pctx.strokeStyle = '#c89aa6';
-  pctx.lineWidth = 0.4;
-  pctx.beginPath();
-  for (let i = 0; i < 5; i++) {
-    const baseAngle = (i / 5) * Math.PI * 2 - Math.PI / 2;
-    const nextAngle = ((i + 1) / 5) * Math.PI * 2 - Math.PI / 2;
-    const tipMidAngle = (baseAngle + nextAngle) / 2;
-    const tipSpread = 0.18;
-
-    const innerR = r * 0.18;
-    const tipR = r;
-    const notchR = r * 0.75;
-    const sideR = r * 0.5;
-
-    const xBase = Math.cos(baseAngle) * innerR;
-    const yBase = Math.sin(baseAngle) * innerR;
-    const xSide1 = Math.cos(baseAngle + 0.45) * sideR;
-    const ySide1 = Math.sin(baseAngle + 0.45) * sideR;
-    const xTipL = Math.cos(tipMidAngle - tipSpread) * tipR;
-    const yTipL = Math.sin(tipMidAngle - tipSpread) * tipR;
-    const xNotch = Math.cos(tipMidAngle) * notchR;
-    const yNotch = Math.sin(tipMidAngle) * notchR;
-    const xTipR = Math.cos(tipMidAngle + tipSpread) * tipR;
-    const yTipR = Math.sin(tipMidAngle + tipSpread) * tipR;
-    const xSide2 = Math.cos(nextAngle - 0.45) * sideR;
-    const ySide2 = Math.sin(nextAngle - 0.45) * sideR;
-    const xNext = Math.cos(nextAngle) * innerR;
-    const yNext = Math.sin(nextAngle) * innerR;
-
-    if (i === 0) pctx.moveTo(xBase, yBase);
-    pctx.quadraticCurveTo(xSide1, ySide1, xTipL, yTipL);
-    pctx.lineTo(xNotch, yNotch);
-    pctx.lineTo(xTipR, yTipR);
-    pctx.quadraticCurveTo(xSide2, ySide2, xNext, yNext);
-  }
-  pctx.closePath();
-  pctx.fill();
-  pctx.stroke();
-
-  // 花蕊
-  pctx.fillStyle = '#d4a3b0';
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    pctx.beginPath();
-    pctx.arc(Math.cos(a) * r * 0.13, Math.sin(a) * r * 0.13, r * 0.04, 0, Math.PI * 2);
-    pctx.fill();
-  }
-  // 花心
-  pctx.fillStyle = '#a47584';
-  pctx.beginPath();
-  pctx.arc(0, 0, r * 0.08, 0, Math.PI * 2);
-  pctx.fill();
-
+  pctx.fillStyle = '#f6e2e8';
+  pctx.fill(getSakuraPath());
+  pctx.strokeStyle = 'rgba(200, 154, 166, 0.4)';
+  pctx.lineWidth = 0.3;
+  pctx.stroke(getSakuraPath());
   pctx.restore();
 }
 
@@ -1458,10 +1437,29 @@ function animateParticles() {
       p.y += p.vy;
       p.x += p.vx + Math.sin(p.y * 0.01) * 0.3;
       p.rot += p.vr;
+      // 鼠标排斥/吹拂
+      const dx = p.x - mouse.x;
+      const dy = p.y - mouse.y;
+      const dist2 = dx * dx + dy * dy;
+      const radius = 120;
+      if (dist2 < radius * radius && dist2 > 1) {
+        const dist = Math.sqrt(dist2);
+        const force = (1 - dist / radius) * 1.8;
+        p.vx += (dx / dist) * force * 0.15;
+        p.vy += (dy / dist) * force * 0.05;
+        p.vr += (Math.random() - 0.5) * 0.02;
+      }
+      // 速度衰减
+      p.vx *= 0.985;
+      p.vx += -0.15 + Math.random() * 0.3 - p.vx * 0.02;
       if (p.y > H + 20) {
         p.y = -20;
         p.x = Math.random() * W;
+        p.vx = -0.2 + Math.random() * 0.4;
+        p.vy = 0.3 + Math.random() * 0.5;
       }
+      if (p.x < -30) p.x = W + 20;
+      if (p.x > W + 30) p.x = -20;
       drawSakuraPetal(p.x, p.y, p.size, p.rot, p.opacity);
     });
   } else {
@@ -1496,21 +1494,52 @@ function animateParticles() {
       }
       drawNote(p.x, p.y, p.size, p.rot + Math.sin(p.phase) * 0.1, p.type, p.opacity);
     });
-    // mouse trail (stardust)
-    mouseTrail.forEach((t, i) => {
-      t.life -= 0.025;
-      if (t.life > 0) {
+    // mouse trail (stardust) - 使用Catmull-Rom插值的平滑曲线
+    if (mouseTrail.length > 2) {
+      pctx.lineCap = 'round';
+      pctx.lineJoin = 'round';
+      // 一笔画连续曲线
+      pctx.beginPath();
+      pctx.moveTo(mouseTrail[0].x, mouseTrail[0].y);
+      for (let i = 1; i < mouseTrail.length - 1; i++) {
+        const t1 = mouseTrail[i];
+        const t2 = mouseTrail[i + 1];
+        const xc = (t1.x + t2.x) / 2;
+        const yc = (t1.y + t2.y) / 2;
+        pctx.quadraticCurveTo(t1.x, t1.y, xc, yc);
+      }
+      // 分段stroke以保留每段透明度
+      for (let i = 0; i < mouseTrail.length - 1; i++) {
+        const t1 = mouseTrail[i];
+        const t2 = mouseTrail[i + 1];
+        if (t1.life > 0 && t2.life > 0) {
+          const alpha = Math.min(t1.life, t2.life);
+          pctx.beginPath();
+          if (i > 0 && i < mouseTrail.length - 2) {
+            const t0 = mouseTrail[i - 1];
+            const t3 = mouseTrail[i + 2];
+            const xc1 = (t0.x + t1.x) / 2, yc1 = (t0.y + t1.y) / 2;
+            const xc2 = (t1.x + t2.x) / 2, yc2 = (t1.y + t2.y) / 2;
+            pctx.moveTo(xc1, yc1);
+            pctx.quadraticCurveTo(t1.x, t1.y, xc2, yc2);
+          } else {
+            pctx.moveTo(t1.x, t1.y);
+            pctx.lineTo(t2.x, t2.y);
+          }
+          pctx.strokeStyle = `rgba(232, 200, 122, ${alpha * 0.45})`;
+          pctx.lineWidth = alpha * 1.2;
+          pctx.stroke();
+        }
+      }
+      pctx.globalAlpha = 1;
+    }
+    // 末端小光点
+    mouseTrail.forEach((t) => {
+      t.life -= 0.022;
+      if (t.life > 0.1) {
         pctx.beginPath();
-        pctx.arc(t.x, t.y, t.size * t.life, 0, Math.PI * 2);
-        pctx.fillStyle = `rgba(212, 175, 110, ${t.life * 0.6})`;
-        pctx.fill();
-        // glow
-        const grad = pctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, t.size * 4);
-        grad.addColorStop(0, `rgba(232, 200, 122, ${t.life * 0.15})`);
-        grad.addColorStop(1, 'transparent');
-        pctx.fillStyle = grad;
-        pctx.beginPath();
-        pctx.arc(t.x, t.y, t.size * 4, 0, Math.PI * 2);
+        pctx.arc(t.x, t.y, t.size * t.life * 0.55, 0, Math.PI * 2);
+        pctx.fillStyle = `rgba(232, 200, 122, ${t.life * 0.7})`;
         pctx.fill();
       }
     });
@@ -1762,10 +1791,24 @@ function renderBuckets(buckets) {
 }
 
 async function searchBuckets(query) {
+  // 先做本地过滤兜底
+  const q = query.toLowerCase();
+  const localResults = allBuckets.filter(b => {
+    if ((b.name || '').toLowerCase().includes(q)) return true;
+    if ((b.content_preview || '').toLowerCase().includes(q)) return true;
+    if ((b.tags || []).some(t => t.toLowerCase().includes(q))) return true;
+    if ((b.domain || []).some(d => d.toLowerCase().includes(q))) return true;
+    return false;
+  });
+  renderBuckets(localResults);
+  // 再尝试远程搜索，成功就覆盖
   try {
     const res = await fetch(BASE + '/api/search?q=' + encodeURIComponent(query));
-    renderBuckets(await res.json());
-  } catch (e) { console.error(e); }
+    if (res.ok) {
+      const remote = await res.json();
+      if (Array.isArray(remote) && remote.length) renderBuckets(remote);
+    }
+  } catch (e) {}
 }
 
 async function showDetail(id) {
@@ -2269,6 +2312,7 @@ function initEvents() {
    Init
    ============================================================ */
 initEvents();
+initParticles();
 checkAuth().then(() => loadBuckets());
 </script>
 </body>
