@@ -1019,7 +1019,7 @@ a { color: var(--accent-deep); text-decoration: none; }
 <div class="content" id="list-view">
   <div class="list-search">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
-    <input class="search-input" type="text" id="search-input" placeholder="搜索记忆">
+    <input class="search-input" type="search" id="search-input" name="memory-search" autocomplete="off" placeholder="搜索记忆">
   </div>
   <div class="filters" id="filters"></div>
   <div class="bucket-list" id="bucket-list">
@@ -1272,11 +1272,6 @@ function applyTheme(theme) {
 const savedTheme = localStorage.getItem('nocturne_theme') || 'sakura';
 applyTheme(savedTheme);
 
-document.getElementById('theme-toggle').addEventListener('click', () => {
-  const current = document.documentElement.dataset.theme;
-  applyTheme(current === 'sakura' ? 'nocturne' : 'sakura');
-});
-
 /* ============================================================
    Particles Background
    - sakura: falling petals
@@ -1319,16 +1314,16 @@ function startParticles(theme) {
   const W = window.innerWidth, H = window.innerHeight;
 
   if (theme === 'sakura') {
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 18; i++) {
       particles.push({
         x: Math.random() * W,
         y: Math.random() * H - H,
-        vy: 0.3 + Math.random() * 0.5,
-        vx: -0.2 + Math.random() * 0.4,
-        size: 8 + Math.random() * 6,
+        vy: 0.4 + Math.random() * 0.6,
+        vx: -0.3 + Math.random() * 0.6,
+        size: 14 + Math.random() * 10,
         rot: Math.random() * Math.PI * 2,
-        vr: -0.01 + Math.random() * 0.02,
-        opacity: 0.4 + Math.random() * 0.4,
+        vr: -0.012 + Math.random() * 0.024,
+        opacity: 0.5 + Math.random() * 0.4,
       });
     }
   } else {
@@ -1366,29 +1361,63 @@ function drawSakuraPetal(x, y, size, rot, opacity) {
   pctx.translate(x, y);
   pctx.rotate(rot);
   pctx.globalAlpha = opacity;
-  pctx.fillStyle = '#e8d3da';
+  const r = size / 2;
+
+  // 5瓣花瓣，每瓣顶端有V型凹陷
+  pctx.fillStyle = '#f5d8e1';
   pctx.strokeStyle = '#c89aa6';
-  pctx.lineWidth = 0.5;
+  pctx.lineWidth = 0.4;
   pctx.beginPath();
-  // 5-petal sakura
   for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2;
-    const x1 = Math.cos(a) * size * 0.45;
-    const y1 = Math.sin(a) * size * 0.45;
-    const x2 = Math.cos(a + 0.6) * size * 0.5;
-    const y2 = Math.sin(a + 0.6) * size * 0.5;
-    if (i === 0) pctx.moveTo(0, 0);
-    pctx.quadraticCurveTo(x1, y1, x2, y2);
-    pctx.lineTo(0, 0);
+    const baseAngle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+    const nextAngle = ((i + 1) / 5) * Math.PI * 2 - Math.PI / 2;
+    const tipMidAngle = (baseAngle + nextAngle) / 2;
+    const tipSpread = 0.18;
+
+    const innerR = r * 0.18;
+    const tipR = r;
+    const notchR = r * 0.75;
+    const sideR = r * 0.5;
+
+    const xBase = Math.cos(baseAngle) * innerR;
+    const yBase = Math.sin(baseAngle) * innerR;
+    const xSide1 = Math.cos(baseAngle + 0.45) * sideR;
+    const ySide1 = Math.sin(baseAngle + 0.45) * sideR;
+    const xTipL = Math.cos(tipMidAngle - tipSpread) * tipR;
+    const yTipL = Math.sin(tipMidAngle - tipSpread) * tipR;
+    const xNotch = Math.cos(tipMidAngle) * notchR;
+    const yNotch = Math.sin(tipMidAngle) * notchR;
+    const xTipR = Math.cos(tipMidAngle + tipSpread) * tipR;
+    const yTipR = Math.sin(tipMidAngle + tipSpread) * tipR;
+    const xSide2 = Math.cos(nextAngle - 0.45) * sideR;
+    const ySide2 = Math.sin(nextAngle - 0.45) * sideR;
+    const xNext = Math.cos(nextAngle) * innerR;
+    const yNext = Math.sin(nextAngle) * innerR;
+
+    if (i === 0) pctx.moveTo(xBase, yBase);
+    pctx.quadraticCurveTo(xSide1, ySide1, xTipL, yTipL);
+    pctx.lineTo(xNotch, yNotch);
+    pctx.lineTo(xTipR, yTipR);
+    pctx.quadraticCurveTo(xSide2, ySide2, xNext, yNext);
   }
   pctx.closePath();
   pctx.fill();
   pctx.stroke();
-  // center
-  pctx.beginPath();
-  pctx.arc(0, 0, size * 0.12, 0, Math.PI * 2);
+
+  // 花蕊
+  pctx.fillStyle = '#d4a3b0';
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    pctx.beginPath();
+    pctx.arc(Math.cos(a) * r * 0.13, Math.sin(a) * r * 0.13, r * 0.04, 0, Math.PI * 2);
+    pctx.fill();
+  }
+  // 花心
   pctx.fillStyle = '#a47584';
+  pctx.beginPath();
+  pctx.arc(0, 0, r * 0.08, 0, Math.PI * 2);
   pctx.fill();
+
   pctx.restore();
 }
 
@@ -1647,33 +1676,6 @@ async function authFetch(url, options) {
 /* ============================================================
    Main Logic
    ============================================================ */
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    const target = tab.dataset.tab;
-    document.getElementById('list-view').style.display = target === 'list' ? '' : 'none';
-    document.getElementById('breath-view').style.display = target === 'breath' ? '' : 'none';
-    document.getElementById('network-view').style.display = target === 'network' ? '' : 'none';
-    document.getElementById('config-view').style.display = target === 'config' ? '' : 'none';
-    document.getElementById('import-view').style.display = target === 'import' ? '' : 'none';
-    document.getElementById('settings-view').style.display = target === 'settings' ? '' : 'none';
-    if (target === 'network') loadNetwork();
-    if (target === 'config') loadConfig();
-    if (target === 'import') { pollImportStatus(); loadImportResults(); }
-    if (target === 'settings') loadSettingsStatus();
-  });
-});
-
-document.getElementById('search-input').addEventListener('input', (e) => {
-  clearTimeout(searchTimer);
-  const q = e.target.value.trim();
-  searchTimer = setTimeout(() => {
-    if (q) searchBuckets(q);
-    else renderBuckets(allBuckets);
-  }, 300);
-});
-
 async function loadBuckets() {
   try {
     const res = await fetch(BASE + '/api/buckets');
@@ -1949,14 +1951,6 @@ function formatTimeAgo(iso) {
   return Math.floor(days/30) + 'mo';
 }
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeDetail();
-  if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
-    e.preventDefault();
-    document.getElementById('search-input').focus();
-  }
-});
-
 /* ============================================================
    Breath Debug
    ============================================================ */
@@ -2026,10 +2020,6 @@ async function runBreathDebug() {
   } catch (e) { results.innerHTML = '<div class="loading">请求失败: ' + e.message + '</div>'; }
 }
 
-document.getElementById('breath-query').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') runBreathDebug();
-});
-
 /* ============================================================
    Config
    ============================================================ */
@@ -2082,19 +2072,6 @@ async function saveConfig(persist) {
 /* ============================================================
    Import
    ============================================================ */
-const uploadZone = document.getElementById('import-upload-zone');
-const fileInput = document.getElementById('import-file-input');
-
-uploadZone.addEventListener('click', () => fileInput.click());
-uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.borderColor = 'var(--accent)'; });
-uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = ''; });
-uploadZone.addEventListener('drop', e => {
-  e.preventDefault();
-  uploadZone.style.borderColor = '';
-  if (e.dataTransfer.files.length) startImport(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', () => { if (fileInput.files.length) startImport(fileInput.files[0]); });
-
 async function startImport(file) {
   const preserveRaw = document.getElementById('import-preserve-raw').checked;
   const fd = new FormData();
@@ -2218,8 +2195,80 @@ async function batchReview(idsJson, action) {
 }
 
 /* ============================================================
+   Event Delegation - 所有事件统一在末尾绑定，避免单点失败
+   ============================================================ */
+function initEvents() {
+  // Click delegation
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#theme-toggle')) {
+      const current = document.documentElement.dataset.theme;
+      applyTheme(current === 'sakura' ? 'nocturne' : 'sakura');
+      return;
+    }
+    const tab = e.target.closest('.tab');
+    if (tab && tab.dataset.tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.tab;
+      ['list','breath','network','config','import','settings'].forEach(v => {
+        const el = document.getElementById(v + '-view');
+        if (el) el.style.display = target === v ? '' : 'none';
+      });
+      if (target === 'network') loadNetwork();
+      if (target === 'config') loadConfig();
+      if (target === 'import') { pollImportStatus(); loadImportResults(); }
+      if (target === 'settings') loadSettingsStatus();
+      return;
+    }
+    if (e.target.closest('#import-upload-zone')) {
+      const input = document.getElementById('import-file-input');
+      if (input) input.click();
+      return;
+    }
+  });
+
+  // Input delegation for search
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'search-input') {
+      clearTimeout(searchTimer);
+      const q = e.target.value.trim();
+      searchTimer = setTimeout(() => {
+        if (q) searchBuckets(q);
+        else renderBuckets(allBuckets);
+      }, 300);
+    }
+  });
+
+  // File input change
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'import-file-input' && e.target.files.length) {
+      startImport(e.target.files[0]);
+    }
+  });
+
+  // Keydown
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDetail();
+    if (e.key === 'Enter' && e.target.id === 'breath-query') runBreathDebug();
+  });
+
+  // Drag & drop on upload zone
+  const uploadZone = document.getElementById('import-upload-zone');
+  if (uploadZone) {
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.borderColor = 'var(--accent)'; });
+    uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = ''; });
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadZone.style.borderColor = '';
+      if (e.dataTransfer.files.length) startImport(e.dataTransfer.files[0]);
+    });
+  }
+}
+
+/* ============================================================
    Init
    ============================================================ */
+initEvents();
 checkAuth().then(() => loadBuckets());
 </script>
 </body>
