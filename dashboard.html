@@ -1057,10 +1057,10 @@ a { color: var(--accent-deep); text-decoration: none; }
 
 <div class="content" id="network-view" style="display:none">
   <div class="network-legend">
-    <div class="legend-item"><span class="legend-dot" style="background:var(--ink)"></span> dynamic</div>
-    <div class="legend-item"><span class="legend-dot" style="background:var(--warning)"></span> permanent</div>
-    <div class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span> feel</div>
-    <div class="legend-item"><span class="legend-dot" style="background:var(--mute-soft)"></span> archived</div>
+    <div class="legend-item"><span class="legend-dot" id="legend-memory"></span> memory</div>
+    <div class="legend-item"><span class="legend-dot" id="legend-feel"></span> feel</div>
+    <div class="legend-item"><span class="legend-dot" id="legend-archived"></span> archived</div>
+    <div class="legend-item" style="margin-left:auto;font-style:italic;font-family:Cormorant Garamond,serif;text-transform:none;letter-spacing:0.05em;font-size:0.75rem;">按 Valence × Arousal 坐标排列</div>
   </div>
   <canvas id="network-canvas"></canvas>
 </div>
@@ -1275,6 +1275,21 @@ function applyTheme(theme) {
     sun.style.display = theme === 'nocturne' ? 'block' : 'none';
     moon.style.display = theme === 'sakura' ? 'block' : 'none';
   }
+  // 更新network legend颜色
+  const legMem = document.getElementById('legend-memory');
+  const legFeel = document.getElementById('legend-feel');
+  const legArch = document.getElementById('legend-archived');
+  if (legMem && legFeel && legArch) {
+    if (theme === 'nocturne') {
+      legMem.style.background = '#e8c87a';
+      legFeel.style.background = '#7ba8d8';
+      legArch.style.background = '#4a5572';
+    } else {
+      legMem.style.background = '#8c7d84';
+      legFeel.style.background = '#b58497';
+      legArch.style.background = '#d4c4ca';
+    }
+  }
   startParticles(theme);
   if (window.networkData) {
     setTimeout(() => loadNetwork(), 50);
@@ -1292,13 +1307,25 @@ function initParticles() {
     mouse.y = e.clientY;
     if (currentTheme === 'nocturne') {
       const last = mouseTrail[mouseTrail.length - 1];
-      if (!last || (Math.abs(e.clientX - last.x) > 4 || Math.abs(e.clientY - last.y) > 4)) {
-        mouseTrail.push({
-          x: e.clientX, y: e.clientY,
-          life: 1, size: 0.8 + Math.random() * 1.0
-        });
-        if (mouseTrail.length > 80) mouseTrail.shift();
+      if (!last) {
+        mouseTrail.push({ x: e.clientX, y: e.clientY, life: 1, size: 1.5 + Math.random() * 1.2 });
+        return;
       }
+      const dx = e.clientX - last.x;
+      const dy = e.clientY - last.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const step = 8; // 每8px插值一个点
+      const count = Math.min(Math.ceil(dist / step), 8);
+      for (let i = 1; i <= count; i++) {
+        const t = i / count;
+        mouseTrail.push({
+          x: last.x + dx * t,
+          y: last.y + dy * t,
+          life: 1,
+          size: 1.4 + Math.random() * 1.2
+        });
+      }
+      while (mouseTrail.length > 60) mouseTrail.shift();
     }
   });
   const savedTheme = localStorage.getItem('nocturne_theme') || 'sakura';
@@ -1335,12 +1362,12 @@ function startParticles(theme) {
       particles.push({
         x: Math.random() * W,
         y: Math.random() * H - H,
-        vy: 0.4 + Math.random() * 0.6,
+        vy: 0.4 + Math.random() * 0.5,
         vx: -0.2 + Math.random() * 0.4,
-        size: 18 + Math.random() * 12,
+        size: 14 + Math.random() * 10,
         rot: Math.random() * Math.PI * 2,
-        vr: -0.012 + Math.random() * 0.024,
-        opacity: 0.55 + Math.random() * 0.35,
+        vr: -0.01 + Math.random() * 0.02,
+        opacity: 0.5 + Math.random() * 0.35,
         // mouse-trail惯性偏移
         ox: 0, oy: 0,
       });
@@ -1378,7 +1405,7 @@ function startParticles(theme) {
 // 樱花path缓存（来自嘉嘉提供的SVG）
 function getSakuraPath() {
   if (!sakuraPath2D) {
-    sakuraPath2D = new Path2D('M19,8.10110778 C18.3621538,7.78521164 17.910872,7.40623729 17.910872,7.40623729 C17.910872,7.40623729 18.0733199,6.78463617 18.4347585,6.11196042 C17.3131919,5.37171997 15.7773111,4.86979808 13.8015842,5.5436326 C13.1178053,5.77684167 12.5539182,6.21130798 12.0667696,6.71049904 C12.0025551,6.77630094 11.939674,6.84322749 11.8780274,6.91096595 C11.6823972,7.12592831 11.5839847,7.12885114 11.7066514,6.89400995 C11.7581941,6.79533313 11.8077764,6.69472804 11.8549654,6.59232756 C12.1516277,5.94856894 12.3537067,5.23385266 12.3537067,4.48119711 C12.3537067,2.27476715 11.5463644,0.889839494 10.4661528,0 C9.98214937,0.540458125 9.49800443,0.874775598 9.49800443,0.874775598 C9.49800443,0.874775598 9.04072183,0.558968593 8.57070156,0.0450728409 C7.55947154,0.936397926 6.63952821,2.31169895 6.63952821,4.48119711 C6.63952821,5.25705205 6.82976126,5.98727439 7.13558341,6.64503798 C7.2095116,6.80404307 7.15939347,6.92164071 6.9962519,6.75673537 C6.50298181,6.25813239 5.9151855,5.83217219 5.22946739,5.59830236 C3.20519578,4.90791836 1.68833661,5.3042147 0.543219459,6.12842077 C0.843998468,6.73314558 0.980404835,7.25491496 0.980404835,7.25491496 C0.980404835,7.25491496 0.579790745,7.59128255 0,7.8944026 C0.482305058,9.21188442 1.44201824,10.613213 3.4636857,11.3027057 C4.13587357,11.531952 4.83528675,11.5537871 5.50151776,11.4612427 C5.88527709,11.4079358 5.85812935,11.5143829 5.49589425,11.7305137 C4.94435878,12.0595921 4.43104612,12.4907385 4.04010804,13.0555549 C2.81649849,14.8233788 2.6847343,16.4278472 3.04716367,17.8052577 C3.65330725,17.7063174 4.12907364,17.7295223 4.12907364,17.7295223 C4.12907364,17.7295223 4.32523386,18.2758337 4.41683191,18.9898683 C5.77868771,18.9336238 7.38621083,18.4256704 8.66295064,16.5810711 C9.0619751,16.0045762 9.29537921,15.343881 9.42132553,14.6778917 C9.43103491,14.6265497 9.44111999,14.5795077 9.44957875,14.5281389 C9.48240145,14.3288116 9.61871547,14.3483093 9.65324834,14.5472114 C9.65993016,14.5856973 9.66696108,14.6241784 9.6743523,14.6626393 C9.70332733,14.8134135 9.73783943,14.9638788 9.77856328,15.1131189 C9.91602804,15.6168838 10.124271,16.1066879 10.4292418,16.5472887 C11.6199599,18.2675738 12.9900527,18.9079825 14.3161015,19 C14.4115491,18.3272351 14.5926223,17.8230254 14.5926223,17.8230254 C14.5926223,17.8230254 15.2118998,17.7928679 15.9374945,17.9482905 C16.2931021,16.5798826 16.3113595,14.8410871 15.0520844,13.0217428 C14.5794728,12.3389283 13.9279772,11.8514364 13.2463358,11.5034859 C13.1661312,11.4625446 13.1981778,11.3496767 13.3215073,11.3713236 C14.0494971,11.4991011 14.824407,11.5014648 15.5673942,11.2480656 C17.5062385,10.5867992 18.5102222,9.40622948 19,8.10110778 Z');
+    sakuraPath2D = new Path2D('M8.2941179,9.57475347 C9.08932966,8.73745846 9.26038782,8.81675637 9.37194192,8.82601299 C9.64801765,8.84924885 9.9553161,8.94702154 10.2746416,9.11347556 C10.6004391,9.28330324 10.9381699,9.52044937 11.2639522,9.8166466 C11.5917882,10.114711 11.9155819,10.46841 12.2072658,10.8741572 C12.4986411,11.275503 12.7374671,11.6927123 12.9155316,12.0940622 C13.0924032,12.4927236 13.2092124,12.8834345 13.2654181,13.2382174 C13.3035148,13.486471 13.3116416,13.7198456 13.2891169,13.9278779 L12.2754633,13.9078108 L12.1120788,14.7716699 C11.7411205,14.8393751 11.509321,14.7548534 11.2706613,14.6305794 C10.9448638,14.4607517 10.607133,14.2236055 10.2813507,13.9274083 C9.9535147,13.6293439 9.62972104,13.2756449 9.3380371,12.8698978 C9.04666181,12.4685519 8.80783574,12.0513427 8.62977129,11.6499927 C8.45289763,11.2513267 8.33198503,10.860631 8.27570308,10.5053591 C8.22066726,10.1579531 8.22331738,9.84124921 8.2941179,9.57475347 Z M7.11198285,8.59106457 C7.66252816,8.43971854 7.71102592,8.47167099 7.71361015,8.53879474 C7.71870481,8.67112497 7.69147685,8.84339995 7.66583519,9.01065639 C7.63177702,9.23281242 7.60320985,9.44639884 7.63193275,9.56802719 C7.6949018,9.83467222 7.6937942,10.1515275 7.63085555,10.4991576 C7.56652358,10.8544833 7.44168151,11.2452702 7.2565745,11.640404 C7.07042631,12.0417321 6.82348773,12.4509495 6.52403673,12.8482978 C6.22460011,13.2456269 5.89689408,13.5953331 5.5610355,13.8853868 C5.22718477,14.1737065 4.88950013,14.407051 4.55964611,14.5689966 C4.32983518,14.6818248 4.10623106,14.7619257 3.89672931,14.8060779 L3.60261121,13.8514295 L2.71451268,13.9624917 C2.53448173,13.6360569 2.54418618,13.3943777 2.5910441,13.136009 C2.65537606,12.7806833 2.78021814,12.3898964 2.96532515,11.9947626 C3.15147332,11.5934345 3.3984119,11.1842171 3.6978629,10.7868688 C3.99729951,10.3895397 4.32500555,10.0398335 4.66086413,9.74977981 C4.99471485,9.46146009 5.3323995,9.2281156 5.66225352,9.06617003 C5.98538278,8.90752605 6.29251466,8.80943571 6.5724568,8.79394944 C6.70261193,8.78674931 6.90499865,8.69251667 7.11198285,8.59106457 Z M13.4470808,4.67208206 C13.8901462,4.63253152 14.305033,4.64418889 14.6667201,4.69943064 C14.9204223,4.74038119 15.1467804,4.80500157 15.3429379,4.89119285 L15.0160138,5.83015929 L15.7996695,6.2498807 C15.7507928,6.6179591 15.5928218,6.80477677 15.4022698,6.98835601 C15.1367849,7.24114203 14.8027656,7.4818553 14.4166278,7.69513139 C14.0280031,7.90978102 13.5826822,8.10052444 13.1002344,8.24782049 C12.6184127,8.39889818 12.1446911,8.49035411 11.7001897,8.53400465 C11.2575152,8.5735203 10.8429803,8.56596886 10.4797147,8.50652481 C10.125181,8.45237209 9.81745835,8.34891319 9.58099553,8.20186066 C9.34754358,6.92884795 9.44600361,6.55720654 9.64071506,6.32292752 L9.70886048,6.24887398 L9.74500071,6.21369779 C10.0104855,5.96091179 10.3445049,5.72019852 10.7299894,5.5072801 C11.5694328,5.05175546 12.4940249,4.76763797 13.4470808,4.67208206 Z M1.35562429,4.57484233 C1.71799386,4.52739981 2.13270097,4.52362772 2.57645725,4.57511968 C3.02157937,4.62280064 3.49500407,4.72620241 3.97279688,4.88523764 C4.42650645,5.03463961 4.8634772,5.22918444 5.27581424,5.46521696 C5.65830962,5.69056551 5.98461296,5.93547411 6.24633455,6.19246446 C6.50204597,6.44355329 6.68803471,6.70177203 6.79037411,6.95686044 C6.653626,8.08868624 6.46775589,8.12367472 6.3713869,8.18107437 C6.1349352,8.32425033 5.82718096,8.4197737 5.46966506,8.46992838 C5.10729549,8.5173709 4.69258839,8.52114299 4.2488321,8.46965103 C3.80370998,8.42197007 3.33028528,8.3185683 2.8527975,8.15963405 C2.37495408,8.00058141 1.93351864,7.80184142 1.54947513,7.57955373 C1.16722734,7.35435107 0.837040239,7.10968162 0.578954821,6.85230625 C0.398718798,6.67532842 0.254723835,6.49253906 0.147386944,6.30887524 L0.972693237,5.73518548 L0.591758774,4.94187452 C0.852263876,4.67530667 1.08882342,4.61024488 1.35562429,4.57484233 Z M7.22319037,0.180438724 L8.03616678,0.782157267 L8.68508375,0.181968927 C9.02716268,0.342786508 9.16335888,0.544049342 9.28255687,0.781680935 C9.44341404,1.105477 9.57180537,1.49254303 9.66027103,1.91897818 C9.74928355,2.34804939 9.79366418,2.82083068 9.7896183,3.31742488 C9.78557286,3.80999217 9.72899436,4.28270695 9.63190274,4.71172099 C9.53544832,5.1379195 9.39910066,5.52083651 9.23029354,5.84050787 C9.06498202,6.15355962 8.87304689,6.40954865 8.65644756,6.58356265 C7.50951444,6.80316196 7.41855112,6.63989689 7.3334149,6.56868448 C7.12086827,6.3908993 6.9329548,6.13123213 6.77559813,5.81448237 C6.61474096,5.49068631 6.48634963,5.10362028 6.39788397,4.67718512 C6.30887145,4.24811392 6.26449082,3.77533262 6.2685367,3.27873842 C6.27258214,2.78617114 6.32916064,2.31345636 6.42620767,1.88463842 C6.52267789,1.46231702 6.6590259,1.07538063 6.82798652,0.755417814 C6.94630138,0.529899659 7.0796897,0.337251416 7.22319037,0.180438724 Z');
   }
   return sakuraPath2D;
 }
@@ -1387,15 +1414,15 @@ function drawSakuraPetal(x, y, size, rot, opacity) {
   pctx.save();
   pctx.translate(x, y);
   pctx.rotate(rot);
-  // SVG viewBox是19x19，要居中
-  const scale = size / 19;
+  // viewBox是16x15，要居中: 中心约(8, 7.5)
+  const scale = size / 16;
   pctx.scale(scale, scale);
-  pctx.translate(-9.5, -9.5);
+  pctx.translate(-8, -7.5);
   pctx.globalAlpha = opacity;
   pctx.fillStyle = '#f6e2e8';
   pctx.fill(getSakuraPath());
-  pctx.strokeStyle = 'rgba(200, 154, 166, 0.4)';
-  pctx.lineWidth = 0.3;
+  pctx.strokeStyle = 'rgba(181, 138, 152, 0.27)';
+  pctx.lineWidth = 0.2;
   pctx.stroke(getSakuraPath());
   pctx.restore();
 }
@@ -1435,31 +1462,12 @@ function animateParticles() {
   if (currentTheme === 'sakura') {
     particles.forEach(p => {
       p.y += p.vy;
-      p.x += p.vx + Math.sin(p.y * 0.01) * 0.3;
+      p.x += p.vx + Math.sin(p.y * 0.008) * 0.4;
       p.rot += p.vr;
-      // 鼠标排斥/吹拂
-      const dx = p.x - mouse.x;
-      const dy = p.y - mouse.y;
-      const dist2 = dx * dx + dy * dy;
-      const radius = 120;
-      if (dist2 < radius * radius && dist2 > 1) {
-        const dist = Math.sqrt(dist2);
-        const force = (1 - dist / radius) * 1.8;
-        p.vx += (dx / dist) * force * 0.15;
-        p.vy += (dy / dist) * force * 0.05;
-        p.vr += (Math.random() - 0.5) * 0.02;
-      }
-      // 速度衰减
-      p.vx *= 0.985;
-      p.vx += -0.15 + Math.random() * 0.3 - p.vx * 0.02;
       if (p.y > H + 20) {
         p.y = -20;
         p.x = Math.random() * W;
-        p.vx = -0.2 + Math.random() * 0.4;
-        p.vy = 0.3 + Math.random() * 0.5;
       }
-      if (p.x < -30) p.x = W + 20;
-      if (p.x > W + 30) p.x = -20;
       drawSakuraPetal(p.x, p.y, p.size, p.rot, p.opacity);
     });
   } else {
@@ -1494,52 +1502,22 @@ function animateParticles() {
       }
       drawNote(p.x, p.y, p.size, p.rot + Math.sin(p.phase) * 0.1, p.type, p.opacity);
     });
-    // mouse trail (stardust) - 使用Catmull-Rom插值的平滑曲线
-    if (mouseTrail.length > 2) {
-      pctx.lineCap = 'round';
-      pctx.lineJoin = 'round';
-      // 一笔画连续曲线
-      pctx.beginPath();
-      pctx.moveTo(mouseTrail[0].x, mouseTrail[0].y);
-      for (let i = 1; i < mouseTrail.length - 1; i++) {
-        const t1 = mouseTrail[i];
-        const t2 = mouseTrail[i + 1];
-        const xc = (t1.x + t2.x) / 2;
-        const yc = (t1.y + t2.y) / 2;
-        pctx.quadraticCurveTo(t1.x, t1.y, xc, yc);
-      }
-      // 分段stroke以保留每段透明度
-      for (let i = 0; i < mouseTrail.length - 1; i++) {
-        const t1 = mouseTrail[i];
-        const t2 = mouseTrail[i + 1];
-        if (t1.life > 0 && t2.life > 0) {
-          const alpha = Math.min(t1.life, t2.life);
-          pctx.beginPath();
-          if (i > 0 && i < mouseTrail.length - 2) {
-            const t0 = mouseTrail[i - 1];
-            const t3 = mouseTrail[i + 2];
-            const xc1 = (t0.x + t1.x) / 2, yc1 = (t0.y + t1.y) / 2;
-            const xc2 = (t1.x + t2.x) / 2, yc2 = (t1.y + t2.y) / 2;
-            pctx.moveTo(xc1, yc1);
-            pctx.quadraticCurveTo(t1.x, t1.y, xc2, yc2);
-          } else {
-            pctx.moveTo(t1.x, t1.y);
-            pctx.lineTo(t2.x, t2.y);
-          }
-          pctx.strokeStyle = `rgba(232, 200, 122, ${alpha * 0.45})`;
-          pctx.lineWidth = alpha * 1.2;
-          pctx.stroke();
-        }
-      }
-      pctx.globalAlpha = 1;
-    }
-    // 末端小光点
+    // mouse trail (stardust) - 平滑圆点序列
     mouseTrail.forEach((t) => {
       t.life -= 0.022;
-      if (t.life > 0.1) {
+      if (t.life > 0) {
+        // 中心点
         pctx.beginPath();
-        pctx.arc(t.x, t.y, t.size * t.life * 0.55, 0, Math.PI * 2);
+        pctx.arc(t.x, t.y, t.size * t.life * 0.9, 0, Math.PI * 2);
         pctx.fillStyle = `rgba(232, 200, 122, ${t.life * 0.7})`;
+        pctx.fill();
+        // 柔光
+        const grad = pctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, t.size * 4);
+        grad.addColorStop(0, `rgba(232, 200, 122, ${t.life * 0.18})`);
+        grad.addColorStop(1, 'transparent');
+        pctx.fillStyle = grad;
+        pctx.beginPath();
+        pctx.arc(t.x, t.y, t.size * 4, 0, Math.PI * 2);
         pctx.fill();
       }
     });
@@ -1880,96 +1858,170 @@ async function loadNetwork() {
 
 function drawNetwork(ctx, W, H, data, isDark, bgColor, labelColor) {
   const nodes = data.nodes, edges = data.edges;
-  if (!nodes.length) { ctx.fillStyle = labelColor; ctx.fillText('没有记忆桶', W/2, H/2); return; }
-
-  const positions = {};
-  const cx = W/2, cy = H/2;
-  nodes.forEach((n, i) => {
-    const angle = (i / nodes.length) * Math.PI * 2;
-    const r = Math.min(W, H) * 0.35;
-    positions[n.id] = {
-      x: cx + Math.cos(angle) * r + (Math.random() - 0.5) * 50,
-      y: cy + Math.sin(angle) * r + (Math.random() - 0.5) * 50,
-    };
-  });
-
-  for (let iter = 0; iter < 80; iter++) {
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const a = positions[nodes[i].id], b = positions[nodes[j].id];
-        let dx = b.x - a.x, dy = b.y - a.y;
-        const dist = Math.max(1, Math.sqrt(dx*dx + dy*dy));
-        const force = 800 / (dist * dist);
-        dx = (dx / dist) * force; dy = (dy / dist) * force;
-        a.x -= dx; a.y -= dy; b.x += dx; b.y += dy;
-      }
-    }
-    edges.forEach(e => {
-      const a = positions[e.source], b = positions[e.target];
-      if (!a || !b) return;
-      let dx = b.x - a.x, dy = b.y - a.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      const force = (dist - 100) * 0.01 * (e.similarity || 0.5);
-      dx = (dx / Math.max(1,dist)) * force; dy = (dy / Math.max(1,dist)) * force;
-      a.x += dx; a.y += dy; b.x -= dx; b.y -= dy;
-    });
-    nodes.forEach(n => {
-      const p = positions[n.id];
-      p.x += (cx - p.x) * 0.01; p.y += (cy - p.y) * 0.01;
-    });
-  }
-
   ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, W, H);
+  if (!nodes.length) { ctx.fillStyle = labelColor; ctx.fillText('没有记忆桶', W/2, H/2); return; }
 
-  const edgeColor = isDark ? '212, 175, 110' : '42, 32, 36';
+  // 坐标轴绘制
+  const padding = 60;
+  const innerW = W - padding * 2;
+  const innerH = H - padding * 2;
+  const axisColor = isDark ? 'rgba(112, 128, 160, 0.25)' : 'rgba(140, 125, 132, 0.25)';
+  const axisTextColor = isDark ? 'rgba(112, 128, 160, 0.7)' : 'rgba(140, 125, 132, 0.7)';
+
+  // 网格
+  ctx.strokeStyle = axisColor;
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 10; i++) {
+    const x = padding + (i / 10) * innerW;
+    const y = padding + (i / 10) * innerH;
+    ctx.beginPath();
+    ctx.moveTo(x, padding);
+    ctx.lineTo(x, H - padding);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(padding, y);
+    ctx.lineTo(W - padding, y);
+    ctx.stroke();
+  }
+
+  // 边框
+  ctx.strokeStyle = isDark ? 'rgba(180, 168, 144, 0.4)' : 'rgba(74, 61, 68, 0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(padding, padding, innerW, innerH);
+
+  // 轴标签
+  ctx.fillStyle = axisTextColor;
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  // X轴: Valence
+  ctx.fillText('VALENCE →', W/2, H - padding + 30);
+  ctx.fillText('0', padding, H - padding + 18);
+  ctx.fillText('0.5', W/2, H - padding + 18);
+  ctx.fillText('1', W - padding, H - padding + 18);
+  // Y轴: Arousal
+  ctx.save();
+  ctx.translate(padding - 30, H/2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('AROUSAL →', 0, 0);
+  ctx.restore();
+  ctx.textAlign = 'right';
+  ctx.fillText('1', padding - 8, padding + 4);
+  ctx.fillText('0.5', padding - 8, H/2 + 4);
+  ctx.fillText('0', padding - 8, H - padding + 4);
+
+  // 象限标签
+  ctx.textAlign = 'center';
+  ctx.font = 'italic 12px Cormorant Garamond, serif';
+  ctx.fillStyle = isDark ? 'rgba(180, 168, 144, 0.3)' : 'rgba(74, 61, 68, 0.3)';
+  ctx.fillText('紧张 / 激动', padding + innerW * 0.25, padding + innerH * 0.1);
+  ctx.fillText('愉悦 / 兴奋', padding + innerW * 0.75, padding + innerH * 0.1);
+  ctx.fillText('抑郁 / 疲惫', padding + innerW * 0.25, padding + innerH * 0.95);
+  ctx.fillText('平静 / 满足', padding + innerW * 0.75, padding + innerH * 0.95);
+
+  // 颜色：黑金版用金色+蓝色，灰粉版用粉色+灰色
+  const colors = isDark
+    ? {
+        feel: '#5a8fc4',       // 蓝
+        feel_glow: '#7ba8d8',
+        memory: '#d4af6e',     // 金
+        memory_glow: '#e8c87a',
+        archived: '#4a5572',
+      }
+    : {
+        feel: '#b58497',       // 粉
+        feel_glow: '#d4a3b0',
+        memory: '#8c7d84',     // 灰
+        memory_glow: '#b8a9b0',
+        archived: '#d4c4ca',
+      };
+
+  // 位置：按VA算坐标，碰撞稍微扰动
+  const positions = {};
+  const occupied = [];
+  nodes.forEach(n => {
+    const v = n.valence != null ? n.valence : 0.5;
+    const a = n.arousal != null ? n.arousal : 0.5;
+    let px = padding + v * innerW;
+    let py = padding + (1 - a) * innerH;  // y倒过来：高arousal在上
+    const r = Math.max(4, Math.min(13, (n.score || 5) * 0.9));
+    // 避免完全重叠
+    let attempts = 0;
+    while (attempts < 8) {
+      let collision = false;
+      for (const o of occupied) {
+        const dx = px - o.x, dy = py - o.y;
+        const minD = (r + o.r) * 0.85;
+        if (dx*dx + dy*dy < minD * minD) {
+          px += (Math.random() - 0.5) * 12;
+          py += (Math.random() - 0.5) * 12;
+          collision = true;
+          break;
+        }
+      }
+      if (!collision) break;
+      attempts++;
+    }
+    occupied.push({ x: px, y: py, r });
+    positions[n.id] = { x: px, y: py, r };
+  });
+
+  // 边
   edges.forEach(e => {
     const a = positions[e.source], b = positions[e.target];
     if (!a || !b) return;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    ctx.strokeStyle = `rgba(${edgeColor}, ${e.similarity * 0.3})`;
-    ctx.lineWidth = Math.max(0.5, e.similarity * 1.5);
+    const edgeColorRGB = isDark ? '212, 175, 110' : '181, 132, 151';
+    ctx.strokeStyle = `rgba(${edgeColorRGB}, ${(e.similarity || 0.3) * 0.18})`;
+    ctx.lineWidth = Math.max(0.3, (e.similarity || 0.3) * 1.2);
     ctx.stroke();
   });
 
-  const colors = isDark
-    ? { dynamic: '#e8c87a', permanent: '#d4a574', feel: '#c08a8a', archived: '#4e5878' }
-    : { dynamic: '#2a2024', permanent: '#c19676', feel: '#b58497', archived: '#b8a9b0' };
-
+  // 节点
   nodes.forEach(n => {
     const p = positions[n.id];
-    const r = Math.max(4, Math.min(14, n.score * 0.8));
-    const color = colors[n.type] || colors.dynamic;
+    const isFeel = n.type === 'feel';
+    const isArchived = n.type === 'archived' || (n.score && n.score < 0.3);
+    const color = isArchived ? colors.archived : (isFeel ? colors.feel : colors.memory);
+    const glow = isArchived ? colors.archived : (isFeel ? colors.feel_glow : colors.memory_glow);
 
     // halo
-    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r + 6);
-    grad.addColorStop(0, color + '40');
-    grad.addColorStop(1, color + '00');
+    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r + 8);
+    grad.addColorStop(0, glow + '50');
+    grad.addColorStop(1, glow + '00');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r + 6, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.r + 8, 0, Math.PI * 2);
     ctx.fill();
 
+    // dot
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = n.resolved ? color + '70' : color;
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = n.resolved ? color + '90' : color;
     ctx.fill();
 
     if (n.pinned) {
-      ctx.strokeStyle = isDark ? '#e8c87a' : '#8d6275';
+      ctx.strokeStyle = glow;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r + 2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, p.r + 3, 0, Math.PI * 2);
       ctx.stroke();
     }
+  });
 
-    const name = n.name.length > 10 ? n.name.slice(0, 10) + '…' : n.name;
-    ctx.fillStyle = labelColor;
-    ctx.font = '10px Shippori Mincho, serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(name, p.x, p.y + r + 14);
+  // 标签：只画重要度高+pinned的避免拥挤
+  ctx.font = '9.5px Shippori Mincho, serif';
+  ctx.fillStyle = labelColor;
+  ctx.textAlign = 'center';
+  nodes.forEach(n => {
+    const p = positions[n.id];
+    const important = n.pinned || (n.score && n.score > 8);
+    if (important) {
+      const name = n.name.length > 10 ? n.name.slice(0, 10) + '…' : n.name;
+      ctx.fillText(name, p.x, p.y + p.r + 13);
+    }
   });
 }
 
