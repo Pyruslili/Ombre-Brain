@@ -819,6 +819,21 @@ async def breath(
     # --- Exclude pinned/protected from search results (they surface in surfacing mode) ---
     # --- 搜索模式排除钉选桶（它们在浮现模式中始终可见）---
     matches = [b for b in matches if not (b["metadata"].get("pinned") or b["metadata"].get("protected"))]
+    # --- Include feel if semantically related ---
+    if query and query.strip():
+        try:
+            feel_buckets = [b for b in await bucket_mgr.list_all(include_archive=False)
+                           if b["metadata"].get("type") == "feel"]
+            feel_ids = {b["id"] for b in matches}
+            vector_feels = await embedding_engine.search_similar(query, top_k=3)
+            for bid, sim in vector_feels:
+                if sim > 0.6 and bid not in feel_ids:
+                    fb = next((b for b in feel_buckets if b["id"] == bid), None)
+                    if fb:
+                        fb["score"] = round(sim * 100, 2)
+                        matches.append(fb)
+        except Exception:
+            pass
 
     # --- Vector similarity channel: find semantically related buckets ---
     # --- 向量相似度通道：找到语义相关的桶 ---
