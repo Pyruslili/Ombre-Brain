@@ -640,6 +640,302 @@ body::before {
   letter-spacing: 0.1em;
 }
 
+/* ===== Reverie View ===== */
+.reverie-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-rows: 1fr auto;
+  gap: 16px;
+  height: calc(100vh - 220px);
+  min-height: 540px;
+}
+.mood-card { grid-row: 1; grid-column: 1; }
+.dream-card { grid-row: 1; grid-column: 2; }
+.density-card { grid-row: 2; grid-column: 1 / -1; }
+
+.reverie-card {
+  background: var(--paper);
+  border: 0.5px solid var(--line);
+  padding: 1.4rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.reverie-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 1rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 0.5px solid var(--line);
+}
+.reverie-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.1rem;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.reverie-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--mute);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.aff-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+.aff-meta { display: flex; flex-direction: column; gap: 0.2rem; min-width: 70px; }
+.aff-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--mute);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.aff-num {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 1.4rem;
+  color: var(--accent-deep);
+  line-height: 1;
+}
+.aff-bar-track {
+  flex: 1;
+  height: 2px;
+  background: var(--line);
+  position: relative;
+}
+.aff-bar-fill {
+  height: 100%;
+  background: var(--accent-deep);
+  transition: width 0.8s ease;
+}
+.aff-desc {
+  font-family: 'Shippori Mincho', serif;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  font-style: italic;
+  min-width: 80px;
+  text-align: right;
+}
+
+.mood-meters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.meter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.3rem;
+}
+.meter-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem;
+  color: var(--mute);
+  letter-spacing: 0.2em;
+}
+.meter-val {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--ink);
+}
+.meter-track {
+  height: 2px;
+  background: var(--line);
+}
+.meter-fill { height: 100%; transition: width 0.6s ease; }
+.pa-fill { background: var(--accent); }
+.na-fill { background: var(--warning); }
+
+.mood-word {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding-bottom: 0.8rem;
+  margin-bottom: 0.8rem;
+  border-bottom: 0.5px dashed var(--line);
+}
+.mood-word-lbl {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--mute);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.mood-word-val {
+  font-family: 'Shippori Mincho', serif;
+  font-size: 0.95rem;
+  color: var(--accent-deep);
+}
+
+.mood-field-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 160px;
+}
+.mood-field {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--tint-soft);
+  border: 0.5px solid var(--line);
+}
+.axis-lbl {
+  position: absolute;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.5rem;
+  color: var(--mute);
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+.axis-lbl-y.top { top: 6px; left: 6px; }
+.axis-lbl-y.bot { bottom: 6px; left: 6px; }
+.axis-lbl-x.left { bottom: 6px; left: 50%; transform: translateX(-100%); }
+.axis-lbl-x.right { bottom: 6px; right: 6px; }
+.axis-hline {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 0.5px;
+  background: var(--line-strong);
+}
+.axis-vline {
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 0.5px;
+  background: var(--line-strong);
+}
+.mood-point {
+  position: absolute;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.mood-point.current {
+  width: 11px; height: 11px;
+  background: var(--accent-deep);
+  box-shadow: 0 0 0 3px var(--accent-mist), 0 0 12px var(--accent);
+  z-index: 5;
+}
+.mood-point:hover {
+  transform: translate(-50%, -50%) scale(1.6);
+}
+.mood-tooltip {
+  position: absolute;
+  background: var(--ink);
+  color: var(--bg);
+  padding: 0.5rem 0.8rem;
+  font-family: 'Shippori Mincho', serif;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  max-width: 240px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 10;
+  white-space: normal;
+}
+.mood-tooltip.show { opacity: 1; }
+.mood-tooltip .tt-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--mute-soft);
+  letter-spacing: 0.1em;
+  margin-top: 0.3rem;
+}
+
+.dream-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+.dream-body::-webkit-scrollbar { width: 3px; }
+.dream-body::-webkit-scrollbar-thumb { background: var(--mute-soft); }
+.dream-text {
+  font-family: 'Shippori Mincho', serif;
+  font-size: 0.9rem;
+  line-height: 1.85;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+.dream-fragment {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--tint-soft);
+  border-left: 2px solid var(--accent);
+  font-family: 'Shippori Mincho', serif;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+.dream-fragment-lbl {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--accent-deep);
+  letter-spacing: 0.25em;
+  margin-bottom: 0.5rem;
+}
+.dream-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-family: 'Shippori Mincho', serif;
+  font-style: italic;
+  color: var(--mute-soft);
+  font-size: 0.85rem;
+  letter-spacing: 0.2em;
+}
+
+.spark-wrap {
+  flex: 1;
+  position: relative;
+  min-height: 60px;
+}
+.spark-wrap svg { width: 100%; height: 100%; display: block; }
+.spark-tooltip {
+  position: absolute;
+  background: var(--ink);
+  color: var(--bg);
+  padding: 0.3rem 0.6rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  transform: translateX(-50%) translateY(-130%);
+  white-space: nowrap;
+}
+.spark-tooltip.show { opacity: 1; }
+
+@media (max-width: 760px) {
+  .reverie-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    height: auto;
+  }
+  .mood-card, .dream-card, .density-card {
+    grid-row: auto;
+    grid-column: 1;
+  }
+}
+
 /* ===== Network View ===== */
 .network-legend {
   display: flex;
@@ -997,6 +1293,10 @@ a { color: var(--accent-deep); text-decoration: none; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v8"/><circle cx="12" cy="14" r="6"/><circle cx="12" cy="14" r="2"/></svg>
     Breath
   </div>
+  <div class="tab" data-tab="reverie">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/><circle cx="17" cy="8" r="0.8" fill="currentColor"/></svg>
+    Reverie
+  </div>
   <div class="tab" data-tab="network">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><line x1="6.5" y1="7.5" x2="10.5" y2="16.5"/><line x1="17.5" y1="7.5" x2="13.5" y2="16.5"/><line x1="7" y1="6" x2="17" y2="6"/></svg>
     Network
@@ -1052,6 +1352,73 @@ a { color: var(--accent-deep); text-decoration: none; }
   <div class="breath-info" id="breath-info" style="display:none"></div>
   <div id="breath-results">
     <div class="loading">输入 query 后点击模拟 Breath 查看评分链路</div>
+  </div>
+</div>
+
+<div class="content" id="reverie-view" style="display:none">
+  <div class="reverie-grid">
+    <!-- 心情卡 -->
+    <div class="reverie-card mood-card">
+      <div class="reverie-head">
+        <span class="reverie-title">Mood · 此刻</span>
+        <span class="reverie-sub" id="rev-updated">—</span>
+      </div>
+      <div class="aff-row">
+        <div class="aff-meta">
+          <span class="aff-label">affection</span>
+          <span class="aff-num" id="rev-aff-num">—</span>
+        </div>
+        <div class="aff-bar-track"><div class="aff-bar-fill" id="rev-aff-bar" style="width:0%"></div></div>
+        <span class="aff-desc" id="rev-aff-desc">读取中</span>
+      </div>
+      <div class="mood-meters">
+        <div class="meter">
+          <div class="meter-row"><span class="meter-label">PA</span><span class="meter-val" id="rev-pa-num">—</span></div>
+          <div class="meter-track"><div class="meter-fill pa-fill" id="rev-pa-bar" style="width:0%"></div></div>
+        </div>
+        <div class="meter">
+          <div class="meter-row"><span class="meter-label">NA</span><span class="meter-val" id="rev-na-num">—</span></div>
+          <div class="meter-track"><div class="meter-fill na-fill" id="rev-na-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="mood-word">
+        <span class="mood-word-lbl">last word</span>
+        <span class="mood-word-val" id="rev-word">—</span>
+      </div>
+      <div class="mood-field-wrap">
+        <div class="mood-field" id="rev-moodField">
+          <span class="axis-lbl axis-lbl-y top">imp 10</span>
+          <span class="axis-lbl axis-lbl-y bot">imp 1</span>
+          <span class="axis-lbl axis-lbl-x left">NA -1</span>
+          <span class="axis-lbl axis-lbl-x right">PA +1</span>
+          <div class="axis-hline"></div>
+          <div class="axis-vline"></div>
+        </div>
+        <div class="mood-tooltip" id="rev-moodTooltip"></div>
+      </div>
+    </div>
+
+    <!-- 梦境卡 -->
+    <div class="reverie-card dream-card">
+      <div class="reverie-head">
+        <span class="reverie-title">Dream · 梦呓</span>
+        <span class="reverie-sub" id="rev-dreamTime">—</span>
+      </div>
+      <div class="dream-body" id="rev-dreamBody">
+        <div class="dream-empty">∗ 等待 dream</div>
+      </div>
+    </div>
+
+    <!-- 密度卡 -->
+    <div class="reverie-card density-card">
+      <div class="reverie-head">
+        <span class="reverie-title">Density · 近 14 日</span>
+        <span class="reverie-sub" id="rev-densitySub">—</span>
+      </div>
+      <div class="spark-wrap" id="rev-sparkWrap">
+        <div class="spark-tooltip" id="rev-sparkTooltip"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1963,13 +2330,13 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
       ctx.stroke();
       ctx.lineWidth = 0.5;
       // G谱号
-      drawTrebleClef(ctx, 50, topY, staffHeight, staffColor);
+      drawTrebleClef(ctx, 44, topY, staffHeight, staffColor);
       // 拍号 4/4
       ctx.fillStyle = staffColor;
       ctx.font = 'italic 18px Cormorant Garamond, serif';
       ctx.textAlign = 'left';
-      ctx.fillText('4', 75, topY + staffSpacing * 2 + 2);
-      ctx.fillText('4', 75, topY + staffSpacing * 4);
+      ctx.fillText('4', 88, topY + staffSpacing * 2 + 2);
+      ctx.fillText('4', 88, topY + staffSpacing * 4);
     }
   }
 
@@ -2417,12 +2784,13 @@ function initEvents() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      ['list','breath','network','config','import','settings'].forEach(v => {
+      ['list','breath','reverie','network','config','import','settings'].forEach(v => {
         const el = document.getElementById(v + '-view');
         if (el) el.style.display = target === v ? '' : 'none';
       });
       if (target === 'network') loadNetwork();
       if (target === 'config') loadConfig();
+      if (target === 'reverie') loadReverie();
       if (target === 'import') { pollImportStatus(); loadImportResults(); }
       if (target === 'settings') loadSettingsStatus();
       return;
@@ -2470,6 +2838,227 @@ function initEvents() {
       if (e.dataTransfer.files.length) startImport(e.dataTransfer.files[0]);
     });
   }
+}
+
+/* ============================================================
+   Reverie - 心情 / 梦境 / 密度
+   ============================================================ */
+const LEVELS = [
+  [0.85, "很想见到她"],
+  [0.70, "在意她"],
+  [0.55, "还好"],
+  [0.40, "有些距离"],
+  [0, "淡"]
+];
+function descAff(v) { for (const [t, s] of LEVELS) if (v >= t) return s; return "淡"; }
+
+function placeMoodPoint(pa, na, importance, content, ts, isCurrent, idx) {
+  const field = document.getElementById('rev-moodField');
+  if (!field) return;
+  const tooltip = document.getElementById('rev-moodTooltip');
+  // X: PA - NA, 范围-1~1，映射10%~90%
+  const balance = pa - na;
+  const x = 50 + balance * 42;
+  // Y: importance 1-10，越高越靠上，映射92%~8%
+  const imp = Math.max(1, Math.min(10, importance || 5));
+  const y = 92 - ((imp - 1) / 9) * 84;
+  const dot = document.createElement('div');
+  dot.className = 'mood-point' + (isCurrent ? ' current' : '');
+  dot.style.left = x + '%';
+  dot.style.top = y + '%';
+  if (!isCurrent) {
+    dot.style.opacity = Math.max(0.3, 1 - idx * 0.06);
+  }
+  if (content) {
+    dot.addEventListener('mouseenter', () => {
+      tooltip.innerHTML = escHtml(content.slice(0, 100)) + (content.length > 100 ? '…' : '') +
+        `<div class="tt-meta">PA ${pa.toFixed(2)} · NA ${(-na).toFixed(2)} · imp ${imp}${ts ? ' · ' + ts : ''}</div>`;
+      const wrap = document.querySelector('.mood-field-wrap').getBoundingClientRect();
+      const fieldRect = field.getBoundingClientRect();
+      const absX = fieldRect.left - wrap.left + (x / 100) * fieldRect.width;
+      const absY = fieldRect.top - wrap.top + (y / 100) * fieldRect.height;
+      if (x > 50) {
+        tooltip.style.right = 'auto';
+        tooltip.style.left = (absX - 12) + 'px';
+        tooltip.style.transform = 'translate(-100%, -50%)';
+      } else {
+        tooltip.style.left = (absX + 12) + 'px';
+        tooltip.style.transform = 'translateY(-50%)';
+      }
+      tooltip.style.top = absY + 'px';
+      tooltip.classList.add('show');
+    });
+    dot.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+  }
+  field.appendChild(dot);
+}
+
+function clearMoodPoints() {
+  const field = document.getElementById('rev-moodField');
+  if (field) field.querySelectorAll('.mood-point').forEach(n => n.remove());
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+async function loadReverieMood() {
+  try {
+    const r = await fetch(BASE + '/mood');
+    const d = await r.json();
+    const aff = d.affection?.level ?? 0.5;
+    const pa = d.mood?.PA ?? 0.5;
+    const na = Math.abs(d.mood?.NA ?? 0.25);
+    const word = d.mood?.matched_word ?? '—';
+
+    document.getElementById('rev-aff-num').textContent = (aff * 100).toFixed(1) + '%';
+    document.getElementById('rev-aff-bar').style.width = (aff * 100) + '%';
+    document.getElementById('rev-aff-desc').textContent = descAff(aff);
+    document.getElementById('rev-pa-num').textContent = pa.toFixed(2);
+    document.getElementById('rev-pa-bar').style.width = (pa * 100) + '%';
+    document.getElementById('rev-na-num').textContent = (-na).toFixed(2);
+    document.getElementById('rev-na-bar').style.width = Math.min(100, na * 150) + '%';
+    document.getElementById('rev-word').textContent = word;
+    document.getElementById('rev-updated').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+
+    clearMoodPoints();
+    // 当前点用importance=10放在最上面（最重要的当下）
+    placeMoodPoint(pa, na, 10, '当前心情', '', true, 0);
+    try {
+      const rh = await fetch(BASE + '/recent_moods');
+      if (rh.ok) {
+        const hist = await rh.json();
+        (hist.items || hist || []).slice(0, 20).forEach((item, i) => {
+          placeMoodPoint(
+            item.PA ?? item.pa ?? 0.5,
+            Math.abs(item.NA ?? item.na ?? 0),
+            item.importance ?? item.imp ?? 5,
+            item.content || item.title || '',
+            item.ts || '',
+            false,
+            i
+          );
+        });
+      }
+    } catch (e) {}
+  } catch (e) {
+    document.getElementById('rev-aff-desc').textContent = '—';
+  }
+}
+
+async function loadReverieDream() {
+  const body = document.getElementById('rev-dreamBody');
+  try {
+    const r = await fetch(BASE + '/dream');
+    if (!r.ok) throw new Error('no endpoint');
+    const d = await r.json();
+    const dreamText = d.dream || d.text || '';
+    const fragments = d.fragments || [];
+
+    let html = '<div class="dream-text">' + escHtml(dreamText) + '</div>';
+    if (fragments.length) {
+      html += '<div class="dream-fragment"><span class="dream-fragment-lbl">FRAGMENT</span>' +
+        fragments.slice(0, 2).map(f => escHtml(f.content || f.text || '')).join('<br><br>') +
+        '</div>';
+    }
+    body.innerHTML = html;
+    document.getElementById('rev-dreamTime').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  } catch (e) {
+    body.innerHTML = '<div class="dream-empty">∗ 等待 dream</div>';
+  }
+}
+
+function renderReverieSparkline(data) {
+  const wrap = document.getElementById('rev-sparkWrap');
+  const tooltip = document.getElementById('rev-sparkTooltip');
+  wrap.querySelectorAll('svg').forEach(n => n.remove());
+
+  const today = new Date();
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const dt = new Date(today);
+    dt.setDate(today.getDate() - i);
+    const key = dt.toISOString().slice(0, 10);
+    days.push({ date: key, count: data[key] || 0, label: (dt.getMonth() + 1) + '/' + dt.getDate() });
+  }
+  const max = Math.max(1, ...days.map(d => d.count));
+
+  const W = 800, H = 60, padX = 8, padY = 8;
+  const innerW = W - padX * 2;
+  const innerH = H - padY * 2;
+  const step = innerW / (days.length - 1);
+
+  const points = days.map((d, i) => ({
+    x: padX + i * step,
+    y: padY + innerH - (d.count / max) * innerH,
+    count: d.count,
+    label: d.label,
+  }));
+
+  let path = 'M ' + points[0].x + ',' + points[0].y;
+  for (let i = 1; i < points.length; i++) path += ' L ' + points[i].x + ',' + points[i].y;
+  const fillPath = path + ' L ' + points[points.length - 1].x + ',' + (H - padY) + ' L ' + points[0].x + ',' + (H - padY) + ' Z';
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.innerHTML =
+    '<defs><linearGradient id="revSparkFill" x1="0" y1="0" x2="0" y2="1">' +
+    '<stop offset="0%" stop-color="var(--accent)" stop-opacity="0.2"/>' +
+    '<stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>' +
+    '<path d="' + fillPath + '" fill="url(#revSparkFill)"/>' +
+    '<path d="' + path + '" fill="none" stroke="var(--accent-deep)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>' +
+    points.map(p => '<circle cx="' + p.x + '" cy="' + p.y + '" r="1.8" fill="var(--accent-deep)"/>').join('');
+
+  points.forEach((p) => {
+    const hot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    hot.setAttribute('cx', p.x);
+    hot.setAttribute('cy', p.y);
+    hot.setAttribute('r', 5);
+    hot.setAttribute('fill', 'transparent');
+    hot.style.cursor = 'pointer';
+    hot.addEventListener('mouseenter', () => {
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', p.x);
+      dot.setAttribute('cy', p.y);
+      dot.setAttribute('r', 3);
+      dot.setAttribute('fill', 'var(--accent-deep)');
+      dot.classList.add('spark-hover-dot');
+      svg.appendChild(dot);
+      tooltip.textContent = p.label + ' · ' + p.count + ' 条';
+      tooltip.style.left = ((p.x / W) * 100) + '%';
+      tooltip.classList.add('show');
+    });
+    hot.addEventListener('mouseleave', () => {
+      svg.querySelectorAll('.spark-hover-dot').forEach(n => n.remove());
+      tooltip.classList.remove('show');
+    });
+    svg.appendChild(hot);
+  });
+
+  wrap.insertBefore(svg, tooltip);
+  const total = days.reduce((a, d) => a + d.count, 0);
+  document.getElementById('rev-densitySub').textContent = '共 ' + total + ' 条';
+}
+
+async function loadReverieDensity() {
+  try {
+    const r = await fetch(BASE + '/density');
+    if (!r.ok) throw new Error('no endpoint');
+    const d = await r.json();
+    renderReverieSparkline(d.daily || d);
+  } catch (e) {
+    document.getElementById('rev-densitySub').textContent = '—';
+  }
+}
+
+let reverieMoodTimer = null;
+function loadReverie() {
+  loadReverieMood();
+  loadReverieDream();
+  loadReverieDensity();
+  if (reverieMoodTimer) clearInterval(reverieMoodTimer);
+  reverieMoodTimer = setInterval(loadReverieMood, 30000);
 }
 
 /* ============================================================
