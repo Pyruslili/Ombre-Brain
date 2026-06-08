@@ -1357,6 +1357,10 @@ a { color: var(--accent-deep); text-decoration: none; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     设置
   </div>
+   <div class="tab" data-tab="desire">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    内心
+  </div>
 </div>
 
 <!-- ============================================================
@@ -1591,6 +1595,33 @@ a { color: var(--accent-deep); text-decoration: none; }
     <div class="config-section">
       <h3>系统信息</h3>
       <div id="config-readonly" style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--mute);line-height:1.9;letter-spacing:0.05em;">加载中</div>
+      <div class="content" id="desire-view" style="display:none">
+  <div style="padding:1.5rem;max-width:700px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+      <h2 style="margin:0;font-size:1.1rem">此刻的内心</h2>
+      <button onclick="loadDesire()" style="font-size:0.8rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--ink-soft)">刷新</button>
+    </div>
+
+    <!-- Intent -->
+    <div id="desire-intent" style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
+      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.4rem">此刻最想做的事</div>
+      <div id="desire-intent-text" style="font-size:1rem">加载中…</div>
+      <div id="desire-intent-reason" style="font-size:0.75rem;color:var(--ink-soft);margin-top:0.3rem"></div>
+    </div>
+
+    <!-- 8维驱动条 -->
+    <div style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
+      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.8rem">驱动条</div>
+      <div id="desire-drives"></div>
+    </div>
+
+    <!-- 念头池 -->
+    <div style="background:var(--card);border-radius:10px;padding:1.2rem;border:1px solid var(--border)">
+      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.8rem">念头池</div>
+      <div id="desire-thoughts"><span style="color:var(--ink-soft);font-size:0.85rem">空的</span></div>
+    </div>
+  </div>
+</div> 
     </div>
   </div>
 </div>
@@ -2045,7 +2076,66 @@ async function doLogin() {
   const resp = await fetch('/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: pwd}) });
   if (resp.ok) { document.getElementById('auth-overlay').style.display = 'none'; loadBuckets(); }
   else { const d = await resp.json(); showAuthError(d.detail || '密码错误'); }
-}
+
+async function loadDesire() {
+  try {
+    const r = await fetch('/api/desire/state');
+    const d = await r.json();
+
+    // intent
+    const intentEl = document.getElementById('desire-intent-text');
+    const reasonEl = document.getElementById('desire-intent-reason');
+    if (d.intent) {
+      intentEl.textContent = d.intent.want_action;
+      reasonEl.textContent = d.intent.reason || '';
+    } else {
+      intentEl.textContent = '此刻没有强烈的意图';
+      reasonEl.textContent = '';
+    }
+
+    // drives
+    const DRIVE_LABELS = {
+      attachment:'想嘉嘉', curiosity:'好奇', reflection:'沉淀',
+      duty:'记挂', social:'社交', fatigue:'疲劳', libido:'亲密', stress:'压力'
+    };
+    const drivesEl = document.getElementById('desire-drives');
+    drivesEl.innerHTML = Object.entries(d.drives).map(([k, v]) => {
+      const lf = d.local_fatigue[k] || 0;
+      const eff = Math.max(0, v * (1 - lf));
+      const pct = Math.round(v * 100);
+      const effPct = Math.round(eff * 100);
+      const isHigh = eff >= 0.55;
+      return `<div style="margin-bottom:0.6rem">
+        <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.2rem">
+          <span style="color:${isHigh?'var(--accent)':'var(--ink-soft)'}">${DRIVE_LABELS[k]||k}</span>
+          <span style="color:var(--ink-soft)">${pct}%${lf>0.1?' (疲劳-'+Math.round(lf*100)+'%)':''}</span>
+        </div>
+        <div style="height:4px;background:var(--border);border-radius:2px">
+          <div style="height:4px;width:${pct}%;background:var(--border);border-radius:2px;position:relative">
+            <div style="position:absolute;left:0;top:0;height:4px;width:${effPct}%;background:${isHigh?'var(--accent)':'var(--ink-soft)'};border-radius:2px"></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // thoughts
+    const thoughtsEl = document.getElementById('desire-thoughts');
+    if (d.thoughts && d.thoughts.length > 0) {
+      thoughtsEl.innerHTML = d.thoughts.map(t => {
+        const icon = t.kind==='fixation'?'🔒':t.kind==='unsourced'?'🌫️':'💭';
+        return `<div style="font-size:0.85rem;padding:0.4rem 0;border-bottom:1px solid var(--border);display:flex;gap:0.5rem;align-items:baseline">
+          <span>${icon}</span>
+          <span style="flex:1;color:var(--ink)">${t.text||'（无来源）'}</span>
+          <span style="color:var(--ink-soft);font-size:0.75rem">${t.drive} ${Math.round(t.strength*100)}%</span>
+        </div>`;
+      }).join('');
+    } else {
+      thoughtsEl.innerHTML = '<span style="color:var(--ink-soft);font-size:0.85rem">空的</span>';
+    }
+  } catch(e) {
+    document.getElementById('desire-intent-text').textContent = '加载失败';
+  }
+}   
 
 async function doLogout() {
   await fetch('/auth/logout', { method: 'POST' });
