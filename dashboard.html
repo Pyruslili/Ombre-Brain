@@ -2080,7 +2080,7 @@ async function doLogin() {
    
 async function loadDesire() {
   try {
-    const r = await fetch('/api/desire/state');
+    const r = await fetch('/api/desire/state', { credentials: 'include' });
     const d = await r.json();
 
     // intent
