@@ -2949,7 +2949,7 @@ function initEvents() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       const target = tab.dataset.tab;
-      ['list','breath','reverie','network','config','import','settings'].forEach(v => {
+      ['list','breath','reverie','network','config','import','settings','desire'].forEach(v => {
         const el = document.getElementById(v + '-view');
         if (el) el.style.display = target === v ? '' : 'none';
       });
