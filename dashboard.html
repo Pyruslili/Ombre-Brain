@@ -2940,6 +2940,7 @@ function initEvents() {
       if (target === 'reverie') loadReverie();
       if (target === 'import') { pollImportStatus(); loadImportResults(); }
       if (target === 'settings') loadSettingsStatus();
+      if (target === 'desire') loadDesire(); 
       return;
     }
     if (e.target.closest('#import-upload-zone')) {
