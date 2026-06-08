@@ -603,6 +603,7 @@ async def breath(
 ) -> str:
     """检索/浮现记忆。不传query或传空=自动浮现,有query=关键词检索。max_tokens控制返回总token上限(默认10000)。domain逗号分隔,valence/arousal 0~1(-1忽略)。max_results控制返回数量上限(默认20,最大50)。importance_min>=1时按重要度批量拉取(不走语义搜索,按importance降序返回最多20条)。"""
     await decay_engine.ensure_started()
+    _desire.tick(idle_seconds=0)
     # --- Restore affection and mood from bucket on first breath ---
     try:
         from affection import restore_from_bucket as _aff_restore, restore_mood_from_bucket as _mood_restore
@@ -2132,6 +2133,13 @@ async def api_import_review(request):
     return JSONResponse({"applied": applied, "errors": errors})
 
 
+@mcp.custom_route("/api/desire/state", methods=["GET"])
+async def api_desire_state(request):
+    from starlette.responses import JSONResponse
+    _desire.tick(idle_seconds=0)
+    return JSONResponse(_desire.state(),
+                       headers={"Access-Control-Allow-Origin": "*"})
+    
 # =============================================================
 # /api/status — system status for Dashboard settings tab
 # /api/status — Dashboard 设置页用系统状态
