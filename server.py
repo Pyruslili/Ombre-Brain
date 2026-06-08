@@ -43,6 +43,7 @@ import secrets
 import time
 import json as _json_lib
 import httpx
+import os as _os
 
 
 # --- Ensure same-directory modules can be imported ---
@@ -57,6 +58,7 @@ from decay_engine import DecayEngine
 from embedding_engine import EmbeddingEngine
 from import_memory import ImportEngine
 from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx
+from desire_engine import DesireEngine
 
 # --- Load config & init logging / 加载配置 & 初始化日志 ---
 config = load_config()
@@ -101,8 +103,14 @@ embedding_engine = EmbeddingEngine(config)            # Embedding engine first (
 bucket_mgr = BucketManager(config, embedding_engine=embedding_engine)  # Bucket manager / 记忆桶管理器
 dehydrator = Dehydrator(config)                      # Dehydrator / 脱水器
 decay_engine = DecayEngine(config, bucket_mgr)       # Decay engine / 衰减引擎
-import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)  # Import engine / 导入引擎
+import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)
 
+_desire_db = os.path.join(
+    os.environ.get("OMBRE_BUCKETS_DIR", "./buckets"),
+    "..",
+    "desire.db"
+)
+_desire = DesireEngine(db_path=_desire_db)
 # --- Create MCP server instance / 创建 MCP 服务器实例 ---
 # host="0.0.0.0" so Docker container's SSE is externally reachable
 # stdio mode ignores host (no network)
