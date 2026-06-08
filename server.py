@@ -2528,6 +2528,24 @@ async def api_desire_state(request):
     return JSONResponse(_desire.state(),
                        headers={"Access-Control-Allow-Origin": "*"})
     
+@mcp.custom_route("/api/desire/trigger", methods=["POST"])
+async def api_desire_trigger(request):
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+        drive = body.get("drive_key", "")
+        if drive:
+            _desire.pulse(drive, delta=0.5)
+        intent = _desire.intent()
+        if intent:
+            asyncio.create_task(_execute_intent(intent))
+            return JSONResponse({"triggered": intent})
+        return JSONResponse({"triggered": None, "msg": "intent未达阈值"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+        
 # =============================================================
 # /api/status — system status for Dashboard settings tab
 # /api/status — Dashboard 设置页用系统状态
