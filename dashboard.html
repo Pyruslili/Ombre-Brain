@@ -2378,10 +2378,64 @@ async function showDetail(id) {
          <div class="field"><label>创建</label>${meta.created || '—'}</div>
          <div class="field"><label>最后活跃</label>${meta.last_active || '—'}</div>
        </div>
-       <div class="detail-content">${esc(b.content)}</div>`;
+       <div class="detail-content" id="detail-body">${esc(b.content)}</div>
+       <div class="detail-actions" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+         <button onclick="startEdit('${id}','${esc(b.content).replace(/'/g,'&#39;')}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">编辑</button>
+         <button onclick="toggleResolved('${id}',${meta.resolved?1:0})" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">${meta.resolved?'捞回':'沉底'}</button>
+         <button onclick="toggleDigested('${id}',${meta.digested?1:0})" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">${meta.digested?'取消消化':'已消化'}</button>
+         <button onclick="deleteBucket('${id}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;color:#e57373">删除</button>
+       </div>`;
   } catch (e) {
     content.innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
   }
+}
+function startEdit(id, currentContent) {
+  const body = document.getElementById('detail-body');
+  body.innerHTML = `<textarea id="edit-ta" style="width:100%;min-height:120px;font-family:inherit;font-size:0.85rem;padding:0.6rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);resize:vertical">${currentContent}</textarea>
+    <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+      <button onclick="saveBucket('${id}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer">保存</button>
+      <button onclick="showDetail('${id}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">取消</button>
+    </div>`;
+}
+
+async function saveBucket(id) {
+  const text = document.getElementById('edit-ta').value;
+  await fetch(BASE + '/api/trace', {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({bucket_id: id, content: text})
+  });
+  await loadBuckets();
+  showDetail(id);
+}
+
+async function toggleResolved(id, current) {
+  await fetch(BASE + '/api/trace', {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({bucket_id: id, resolved: current ? 0 : 1})
+  });
+  await loadBuckets();
+  showDetail(id);
+}
+
+async function toggleDigested(id, current) {
+  await fetch(BASE + '/api/trace', {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({bucket_id: id, digested: current ? 0 : 1})
+  });
+  await loadBuckets();
+  showDetail(id);
+}
+
+async function deleteBucket(id) {
+  if (!confirm('确定删除？')) return;
+  await fetch(BASE + '/api/bucket/' + id, {
+    method:'DELETE', credentials:'include'
+  });
+  document.getElementById('detail-panel').classList.remove('open');
+  await loadBuckets();
 }
 
 function closeDetail() {
