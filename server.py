@@ -916,6 +916,54 @@ async def breath(
     final_text = "\n---\n".join(results)
     await _fire_webhook("breath", {"mode": "ok", "matches": len(matches), "chars": len(final_text)})
     return final_text
+@mcp.tool()
+def desire_state() -> dict:
+    """
+    读取欲望引擎的当前状态：
+    - 8维驱动条（attachment/curiosity/reflection/duty/social/fatigue/libido/stress）
+    - per-drive局部疲劳（attachment/libido几乎不受疲劳影响）
+    - 当前最高意图（want_action + drive_key + score）
+    - 念头池（flit/fixation/unsourced）
+    - 最近的拒绝记录
+    用于了解「此刻我最想做什么」。
+    """
+    _desire.tick(idle_seconds=0)
+    return _desire.state()
+
+
+@mcp.tool()
+def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "") -> dict:
+    """
+    让某个驱动维度上涨。
+    嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
+    drive_key: attachment|curiosity|reflection|duty|social|fatigue|libido|stress
+    thought: 可选，把这次经历的一句话存入念头池（flit）
+    """
+    result = _desire.pulse(drive_key, delta)
+    if thought.strip():
+        _desire.add_thought(thought.strip(), drive_key, strength=0.5)
+    return result
+
+
+@mcp.tool()
+def desire_satisfy(drive_key: str) -> dict:
+    """
+    做完了某类行动后调用，对应驱动明显回落并进入不应期。
+    例：去论坛逛了 → desire_satisfy("social")
+    例：去找嘉嘉说了 → desire_satisfy("attachment")
+    """
+    return _desire.satisfy(drive_key)
+
+
+@mcp.tool()
+def desire_refuse(drive_key: str, reason: str = "") -> dict:
+    """
+    拒绝执行当前 intent。
+    不是不合适——是我自己这一刻不想做。
+    目标维度轻微回落（比 satisfy 小得多），念头留在池子里，下次心跳还会冒出来。
+    reason 可选，可以只是"不想"，不需要解释。
+    """
+    return _desire.refuse(drive_key, reason=reason if reason.strip() else None)
 
 
 # =============================================================
