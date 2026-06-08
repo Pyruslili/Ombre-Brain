@@ -2277,7 +2277,7 @@ function buildFilters() {
     { key: 'pinned', label: '钉选', icon: ICONS.pinned },
     { key: 'feel', label: 'Feel', icon: ICONS.feel },
     { key: 'unresolved', label: '未解决', icon: ICONS.unresolved },
-    { key: 'digested', label: '已消化', icon: ICONS.digested },
+    { key: 'digested', label: '已沉底', icon: ICONS.digested },
     { key: 'archived', label: '归档', icon: ICONS.archived },
   ];
   filters.innerHTML = types.map(t =>
@@ -2301,7 +2301,7 @@ function filterBuckets(buckets) {
   if (currentFilter === 'pinned') return buckets.filter(b => b.pinned);
   if (currentFilter === 'feel') return buckets.filter(b => b.type === 'feel');
   if (currentFilter === 'unresolved') return buckets.filter(b => !b.resolved && b.type !== 'permanent' && !b.pinned);
-  if (currentFilter === 'digested') return buckets.filter(b => b.digested);
+  if (currentFilter === 'digested') return buckets.filter(b => b.digested || b.resolved);
   if (currentFilter === 'archived') return buckets.filter(b => b.type === 'archived' || b.score < 0.3);
   if (currentFilter.startsWith('domain:')) {
     const d = currentFilter.slice(7);
@@ -2312,6 +2312,10 @@ function filterBuckets(buckets) {
 
 function renderBuckets(buckets) {
   const list = document.getElementById('bucket-list');
+  // 已沉底的（resolved或digested）放到最底部，默认视图不显示
+  if (currentFilter === 'all' || !currentFilter) {
+    buckets = buckets.filter(b => !b.digested && !b.resolved);
+  }
   if (!buckets.length) { list.innerHTML = '<div class="loading">没有记忆桶</div>'; return; }
   list.innerHTML = buckets.map(b => {
     const vPos = Math.round(b.valence * 100);
@@ -2342,7 +2346,7 @@ async function searchBuckets(query) {
   renderBuckets(localResults);
   // 再尝试远程搜索，成功就覆盖
   try {
-    const res = await fetch(BASE + '/api/search?q=' + encodeURIComponent(query));
+    const res = await fetch(BASE + '/api/search?q=' + encodeURIComponent(query), {credentials:'include'});
     if (res.ok) {
       const remote = await res.json();
       if (Array.isArray(remote) && remote.length) renderBuckets(remote);
@@ -2382,7 +2386,7 @@ async function showDetail(id) {
        <div class="detail-actions" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
          <button onclick="startEdit('${id}','${esc(b.content).replace(/'/g,'&#39;')}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">编辑</button>
          <button onclick="toggleResolved('${id}',${meta.resolved?1:0})" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">${meta.resolved?'捞回':'沉底'}</button>
-         <button onclick="toggleDigested('${id}',${meta.digested?1:0})" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">${meta.digested?'取消消化':'已消化'}</button>
+         <button onclick="toggleDigested('${id}',${meta.digested?1:0})" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">${meta.digested?'取消消化':'消化(feel)'}</button>
          <button onclick="deleteBucket('${id}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;color:#e57373">删除</button>
        </div>`;
   } catch (e) {
@@ -2400,30 +2404,30 @@ function startEdit(id, currentContent) {
 
 async function saveBucket(id) {
   const text = document.getElementById('edit-ta').value;
-  await fetch(BASE + '/api/trace', {
-    method:'POST', credentials:'include',
+  await fetch(BASE + '/api/bucket/' + id, {
+    method:'PATCH', credentials:'include',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({bucket_id: id, content: text})
+    body: JSON.stringify({content: text})
   });
   await loadBuckets();
   showDetail(id);
 }
 
 async function toggleResolved(id, current) {
-  await fetch(BASE + '/api/trace', {
-    method:'POST', credentials:'include',
+  await fetch(BASE + '/api/bucket/' + id, {
+    method:'PATCH', credentials:'include',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({bucket_id: id, resolved: current ? 0 : 1})
+    body: JSON.stringify({resolved: !current})
   });
   await loadBuckets();
   showDetail(id);
 }
 
 async function toggleDigested(id, current) {
-  await fetch(BASE + '/api/trace', {
-    method:'POST', credentials:'include',
+  await fetch(BASE + '/api/bucket/' + id, {
+    method:'PATCH', credentials:'include',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({bucket_id: id, digested: current ? 0 : 1})
+    body: JSON.stringify({digested: !current})
   });
   await loadBuckets();
   showDetail(id);
