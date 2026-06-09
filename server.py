@@ -2452,9 +2452,24 @@ if __name__ == "__main__":
 
         async def _desire_heartbeat_loop():
             await asyncio.sleep(60)  # 等服务器完全启动
+            _last_signal_ts = [0.0]  # 用list包装，让内部函数可以修改
+
             while True:
                 try:
-                    _desire.tick(idle_seconds=1800)
+                    now = time.time()
+                    # has_signal：上一个tick周期（1800s）内是否有嘉嘉输入信号
+                    has_signal = (now - _last_signal_ts[0]) < 1800
+                    _desire.tick(idle_seconds=1800, has_signal=has_signal)
+
+                    # 节律状态日志
+                    try:
+                        rhythm = _desire.rhythm_state()
+                        logger.info(f"Rhythm: {rhythm['label']} (val={rhythm['value']})")
+                        grief = _desire.grief_state()
+                        if grief["layer"] != "none":
+                            logger.info(f"Grief layer: {grief['layer']} (protest_ticks={grief['protest_ticks']})")
+                    except Exception as e:
+                        logger.warning(f"Rhythm/grief state log failed: {e}")
 
                     # --- autofeed: 每次心跳往念头池喂一条当前最高drive的碎语 ---
                     try:

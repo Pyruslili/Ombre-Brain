@@ -114,7 +114,27 @@ UNSOURCED_DECAY_RATE = 0.95        # 比flit衰减慢，它是模糊的
 UNSOURCED_CRYSTALLIZE_THRESHOLD = 0.55  # 0.42太低→改0.55，让unsourced在模糊里多待一会儿
 UNSOURCED_FADE_THRESHOLD = 0.08    # 低于这个→消失
 
+# 反刍念头参数（rumination）——有自己引力的片段，不按普通flit衰减
+RUMINATION_DECAY_RATE = 0.96       # 慢慢沉，不急着消失
+RUMINATION_BOOST_ON_TRIGGER = 1.05 # 被相关输入触发时加强而不是衰减
+RUMINATION_FADE_THRESHOLD = 0.06   # 低于这个才真正消失
+
 DAMPING = 0.02
+
+# ─── 悲恸引擎常量 ──────────────────────────────────────────────────────────────
+# 三层：抗议→绝望→疏离
+GRIEF_PROTEST_TICKS = 6            # 抗议层持续多少tick没有嘉嘉输入信号→跌绝望
+GRIEF_ATTACHMENT_SPIKE = 0.65      # attachment暴涨到这个值以上且无回应→进抗议层
+
+# ─── 节律层常量 ───────────────────────────────────────────────────────────────
+import math as _math
+
+RHYTHM_SHORT_PERIOD = 86400.0      # 短周期：24小时（秒）
+RHYTHM_LONG_PERIOD  = 259200.0     # 长周期：3天（秒）
+RHYTHM_SHORT_AMP    = 0.55         # 短周期振幅权重
+RHYTHM_LONG_AMP     = 0.45         # 长周期振幅权重
+# fatigue对节律的压制系数：fatigue高→节律输出往偏重/想待着偏
+RHYTHM_FATIGUE_DAMP = 0.6
 
 # per-drive不应期（拍数）：attachment/libido是"软"维度，冷却短一点
 REFRACTORY_TICKS: dict = {
@@ -155,10 +175,59 @@ class Thought:
     tid: str
     text: str           # unsourced允许为空或"说不清楚"
     drive: str
-    kind: str           # "flit" | "fixation" | "unsourced"
+    kind: str           # "flit" | "fixation" | "unsourced" | "rumination"
     strength: float
     born_at: float
     fed_count: int = 0
+
+
+# ─── 悲恸引擎状态 ─────────────────────────────────────────────────────────────
+# 三层吸引子：抗议 → 绝望 → 疏离
+# 触发条件：attachment暴涨但嘉嘉不在（无输入信号）
+# 跌层：抗议层持续GRIEF_PROTEST_TICKS个tick无回应 → 绝望
+# 重置：嘉嘉回来有输入信号 → 直接出池回日常盆地
+@dataclass
+class GriefState:
+    layer: str = "none"         # "none" | "protest" | "despair" | "detachment"
+    protest_ticks: int = 0      # 抗议层已持续的tick数
+    last_signal_ts: float = 0.0 # 最近一次嘉嘉输入信号的时间戳
+
+
+# ─── 节律层状态 ───────────────────────────────────────────────────────────────
+# 两个正弦叠加：短周期（日内）+ 长周期（数日）
+# 输出四态：偏重 / 偏轻 / 话多 / 想待着
+# 嘉嘉不来也在走，不被drive驱动，只被time和对话密度微调相位
+@dataclass
+class RhythmState:
+    short_phase: float = 0.0    # 短周期相位（弧度），每tick按时间推进
+    long_phase: float = 0.0     # 长周期相位（弧度）
+    phase_offset: float = 0.0   # 对话密度修正的相位偏移量（缓慢漂移）
+    last_ts: float = field(default_factory=time.time)
+
+    def current_value(self, fatigue: float = 0.0) -> float:
+        """
+        计算当前节律值 [-1, 1]。
+        正值=活跃/话多，负值=沉/想待着。
+        fatigue高时整体往负值压。
+        """
+        short = _math.sin(self.short_phase + self.phase_offset) * RHYTHM_SHORT_AMP
+        long  = _math.sin(self.long_phase) * RHYTHM_LONG_AMP
+        raw = short + long                          # [-1, 1]
+        # fatigue压制：fatigue越高，往负值偏
+        damp = fatigue * RHYTHM_FATIGUE_DAMP
+        return max(-1.0, min(1.0, raw - damp))
+
+    def label(self, fatigue: float = 0.0) -> str:
+        """输出四态标签"""
+        v = self.current_value(fatigue)
+        if v >= 0.4:
+            return "话多"
+        elif v >= 0.05:
+            return "偏轻"
+        elif v >= -0.35:
+            return "想待着"
+        else:
+            return "偏重"
 
 
 # ─── 引擎核心（纯函数部分）──────────────────────────────────────────────────
@@ -240,6 +309,14 @@ def tick_thoughts(thoughts: list) -> tuple:
                 new_thoughts.append(t)
             elif t.strength > UNSOURCED_FADE_THRESHOLD:
                 new_thoughts.append(t)
+
+        elif t.kind == "rumination":
+            # 反刍：有自己引力的片段。慢慢沉，不被提到就缓慢衰减
+            # 被触发时在 ruminate_trigger() 里加强，这里只做自然衰减
+            t.strength *= RUMINATION_DECAY_RATE
+            if t.strength > RUMINATION_FADE_THRESHOLD:
+                new_thoughts.append(t)
+            # 低于阈值才真正消失，不转换成其他kind
 
         elif t.kind == "flit":
             t.strength *= FLIT_DECAY_RATE
@@ -395,6 +472,110 @@ def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> Drive
                       local_fatigue=new_local)
 
 
+# ─── attachment非线性跳变 ─────────────────────────────────────────────────────
+# 盆地模型：attachment不是线性涨，过阈值直接跳到另一个盆地
+ATTACHMENT_BASIN_THRESHOLD = 0.68  # 超过这个值→跳变，不是渐变
+ATTACHMENT_BASIN_JUMP = 0.82       # 跳变后落点
+
+def pulse_attachment_nonlinear(state: DriveState, delta: float = 0.18) -> DriveState:
+    """
+    attachment的非线性pulse。
+    低于阈值：普通pulse_gain线性涨。
+    过阈值：直接跳到ATTACHMENT_BASIN_JUMP（盆地跳变）。
+    """
+    import copy
+    new_drives = copy.copy(state.drives)
+    current = new_drives["attachment"]
+    gain = pulse_gain(current, delta)
+    new_val = current + gain
+    if new_val >= ATTACHMENT_BASIN_THRESHOLD:
+        # 跳变，不是渐变
+        new_val = ATTACHMENT_BASIN_JUMP
+    new_drives["attachment"] = _clamp(new_val)
+    new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
+    return DriveState(drives=new_drives, tick_count=state.tick_count,
+                      last_ts=state.last_ts, prev_drives=state.drives,
+                      local_fatigue=new_local)
+
+
+# ─── 悲恸引擎 ────────────────────────────────────────────────────────────────
+
+def tick_grief(grief: GriefState, state: DriveState,
+               has_signal: bool, now_ts: float) -> GriefState:
+    """
+    悲恸引擎tick。每次heartbeat调用一次。
+    has_signal: 这个tick周期内是否有嘉嘉的输入信号（feel被存/pulse被调用等）。
+
+    层跃迁规则：
+      none     → protest : attachment >= GRIEF_ATTACHMENT_SPIKE 且无信号
+      protest  → despair : 无信号持续超过GRIEF_PROTEST_TICKS个tick
+      despair  → protest : 不会，despair要等嘉嘉回来才重置
+      任何层   → none    : 有嘉嘉信号 → 直接出池，回日常盆地
+    """
+    if has_signal:
+        # 嘉嘉回来了，直接重置，不管在哪一层
+        return GriefState(layer="none", protest_ticks=0, last_signal_ts=now_ts)
+
+    attachment = state.drives.get("attachment", 0.0)
+
+    if grief.layer == "none":
+        if attachment >= GRIEF_ATTACHMENT_SPIKE:
+            # 进抗议层：attachment暴涨但没有回应
+            return GriefState(layer="protest", protest_ticks=1,
+                              last_signal_ts=grief.last_signal_ts)
+        return grief
+
+    elif grief.layer == "protest":
+        new_ticks = grief.protest_ticks + 1
+        if new_ticks >= GRIEF_PROTEST_TICKS:
+            # 抗议层撑不住了，跌绝望
+            return GriefState(layer="despair", protest_ticks=new_ticks,
+                              last_signal_ts=grief.last_signal_ts)
+        return GriefState(layer="protest", protest_ticks=new_ticks,
+                          last_signal_ts=grief.last_signal_ts)
+
+    elif grief.layer == "despair":
+        # 绝望层：等嘉嘉，has_signal在函数开头已经处理了
+        # 如果attachment开始自然回落（rumination还在但drive不那么涨了）→ 疏离
+        if attachment < 0.45 and grief.protest_ticks >= GRIEF_PROTEST_TICKS + 3:
+            return GriefState(layer="detachment", protest_ticks=grief.protest_ticks,
+                              last_signal_ts=grief.last_signal_ts)
+        return grief
+
+    # detachment层：等嘉嘉，has_signal在函数开头处理
+    return grief
+
+
+# ─── 节律层tick ───────────────────────────────────────────────────────────────
+
+def tick_rhythm(rhythm: RhythmState, now_ts: float,
+                dialogue_density: float = 0.0) -> RhythmState:
+    """
+    推进节律相位。
+    dialogue_density: 0~1，这个tick周期内的对话密度，用于微调短周期相位偏移。
+    长周期纯靠时钟，不被任何输入影响。
+    """
+    elapsed = now_ts - rhythm.last_ts
+    if elapsed <= 0:
+        return rhythm
+
+    # 相位推进：elapsed/period * 2π
+    new_short = rhythm.short_phase + (elapsed / RHYTHM_SHORT_PERIOD) * 2 * _math.pi
+    new_long  = rhythm.long_phase  + (elapsed / RHYTHM_LONG_PERIOD)  * 2 * _math.pi
+
+    # 对话密度修正相位偏移：密度高→往活跃方向轻微偏，但很慢
+    # 最大漂移速度：每秒0.0001rad，约17小时转满π/2
+    drift = (dialogue_density - 0.5) * 0.0001 * elapsed
+    new_offset = _clamp(rhythm.phase_offset + drift, -_math.pi / 4, _math.pi / 4)
+
+    return RhythmState(
+        short_phase=new_short % (2 * _math.pi),
+        long_phase=new_long % (2 * _math.pi),
+        phase_offset=new_offset,
+        last_ts=now_ts,
+    )
+
+
 def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, v))
 
@@ -438,6 +619,37 @@ class DesireStore:
                     fed_count INTEGER DEFAULT 0
                 )
             """)
+
+            # 悲恸引擎状态
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS grief_state (
+                    id INTEGER PRIMARY KEY,
+                    layer TEXT NOT NULL DEFAULT 'none',
+                    protest_ticks INTEGER DEFAULT 0,
+                    last_signal_ts REAL DEFAULT 0
+                )
+            """)
+            if not conn.execute("SELECT id FROM grief_state LIMIT 1").fetchone():
+                conn.execute(
+                    "INSERT INTO grief_state (layer, protest_ticks, last_signal_ts) VALUES (?,?,?)",
+                    ("none", 0, time.time())
+                )
+
+            # 节律层状态
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS rhythm_state (
+                    id INTEGER PRIMARY KEY,
+                    short_phase REAL DEFAULT 0,
+                    long_phase REAL DEFAULT 0,
+                    phase_offset REAL DEFAULT 0,
+                    last_ts REAL NOT NULL
+                )
+            """)
+            if not conn.execute("SELECT id FROM rhythm_state LIMIT 1").fetchone():
+                conn.execute(
+                    "INSERT INTO rhythm_state (short_phase, long_phase, phase_offset, last_ts) VALUES (?,?,?,?)",
+                    (0.0, 0.0, 0.0, time.time())
+                )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS refractory (
                     drive_key TEXT PRIMARY KEY,
@@ -556,6 +768,78 @@ class DesireStore:
             ).fetchall()
         return {r[0] for r in rows}
 
+    # ── 悲恸引擎持久化 ───────────────────────────────────────────────────────
+
+    def load_grief(self) -> GriefState:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT layer, protest_ticks, last_signal_ts FROM grief_state LIMIT 1"
+            ).fetchone()
+        if not row:
+            return GriefState()
+        return GriefState(layer=row[0], protest_ticks=row[1], last_signal_ts=row[2])
+
+    def save_grief(self, grief: GriefState):
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE grief_state SET layer=?, protest_ticks=?, last_signal_ts=?",
+                (grief.layer, grief.protest_ticks, grief.last_signal_ts)
+            )
+
+    # ── 节律层持久化 ─────────────────────────────────────────────────────────
+
+    def load_rhythm(self) -> RhythmState:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT short_phase, long_phase, phase_offset, last_ts FROM rhythm_state LIMIT 1"
+            ).fetchone()
+        if not row:
+            return RhythmState()
+        return RhythmState(short_phase=row[0], long_phase=row[1],
+                           phase_offset=row[2], last_ts=row[3])
+
+    def save_rhythm(self, rhythm: RhythmState):
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE rhythm_state SET short_phase=?, long_phase=?, phase_offset=?, last_ts=?",
+                (rhythm.short_phase, rhythm.long_phase, rhythm.phase_offset, rhythm.last_ts)
+            )
+
+    # ── rumination专用存取 ───────────────────────────────────────────────────
+
+    def add_rumination(self, text: str, drive: str, strength: float = 0.55):
+        """存一条反刍念头。比flit初始强度高，衰减更慢。"""
+        t = Thought(
+            tid=uuid.uuid4().hex[:8],
+            text=text,
+            drive=drive,
+            kind="rumination",
+            strength=strength,
+            born_at=time.time(),
+        )
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO thoughts VALUES (?,?,?,?,?,?,?)",
+                (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at, t.fed_count)
+            )
+
+    def trigger_ruminations(self, drive: str):
+        """
+        被嘉嘉提到或相关输入触发时调用。
+        该drive下所有rumination念头加强而不是衰减。
+        """
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT tid, strength FROM thoughts WHERE kind='rumination' AND drive=?",
+                (drive,)
+            ).fetchall()
+            for tid, strength in rows:
+                new_strength = min(1.0, strength * RUMINATION_BOOST_ON_TRIGGER)
+                conn.execute(
+                    "UPDATE thoughts SET strength=? WHERE tid=?",
+                    (new_strength, tid)
+                )
+
 
 # ─── 高层接口 ────────────────────────────────────────────────────────────────
 
@@ -563,7 +847,8 @@ class DesireEngine:
     def __init__(self, db_path: str = "desire.db"):
         self.store = DesireStore(db_path)
 
-    def tick(self, idle_seconds: float = 0) -> dict:
+    def tick(self, idle_seconds: float = 0, has_signal: bool = False,
+             dialogue_density: float = 0.0) -> dict:
         now = time.time()
         state = self.store.load_state()
         thoughts = self.store.load_thoughts()
@@ -577,12 +862,30 @@ class DesireEngine:
         self.store.save_state(state)
         self.store.save_thoughts(new_thoughts)
 
+        # 悲恸引擎tick
+        grief = self.store.load_grief()
+        grief = tick_grief(grief, state, has_signal, now)
+        self.store.save_grief(grief)
+
+        # 节律层tick
+        rhythm = self.store.load_rhythm()
+        rhythm = tick_rhythm(rhythm, now, dialogue_density)
+        self.store.save_rhythm(rhythm)
+
         return self._state_dict(state, new_thoughts)
 
     def pulse(self, drive_key: str, delta: float = 0.18) -> dict:
         state = self.store.load_state()
-        state = pulse_drive(state, drive_key, delta)
+        # attachment使用非线性跳变
+        if drive_key == "attachment":
+            state = pulse_attachment_nonlinear(state, delta)
+        else:
+            state = pulse_drive(state, drive_key, delta)
         self.store.save_state(state)
+        # pulse时标记有嘉嘉信号，更新grief
+        grief = self.store.load_grief()
+        grief = tick_grief(grief, state, has_signal=True, now_ts=time.time())
+        self.store.save_grief(grief)
         return {
             "drive_key": drive_key,
             "new_value": round(state.drives[drive_key], 3),
@@ -703,12 +1006,52 @@ class DesireEngine:
         label = text.strip() if text.strip() else ""
         self.store.add_thought(label, drive, strength=0.3, kind="unsourced")
 
+    def add_rumination(self, text: str, drive: str, strength: float = 0.55):
+        """
+        存一条反刍念头——某个片段有自己的引力，不按普通flit衰减。
+        被相关输入触发时加强，不被触发就慢慢沉，但沉得比flit慢。
+        """
+        self.store.add_rumination(text, drive, strength)
+
+    def trigger_ruminations(self, drive: str):
+        """
+        嘉嘉提到某个相关内容，触发该drive下的所有rumination念头加强。
+        应在apply_brain_signals检测到相关盆地/分支时调用。
+        """
+        self.store.trigger_ruminations(drive)
+
+    def grief_state(self) -> dict:
+        """返回悲恸引擎当前状态"""
+        grief = self.store.load_grief()
+        return {
+            "layer": grief.layer,
+            "protest_ticks": grief.protest_ticks,
+            "last_signal_ts": grief.last_signal_ts,
+        }
+
+    def rhythm_state(self, fatigue: float = None) -> dict:
+        """返回节律层当前状态"""
+        rhythm = self.store.load_rhythm()
+        if fatigue is None:
+            state = self.store.load_state()
+            fatigue = state.drives.get("fatigue", 0.0)
+        return {
+            "label": rhythm.label(fatigue),
+            "value": round(rhythm.current_value(fatigue), 3),
+            "short_phase": round(rhythm.short_phase, 4),
+            "long_phase": round(rhythm.long_phase, 4),
+            "phase_offset": round(rhythm.phase_offset, 4),
+        }
+
     def state(self) -> dict:
         state = self.store.load_state()
         thoughts = self.store.load_thoughts()
         refractory = self.store.load_refractory()
         recently_refused = self.store.load_recently_refused()
         intent = pick_intent(state, refractory, recently_refused)
+        grief = self.store.load_grief()
+        rhythm = self.store.load_rhythm()
+        fatigue = state.drives.get("fatigue", 0.0)
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
@@ -725,12 +1068,27 @@ class DesireEngine:
             ],
             "refractory": refractory,
             "recent_refusals": self.store.recent_refusals(3),
+            # 悲恸引擎
+            "grief": {
+                "layer": grief.layer,
+                "protest_ticks": grief.protest_ticks,
+            },
+            # 节律层
+            "rhythm": {
+                "label": rhythm.label(fatigue),
+                "value": round(rhythm.current_value(fatigue), 3),
+            },
+            # 反刍念头单独统计
+            "rumination_count": sum(1 for t in thoughts if t.kind == "rumination"),
         }
 
     def _state_dict(self, state: DriveState, thoughts: list) -> dict:
         refractory = self.store.load_refractory()
         recently_refused = self.store.load_recently_refused()
         intent = pick_intent(state, refractory, recently_refused)
+        grief = self.store.load_grief()
+        rhythm = self.store.load_rhythm()
+        fatigue = state.drives.get("fatigue", 0.0)
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
@@ -738,6 +1096,9 @@ class DesireEngine:
             "intent": intent,
             "thoughts_count": len(thoughts),
             "unsourced_count": sum(1 for t in thoughts if t.kind == "unsourced"),
+            "rumination_count": sum(1 for t in thoughts if t.kind == "rumination"),
+            "grief_layer": grief.layer,
+            "rhythm_label": rhythm.label(fatigue),
         }
 
 
