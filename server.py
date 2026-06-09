@@ -110,6 +110,7 @@ _desire_db = os.path.join(
     "desire.db"
 )
 _desire = DesireEngine(db_path=_desire_db)
+_last_signal_ts: list = [0.0]  # 最近一次嘉嘉输入信号时间戳
 
 NOXMEW_SPEAK_URL = "https://toy.pyrus.uk/speak"
 NOXMEW_SPEAK_TOKEN = os.environ.get("SPEAK_TOKEN", "")
@@ -2362,6 +2363,7 @@ async def api_desire_feed(request):
 
             # 用引擎方法统一处理drive pulse
             result = _desire.apply_brain_signals(brain_signals)
+            _last_signal_ts[0] = time.time()
             logger.info(f"brain_signals → drives: {result.get('applied', {})}")
         except Exception as e:
             logger.warning(f"brain_signals write failed: {e}")
@@ -2452,7 +2454,6 @@ if __name__ == "__main__":
 
         async def _desire_heartbeat_loop():
             await asyncio.sleep(60)  # 等服务器完全启动
-            _last_signal_ts = [0.0]  # 用list包装，让内部函数可以修改
 
             while True:
                 try:
