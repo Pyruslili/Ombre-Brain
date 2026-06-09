@@ -107,7 +107,6 @@ import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)
 
 _desire_db = os.path.join(
     os.environ.get("OMBRE_BUCKETS_DIR", "./buckets"),
-    "..",
     "desire.db"
 )
 _desire = DesireEngine(db_path=_desire_db)
