@@ -120,7 +120,7 @@ class BucketManager:
         pinned/protected 桶不参与合并与衰减，importance 强制锁定为 10。
         """
         bucket_id = generate_bucket_id()
-        bucket_name = sanitize_name(name) if name else bucket_id
+        bucket_name = sanitize_name(name) if name else None
         # feel buckets are allowed to have empty domain; others default to ["未分类"]
         if bucket_type == "feel":
             domain = domain if domain is not None else []
