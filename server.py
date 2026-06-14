@@ -2293,8 +2293,11 @@ async def api_import_review(request):
 
 @mcp.custom_route("/api/desire/state", methods=["GET"])
 async def api_desire_state(request):
+    """只读：当前drive/intent/pa_na等快照，不tick。
+    tick的节奏完全交给_desire_heartbeat_loop(1800s)——
+    否则dashboard刷新/打开页面会偷偷多走一拍，tick_count/escape_streak/grief
+    的计数节奏会被"谁在看"污染。"""
     from starlette.responses import JSONResponse
-    _desire.tick(idle_seconds=0)
     return JSONResponse(_desire.state(),
                        headers={"Access-Control-Allow-Origin": "*"})
 
