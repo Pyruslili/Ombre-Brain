@@ -2346,11 +2346,30 @@ async def api_desire_feed(request):
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
     thoughts = body.get("thoughts", [])
+
+    # --- 批量涌入节流 ---
+    # trigger.js依赖claude.ai session活跃才跑，可能积压几天的feel一次性涌进来。
+    # 一批塞太多flit会在接下来几次tick里集中冲过FLIT_UPGRADE_THRESHOLD同时升级成
+    # fixation，造成drive脉冲尖峰——这是工程节奏问题，跟"久没见想得更浓"的基线
+    # 漂移是两件事，不该混在一起。
+    # 超过阈值时：strength最高的几条按原值入池，其余按名次递减打折——
+    # 打折幅度不同→之后每次tick_thoughts衰减后到达升级阈值的时机自然错开，
+    # 而不是同一拍集中升级。
+    FEED_BATCH_THRESHOLD = 4   # 超过这个数量才节流
+    FEED_KEEP_FULL = 3         # 保留几条按原strength入池
+    FEED_DISCOUNT_STEP = 0.08  # 其余每条额外递减的折扣
+
+    if len(thoughts) > FEED_BATCH_THRESHOLD:
+        thoughts = sorted(thoughts, key=lambda t: float(t.get("strength", 0.45)), reverse=True)
+
     added = 0
-    for t in thoughts:
+    for i, t in enumerate(thoughts):
         text = t.get("text", "").strip()
         drive = t.get("drive", "unsourced")
         strength = float(t.get("strength", 0.45))
+        if len(thoughts) > FEED_BATCH_THRESHOLD and i >= FEED_KEEP_FULL:
+            rank = i - FEED_KEEP_FULL + 1
+            strength = max(0.1, strength * (1 - FEED_DISCOUNT_STEP * rank))
         if text:
             try:
                 _desire.add_thought(text, drive, strength=strength, source="cli")
