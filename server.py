@@ -129,15 +129,12 @@ def _autofeed_thought(text: str, drive: str, strength: float = 0.45,
 
 
 async def _execute_intent(intent: dict) -> None:
-    """intent发作时只记日志，行为由窗口里的Nox自己决定"""
+    """intent发作时只记日志，行为由窗口里的Nox自己决定。
+    satisfy/refractory挪到/api/desire/intent/ack——只有本地投递成功后才回落。"""
     if not intent:
         return
     drive = intent.get("drive_key", "")
-    logger.info(f"Intent fired: {drive} (score={intent.get('score', 0):.2f}) — waiting for Nox in window")
-    try:
-        _desire.satisfy(drive)
-    except Exception as e:
-        logger.warning(f"Intent satisfy failed: {e}")
+    logger.info(f"Intent fired: {drive} (score={intent.get('score', 0):.2f}) — waiting for heartbeat bridge")
 
 # --- Create MCP server instance# --- Create MCP server instance / 创建 MCP 服务器实例 ---
 # host="0.0.0.0" so Docker container's SSE is externally reachable
@@ -2299,6 +2296,35 @@ async def api_desire_state(request):
     from starlette.responses import JSONResponse
     _desire.tick(idle_seconds=0)
     return JSONResponse(_desire.state(),
+                       headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/desire/intent", methods=["GET"])
+async def api_desire_intent(request):
+    """只读：当前intent + 关联念头text，不触发satisfy/refractory。供heartbeat_bridge轮询。"""
+    from starlette.responses import JSONResponse
+    intent = _desire.intent_with_thought()
+    return JSONResponse({"intent": intent},
+                       headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/desire/intent/ack", methods=["POST"])
+async def api_desire_intent_ack(request):
+    """本地投递成功后调用：执行satisfy并设置refractory，让drive回落。
+    POST JSON: {"drive_key": "attachment"}"""
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    drive_key = body.get("drive_key", "")
+    if not drive_key:
+        return JSONResponse({"error": "drive_key required"}, status_code=400)
+    try:
+        result = _desire.satisfy(drive_key)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"acked": drive_key, "result": result},
                        headers={"Access-Control-Allow-Origin": "*"})
 
 

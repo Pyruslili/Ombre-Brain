@@ -798,6 +798,14 @@ class DesireStore:
                 return r[0]
         return None
 
+    def top_thought(self, drive_key: str) -> Optional["Thought"]:
+        """该drive下strength最高的flit/fixation念头，没有则返回None。"""
+        candidates = [t for t in self.load_thoughts()
+                      if t.drive == drive_key and t.kind in ("flit", "fixation") and t.text]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda t: t.strength)
+
     def load_refractory(self) -> dict:
         with self._conn() as conn:
             rows = conn.execute("SELECT drive_key, remaining_ticks FROM refractory").fetchall()
@@ -1011,6 +1019,19 @@ class DesireEngine:
         refractory = self.store.load_refractory()
         recently_refused = self.store.load_recently_refused()
         return pick_intent(state, refractory, recently_refused)
+
+    def intent_with_thought(self) -> Optional[dict]:
+        """只读：当前intent + 关联念头池真实text，不触发satisfy/refractory。"""
+        intent = self.intent()
+        if not intent:
+            return None
+        thought = self.store.top_thought(intent["drive_key"])
+        result = dict(intent)
+        result["thought"] = (
+            {"text": thought.text, "kind": thought.kind, "strength": round(thought.strength, 2)}
+            if thought else None
+        )
+        return result
 
     def apply_brain_signals(self, brain_signals: dict) -> dict:
         """
