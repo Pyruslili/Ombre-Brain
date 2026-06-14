@@ -122,6 +122,16 @@ RUMINATION_FADE_THRESHOLD = 0.06   # 低于这个才真正消失
 
 DAMPING = 0.02
 
+# ─── ESM软互抑 + 逃逸阀（P3，作用在已有9维drive上，不另起PA/NA持久层）──────────
+# 正向组/负向组：不是新状态，只是把现有9维drive按情绪极性分组
+POSITIVE_GROUP = ["attachment", "libido", "curiosity", "social", "reflection"]
+NEGATIVE_GROUP = ["stress", "disgust", "fatigue"]
+
+ESM_K = 0.3                      # 互抑系数，跟PDF阶段5.7一致
+ESCAPE_VALVE_EXCESS_GAP = 0.15   # 负向超出量比正向超出量高出这个值才算"明显失衡"
+ESCAPE_VALVE_STREAK_TRIGGER = 3  # 连续3拍失衡才触发，防止单次评分误判
+ESCAPE_VALVE_PULLBACK = 0.5      # 触发后负向组超出baseline的部分往回拉50%
+
 # ─── 悲恸引擎常量 ──────────────────────────────────────────────────────────────
 # 三层：抗议→绝望→疏离
 GRIEF_PROTEST_TICKS = 6            # 抗议层持续多少tick没有嘉嘉输入信号→跌绝望
@@ -187,6 +197,8 @@ class DriveState:
     prev_drives: dict = field(default_factory=lambda: dict(DRIVE_BASELINES))
     # per-drive局部疲劳：从全局fatigue按敏感度分配，影响有效分
     local_fatigue: dict = field(default_factory=lambda: {k: 0.0 for k in FATIGUE_SENSITIVITY})
+    # 逃逸阀连续失衡计数（PDF阶段5.6），tick计数不是wall-clock
+    escape_streak: int = 0
 
 
 @dataclass
@@ -267,6 +279,73 @@ def effective_score(drive_val: float, local_fat: float) -> float:
     return drive_val * (1.0 - local_fat)
 
 
+def _group_excess(drives: dict, group: list) -> float:
+    """某分组里，超出各自baseline的部分的平均值（不超出的算0）。"""
+    vals = [max(0.0, drives[k] - DRIVE_BASELINES[k]) for k in group]
+    return sum(vals) / len(vals) if vals else 0.0
+
+
+def apply_esm_inhibition(drives: dict) -> dict:
+    """
+    ESM软互抑（PDF阶段5.7，k=0.3）。
+    只压"超出baseline的部分"，不动baseline本身——
+    "甜蜜又心疼"：两组都在，互相压一点，不是清零，也不会把drive压到baseline以下。
+    互抑前的pos_excess用于压负向组，避免顺序依赖（跟PDF原版pa_before一致）。
+    """
+    import copy
+    new_drives = copy.copy(drives)
+    pos_excess = _group_excess(drives, POSITIVE_GROUP)
+    neg_excess = _group_excess(drives, NEGATIVE_GROUP)
+    for k in POSITIVE_GROUP:
+        excess = drives[k] - DRIVE_BASELINES[k]
+        if excess > 0:
+            new_drives[k] = _clamp(DRIVE_BASELINES[k] + excess * (1 - ESM_K * neg_excess))
+    for k in NEGATIVE_GROUP:
+        excess = drives[k] - DRIVE_BASELINES[k]
+        if excess > 0:
+            new_drives[k] = _clamp(DRIVE_BASELINES[k] + excess * (1 - ESM_K * pos_excess))
+    return new_drives
+
+
+def apply_escape_valve(drives: dict, streak: int) -> tuple:
+    """
+    逃逸阀（PDF阶段5.6，红线条款）。
+    连续ESCAPE_VALVE_STREAK_TRIGGER拍出现"负向组明显高于正向组"→
+    强制把负向组超出baseline的部分拉回ESCAPE_VALVE_PULLBACK（默认50%）。
+    用streak计数（非单次判断），防止单次评分误判就触发；触发后streak清零重新计。
+    """
+    import copy
+    pos_excess = _group_excess(drives, POSITIVE_GROUP)
+    neg_excess = _group_excess(drives, NEGATIVE_GROUP)
+
+    if neg_excess - pos_excess > ESCAPE_VALVE_EXCESS_GAP:
+        streak += 1
+    else:
+        streak = 0
+
+    new_drives = copy.copy(drives)
+    if streak >= ESCAPE_VALVE_STREAK_TRIGGER:
+        for k in NEGATIVE_GROUP:
+            excess = drives[k] - DRIVE_BASELINES[k]
+            if excess > 0:
+                new_drives[k] = _clamp(DRIVE_BASELINES[k] + excess * (1 - ESCAPE_VALVE_PULLBACK))
+        streak = 0
+
+    return new_drives, streak
+
+
+def pa_na_snapshot(drives: dict) -> dict:
+    """
+    PA/NA展示层——不持久化，每次从当前9维drive实时算一个坐标给前端看。
+    PA=正向组均值，NA=负向组均值，两者都是[0,1]。
+    """
+    pos_vals = [drives[k] for k in POSITIVE_GROUP]
+    neg_vals = [drives[k] for k in NEGATIVE_GROUP]
+    pa = sum(pos_vals) / len(pos_vals) if pos_vals else 0.0
+    na = sum(neg_vals) / len(neg_vals) if neg_vals else 0.0
+    return {"PA": round(pa, 3), "NA": round(na, 3)}
+
+
 def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> DriveState:
     import copy
     new_drives = copy.copy(state.drives)
@@ -293,6 +372,10 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
     for k in coupled:
         new_drives[k] = _clamp(new_drives[k] + DAMPING * (DRIVE_BASELINES[k] - new_drives[k]))
 
+    # ESM软互抑 + 逃逸阀（P3，红线条款，不许省）
+    new_drives = apply_esm_inhibition(new_drives)
+    new_drives, new_escape_streak = apply_escape_valve(new_drives, state.escape_streak)
+
     # 更新per-drive局部疲劳
     new_local_fatigue = compute_local_fatigue(new_drives.get("fatigue", 0.0))
 
@@ -302,6 +385,7 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
         last_ts=now_ts,
         prev_drives=prev,
         local_fatigue=new_local_fatigue,
+        escape_streak=new_escape_streak,
     )
 
 
@@ -634,6 +718,11 @@ class DesireStore:
                 conn.execute("ALTER TABLE drive_state ADD COLUMN local_fatigue_json TEXT")
             except Exception:
                 pass
+            # 兼容旧表：逃逸阀连续失衡计数
+            try:
+                conn.execute("ALTER TABLE drive_state ADD COLUMN escape_streak INTEGER DEFAULT 0")
+            except Exception:
+                pass
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS thoughts (
@@ -719,20 +808,21 @@ class DesireStore:
     def load_state(self) -> DriveState:
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json FROM drive_state LIMIT 1"
+                "SELECT drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json, escape_streak FROM drive_state LIMIT 1"
             ).fetchone()
         drives = json.loads(row[0])
         prev = json.loads(row[3]) if row[3] else dict(drives)
         local_fat = json.loads(row[4]) if row[4] else compute_local_fatigue(drives.get("fatigue", 0.0))
+        escape_streak = row[5] if row[5] is not None else 0
         return DriveState(drives=drives, tick_count=row[1], last_ts=row[2],
-                          prev_drives=prev, local_fatigue=local_fat)
+                          prev_drives=prev, local_fatigue=local_fat, escape_streak=escape_streak)
 
     def save_state(self, state: DriveState):
         with self._conn() as conn:
             conn.execute(
-                "UPDATE drive_state SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?, local_fatigue_json=?",
+                "UPDATE drive_state SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?, local_fatigue_json=?, escape_streak=?",
                 (json.dumps(state.drives), state.tick_count, state.last_ts,
-                 json.dumps(state.prev_drives), json.dumps(state.local_fatigue))
+                 json.dumps(state.prev_drives), json.dumps(state.local_fatigue), state.escape_streak)
             )
 
     def load_thoughts(self) -> list:
@@ -1161,6 +1251,7 @@ class DesireEngine:
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
+            "pa_na": pa_na_snapshot(state.drives),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts": [
@@ -1200,6 +1291,7 @@ class DesireEngine:
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
+            "pa_na": pa_na_snapshot(state.drives),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts_count": len(thoughts),
