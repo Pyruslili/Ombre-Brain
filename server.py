@@ -884,11 +884,8 @@ async def nocturne_breath(
 
             lines = [f"Warmth：{pa}", f"Shadow：{na}"]
 
-            # Live Wire：brain_signals的此刻优先，没有就退回daily mood pool的装饰心情
-            if bs.get("二级分支"):
-                lines.append(f"Live Wire：{bs['二级分支']}")
-            else:
-                lines.append(f"Live Wire：{mood_entry[0]} — {mood_entry[1]}")
+            # Live Wire：mood_entry[1]——有二级分支时已经是从对应子池里选出来的贴题词
+            lines.append(f"Live Wire：{mood_entry[1]}")
             if bs.get("地基感"):
                 lines.append(f"地基感：{bs['地基感']}")
             if bs.get("脑岛"):
