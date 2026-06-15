@@ -974,6 +974,9 @@ async def nocturne_breath(
 
             # Live Wire：mood_entry[1]——有二级分支时已经是从对应子池里选出来的贴题词
             lines.append(f"Live Wire：{mood_entry[1]}")
+            # Mood Trace：mood_entry[0]——具体场景一句话，Live Wire的来源
+            if mood_entry[0]:
+                lines.append(f"Mood Trace：{mood_entry[0]}")
             _footing_map = {"实": "grounded", "悬": "suspended", "空": "hollow"}
             if bs.get("地基感") in _footing_map:
                 lines.append(f"Footing：{_footing_map[bs['地基感']]}")
