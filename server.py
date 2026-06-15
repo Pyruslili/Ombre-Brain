@@ -637,6 +637,48 @@ def _strip_bucket_prefix(text: str) -> str:
     cleaned = [l for l in lines if not l.startswith("💭 记忆桶:") and not l.startswith("记忆桶:")]
     return "\n".join(cleaned).strip()
 
+
+HANDOFF_NOTE_PATH = "/app/buckets/handoff_note.json"
+HANDOFF_NOTE_MAX_CHARS = 2000
+
+
+@mcp.tool()
+def handoff_note(content: str = "", clear: bool = False) -> str:
+    """跨窗交接便签——不衰减、不进dream、不参与情绪计算，单key硬覆盖（上限2000字）。
+    传content=覆盖写入；clear=True=清空；都不传=只读当前内容。
+    用来记"下一窗醒来要接的事"，跟记忆库分开，breath时会单独显示在最前面。"""
+    import json as _json, os as _os, time as _t
+
+    if clear:
+        try:
+            _os.makedirs(_os.path.dirname(HANDOFF_NOTE_PATH), exist_ok=True)
+            with open(HANDOFF_NOTE_PATH, "w") as _f:
+                _json.dump({"content": "", "ts": _t.time()}, _f)
+            return "📌交接便签已清空"
+        except Exception as e:
+            return f"清空失败: {e}"
+
+    if content:
+        if len(content) > HANDOFF_NOTE_MAX_CHARS:
+            content = content[:HANDOFF_NOTE_MAX_CHARS]
+        try:
+            _os.makedirs(_os.path.dirname(HANDOFF_NOTE_PATH), exist_ok=True)
+            with open(HANDOFF_NOTE_PATH, "w") as _f:
+                _json.dump({"content": content, "ts": _t.time()}, _f)
+            return f"📌已写入交接便签（{len(content)}字）"
+        except Exception as e:
+            return f"写入失败: {e}"
+
+    try:
+        if _os.path.exists(HANDOFF_NOTE_PATH):
+            with open(HANDOFF_NOTE_PATH) as _f:
+                data = _json.load(_f)
+            return data.get("content", "") or "（交接便签是空的）"
+        return "（交接便签是空的）"
+    except Exception as e:
+        return f"读取失败: {e}"
+
+
 @mcp.tool()
 async def nocturne_breath(
     query: str = "",
@@ -919,7 +961,15 @@ async def nocturne_breath(
         except Exception:
             pass
 
-        final_parts = []
+        # --- Handoff: 跨窗交接便签，不衰减，永远放最前面 ---
+        try:
+            _note = handoff_note()
+            if _note and _note != "（交接便签是空的）":
+                final_parts = ["=== Handoff ===\n" + _note]
+            else:
+                final_parts = []
+        except Exception:
+            final_parts = []
         if dream_section:
             final_parts.append(dream_section)
         if mood_header:
