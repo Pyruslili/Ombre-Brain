@@ -1041,7 +1041,7 @@ def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "") -> dict
     drive_key: attachment|curiosity|reflection|duty|social|fatigue|libido|stress
     thought: 可选，把这次经历的一句话存入念头池（flit）
     """
-    result = _desire.pulse(drive_key, delta, real_user_message=True)
+    result = _desire.pulse(drive_key, delta)
     if thought.strip():
         _desire.add_thought(thought.strip(), drive_key, strength=0.5)
     return result
@@ -2415,6 +2415,7 @@ async def api_desire_feed(request):
             # 用引擎方法统一处理drive pulse
             result = _desire.apply_brain_signals(brain_signals)
             _last_signal_ts[0] = time.time()
+            _desire.mark_user_signal(_last_signal_ts[0])
             logger.info(f"brain_signals → drives: {result.get('applied', {})}")
         except Exception as e:
             logger.warning(f"brain_signals write failed: {e}")

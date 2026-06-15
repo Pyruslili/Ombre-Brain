@@ -228,7 +228,8 @@ def test_reunion_boost_is_one_shot_on_next_state(tmp_path):
     state.last_user_message_at = now - 600 * 3600
     engine.store.save_state(state)
 
-    engine.pulse("attachment", 0.01, real_user_message=True, now_ts=now)
+    engine.mark_user_signal(now)
+    engine.pulse("attachment", 0.01)
     boosted = engine.store.load_state()
     expected_longing = longing_value(600, 1.0)
     expected_boost = reunion_boost_for_return(600, expected_longing, "detachment")

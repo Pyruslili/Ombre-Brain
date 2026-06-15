@@ -1188,6 +1188,16 @@ class DesireEngine:
         state.last_user_message_at = now
         return state
 
+    def mark_user_signal(self, now: float = None) -> dict:
+        """嘉嘉的真实输入信号到达时调用（/api/desire/feed的brain_signals路径），
+        而不是desire_pulse——desire_pulse同时承载Nox自己经历的pulse，
+        不应该用来重置"距离上次嘉嘉消息"的计时。"""
+        now = now if now is not None else time.time()
+        state = self.store.load_state()
+        state = self._mark_real_user_message(state, now)
+        self.store.save_state(state)
+        return self._longing_context(state, now)
+
     def tick(self, idle_seconds: float = 0, has_signal: bool = False,
              dialogue_density: float = 0.0) -> dict:
         now = time.time()
@@ -1222,12 +1232,9 @@ class DesireEngine:
 
         return self._state_dict(state, new_thoughts)
 
-    def pulse(self, drive_key: str, delta: float = 0.18,
-              real_user_message: bool = False, now_ts: float = None) -> dict:
-        now = now_ts if now_ts is not None else time.time()
+    def pulse(self, drive_key: str, delta: float = 0.18) -> dict:
+        now = time.time()
         state = self.store.load_state()
-        if real_user_message:
-            state = self._mark_real_user_message(state, now)
         # attachment使用非线性跳变
         if drive_key == "attachment":
             state = pulse_attachment_nonlinear(state, delta)
