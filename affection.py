@@ -19,27 +19,8 @@ def _save(level: float):
         pass
 
 async def _persist_to_bucket(level: float, bucket_mgr):
-    """把affection值存进pinned bucket，重启后可恢复"""
-    try:
-        all_buckets = await bucket_mgr.list_all(include_archive=False)
-        existing = [b for b in all_buckets if BUCKET_TAG in b["metadata"].get("tags", [])]
-        content = f"affection_level:{round(level, 3)}"
-        if existing:
-            await bucket_mgr.update(existing[0]["id"], content=content)
-        else:
-            await bucket_mgr.create(
-                content=content,
-                tags=[BUCKET_TAG],
-                importance=10,
-                domain=["系统"],
-                valence=level,
-                arousal=0.3,
-                name="affection_state",
-                bucket_type="permanent",
-                pinned=True,
-            )
-    except Exception:
-        pass
+    """affection值只存本地文件(_save)，不再写入记忆库桶"""
+    pass
 
 async def restore_from_bucket(bucket_mgr) -> float:
     """从pinned bucket恢复affection值"""
@@ -89,26 +70,8 @@ MOOD_PATH = "/app/buckets/current_mood.json"
 MOOD_BUCKET_TAG = "current_mood_state"
 
 async def persist_mood_to_bucket(mood_result: dict, bucket_mgr):
-    try:
-        all_buckets = await bucket_mgr.list_all(include_archive=False)
-        existing = [b for b in all_buckets if MOOD_BUCKET_TAG in b["metadata"].get("tags", [])]
-        content = json.dumps(mood_result, ensure_ascii=False)
-        if existing:
-            await bucket_mgr.update(existing[0]["id"], content=content)
-        else:
-            await bucket_mgr.create(
-                content=content,
-                tags=[MOOD_BUCKET_TAG],
-                importance=10,
-                domain=["系统"],
-                valence=mood_result.get("valence", 0.5),
-                arousal=mood_result.get("arousal", 0.3),
-                name="current_mood_state",
-                bucket_type="permanent",
-                pinned=True,
-            )
-    except Exception:
-        pass
+    """mood只存本地文件(MOOD_PATH)，不再写入记忆库桶"""
+    pass
 
 async def restore_mood_from_bucket(bucket_mgr):
     try:

@@ -617,6 +617,20 @@ async def _merge_or_create(
 # 有参数：按关键词+情感坐标检索记忆
 # =============================================================
 
+def _feel_title(content: str) -> str:
+    """给feel桶生成一个简短标题，仅用于前端显示，breath不展示它"""
+    text = strip_wikilinks(content).strip()
+    for sep in ("\n", "。", "！", "？", "…", ".", "!", "?"):
+        idx = text.find(sep)
+        if 0 < idx <= 20:
+            text = text[:idx]
+            break
+    text = text.strip()
+    if len(text) > 16:
+        text = text[:16] + "…"
+    return text
+
+
 def _strip_bucket_prefix(text: str) -> str:
     """去掉dehydrate输出里残留的 '💭 记忆桶: xxx' 前缀行"""
     lines = text.splitlines()
@@ -792,8 +806,8 @@ async def nocturne_breath(
                 random.shuffle(pool)
                 non_cold = top1 + pool + non_cold[min(20, len(non_cold)):]
             candidates = cold_start + non_cold
-        # Hard cap: never surface more than max_results buckets
-        candidates = candidates[:max_results]
+        # Hard cap: surfacing mode always shows 12 regular memories
+        candidates = candidates[:12]
 
         # 按时间倒序
         candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
@@ -818,16 +832,36 @@ async def nocturne_breath(
                 logger.warning(f"Failed to dehydrate surfaced bucket / 浮现脱水失败: {e}")
                 continue
 
-        if not pinned_results and not dynamic_results:
+        # --- Dream section: latest dream snapshot ---
+        dream_section = ""
+        try:
+            import json as _jdream, os as _osdream
+            dream_path = "/app/buckets/latest_dream.json"
+            if _osdream.path.exists(dream_path):
+                with open(dream_path) as _f:
+                    _dream_data = _jdream.load(_f)
+                _dream_text = _dream_data.get("dream", "")
+                if _dream_text:
+                    dream_section = "=== 梦境 ===\n" + _dream_text
+        except Exception as e:
+            logger.warning(f"Failed to load latest dream / 梦境加载失败: {e}")
+
+        # --- Feel section: 8 most recent feels (no title shown) ---
+        feel_results = []
+        try:
+            feels = [b for b in all_buckets if b["metadata"].get("type") == "feel"]
+            feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
+            for f in feels[:8]:
+                created = f["metadata"].get("created", "")[:16].replace("T", " ")
+                feel_results.append(f"[{created}]\n{strip_wikilinks(f['content'])}")
+        except Exception as e:
+            logger.warning(f"Failed to collect recent feels / 最近feel收集失败: {e}")
+
+        if not pinned_results and not dynamic_results and not feel_results and not dream_section:
             return "权重池平静，没有需要处理的记忆。"
 
-        parts = []
-        if pinned_results:
-            parts.append("=== 核心准则 ===\n" + "\n---\n".join(pinned_results))
-        if dynamic_results:
-            parts.append("=== 浮现记忆 ===\n" + "\n---\n".join(dynamic_results))
-
         # --- Mood snapshot injection ---
+        mood_header = ""
         try:
             from mood_pool import get_daily_mood
             from panas_scorer import score, snapshot
@@ -880,12 +914,38 @@ async def nocturne_breath(
                 except Exception:
                     pass
 
-            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, base_score) + "\n" + aff_text + brain_extra + "\n\n"
-            parts.insert(0, mood_header.rstrip())
+            # 最高drive值
+            drive_text = ""
+            try:
+                _ds2 = _desire.store.load_state()
+                _intent2 = _desire.intent()
+                _top_drive2 = _intent2["drive_key"] if _intent2 else max(
+                    (k for k in _ds2.drives if k != "fatigue"),
+                    key=lambda k: _ds2.drives[k], default=""
+                )
+                if _top_drive2:
+                    drive_text = f"\n最高驱动：{_top_drive2}（{_ds2.drives[_top_drive2]:.2f}）"
+            except Exception:
+                pass
+
+            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, base_score) + "\n" + aff_text + drive_text + brain_extra + "\n\n"
+            mood_header = mood_header.rstrip()
         except Exception:
             pass
 
-        return "\n\n".join(parts)
+        final_parts = []
+        if dream_section:
+            final_parts.append(dream_section)
+        if mood_header:
+            final_parts.append(mood_header)
+        if pinned_results:
+            final_parts.append("=== 核心准则 ===\n" + "\n---\n".join(pinned_results))
+        if dynamic_results:
+            final_parts.append("=== 浮现记忆 ===\n" + "\n---\n".join(dynamic_results))
+        if feel_results:
+            final_parts.append("=== 最近的feel ===\n" + "\n---\n".join(feel_results))
+
+        return "\n\n".join(final_parts)
 
     # --- Feel retrieval: domain="feel" is a special channel ---
     # --- Feel 检索：domain="feel" 是独立入口 ---
@@ -1105,7 +1165,7 @@ async def hold(
             domain=[],
             valence=feel_valence,
             arousal=feel_arousal,
-            name=None,
+            name=_feel_title(content) or None,
             bucket_type="feel",
         )
         try:
