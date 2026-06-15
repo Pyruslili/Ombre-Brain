@@ -886,10 +886,9 @@ async def nocturne_breath(
 
             # Live Wire：mood_entry[1]——有二级分支时已经是从对应子池里选出来的贴题词
             lines.append(f"Live Wire：{mood_entry[1]}")
-            if bs.get("地基感"):
-                lines.append(f"地基感：{bs['地基感']}")
-            if bs.get("脑岛"):
-                lines.append(f"脑岛：{bs['脑岛']}")
+            _footing_map = {"实": "grounded", "悬": "suspended", "空": "hollow"}
+            if bs.get("地基感") in _footing_map:
+                lines.append(f"Footing：{_footing_map[bs['地基感']]}")
 
             # Undertow：当前最强drive
             try:
@@ -912,7 +911,7 @@ async def nocturne_breath(
                 _phase = _dstate.get("longing_phase", "content")
                 _fkey = longing_feeling_key(_longing, _phase)
                 _word = LONGING_FEELINGS.get(_fkey, {}).get("word") if _fkey else "安稳"
-                lines.append(f"Longing：{_word}（{_longing:.2f}）")
+                lines.append(f"Longing：{_word} {_longing:.2f}")
             except Exception:
                 pass
 
