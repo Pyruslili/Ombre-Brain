@@ -132,6 +132,21 @@ ESCAPE_VALVE_EXCESS_GAP = 0.15   # 负向超出量比正向超出量高出这个
 ESCAPE_VALVE_STREAK_TRIGGER = 3  # 连续3拍失衡才触发，防止单次评分误判
 ESCAPE_VALVE_PULLBACK = 0.5      # 触发后负向组超出baseline的部分往回拉50%
 
+# ─── Longing/absence展示层（Stage 6 v1）──────────────────────────────────────
+LONGING_ALPHA = 0.8
+LONGING_TAU_BASE_HOURS = 36.0
+LONGING_DETACHMENT_HOURS = 504.0  # 21 days
+LONGING_REUNION_THRESHOLD_HOURS = 2.0
+
+LONGING_FEELINGS = {
+    "stirring": {"word": "挂念", "valence": -0.05, "arousal": 0.525},
+    "protest": {"word": "想念", "valence": -0.05, "arousal": 0.55},
+    "protest_mid": {"word": "牵挂", "valence": -0.15, "arousal": 0.50},
+    "protest_late": {"word": "不安", "valence": -0.40, "arousal": 0.60},
+    "despair": {"word": "失落", "valence": -0.50, "arousal": 0.40},
+    "detachment": {"word": "落寞", "valence": -0.55, "arousal": 0.30},
+}
+
 # ─── 悲恸引擎常量 ──────────────────────────────────────────────────────────────
 # 三层：抗议→绝望→疏离
 GRIEF_PROTEST_TICKS = 6            # 抗议层持续多少tick没有嘉嘉输入信号→跌绝望
@@ -199,6 +214,10 @@ class DriveState:
     local_fatigue: dict = field(default_factory=lambda: {k: 0.0 for k in FATIGUE_SENSITIVITY})
     # 逃逸阀连续失衡计数（PDF阶段5.6），tick计数不是wall-clock
     escape_streak: int = 0
+    # 最近一次真实用户消息；Stage 6 v1用attachment drive临时代替完整亲密/激情/承诺+依恋风格模型。
+    last_user_message_at: float = field(default_factory=time.time)
+    # 团圆PA上扬是一次性展示层事件，不写回drive baseline。
+    reunion_pa_boost: float = 0.0
 
 
 @dataclass
@@ -346,6 +365,85 @@ def pa_na_snapshot(drives: dict) -> dict:
     return {"PA": round(pa, 3), "NA": round(na, 3)}
 
 
+def longing_value(hours_since_last_message: float, attachment: float) -> float:
+    """
+    Stage 6 v1 longing curve.
+    v1 simplification: current attachment drive stands in for intimacy. A fuller
+    Sternberg intimacy/passion/commitment + attachment-style model can replace it.
+    """
+    t = max(0.0, float(hours_since_last_message or 0.0))
+    attachment = _clamp(float(attachment or 0.0))
+    l_max = min(1.0, attachment)
+    if t <= 0.0 or l_max <= 0.0:
+        return 0.0
+    tau = LONGING_TAU_BASE_HOURS * (1 - attachment / 2)
+    return _clamp(l_max * (1 - (1 + t / tau) ** (-LONGING_ALPHA)))
+
+
+def longing_phase(longing: float, hours_since_last_message: float = 0.0) -> str:
+    longing = _clamp(float(longing or 0.0))
+    hours = max(0.0, float(hours_since_last_message or 0.0))
+    if longing >= 0.90 and hours >= LONGING_DETACHMENT_HOURS:
+        return "detachment"
+    if longing >= 0.70:
+        return "despair"
+    if longing >= 0.35:
+        return "protest"
+    if longing >= 0.15:
+        return "stirring"
+    return "content"
+
+
+def longing_feeling_key(longing: float, phase: str) -> Optional[str]:
+    if phase != "protest":
+        return phase if phase in LONGING_FEELINGS else None
+    # Protest spans 0.35-0.70; split into equal thirds so the feeling word
+    # moves from simple missing → sustained concern → late anxiety.
+    width = (0.70 - 0.35) / 3
+    if longing < 0.35 + width:
+        return "protest"
+    if longing < 0.35 + 2 * width:
+        return "protest_mid"
+    return "protest_late"
+
+
+def apply_longing_adjustment(pa: float, na: float, longing: float, phase: str) -> dict:
+    """Add longing's PA/NA readout after pa_na_snapshot; does not mutate drives."""
+    pa = float(pa)
+    na = float(na)
+    longing = _clamp(float(longing or 0.0))
+    if longing <= 0.15:
+        return {"PA": round(_clamp(pa), 3), "NA": round(_clamp(na), 3)}
+
+    feeling_key = longing_feeling_key(longing, phase)
+    feeling = LONGING_FEELINGS.get(feeling_key or "")
+    if not feeling:
+        return {"PA": round(_clamp(pa), 3), "NA": round(_clamp(na), 3)}
+
+    attachment_v = feeling["valence"]
+    pa_delta = max(0.0, attachment_v) * 0.5 * longing
+    na_delta = max(0.0, -attachment_v) * 0.5 * longing
+    return {
+        "PA": round(_clamp(pa + pa_delta), 3),
+        "NA": round(_clamp(na + na_delta), 3),
+    }
+
+
+def apply_reunion_boost(pa_na: dict, pa_boost: float) -> dict:
+    boosted = dict(pa_na)
+    boosted["PA"] = round(_clamp(float(boosted.get("PA", 0.0)) + max(0.0, float(pa_boost or 0.0))), 3)
+    return boosted
+
+
+def reunion_boost_for_return(hours_since_last_message: float, longing: float, phase: str) -> float:
+    if hours_since_last_message <= LONGING_REUNION_THRESHOLD_HOURS:
+        return 0.0
+    boost = 0.05 + _clamp(longing) * 0.10
+    if phase == "detachment":
+        boost *= 1.5
+    return round(boost, 6)
+
+
 def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> DriveState:
     import copy
     new_drives = copy.copy(state.drives)
@@ -386,6 +484,8 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
         prev_drives=prev,
         local_fatigue=new_local_fatigue,
         escape_streak=new_escape_streak,
+        last_user_message_at=state.last_user_message_at,
+        reunion_pa_boost=state.reunion_pa_boost,
     )
 
 
@@ -545,7 +645,10 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=state.drives,
-                      local_fatigue=new_local)
+                      local_fatigue=new_local,
+                      escape_streak=state.escape_streak,
+                      last_user_message_at=state.last_user_message_at,
+                      reunion_pa_boost=state.reunion_pa_boost)
 
 
 def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
@@ -562,7 +665,10 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=state.drives,
-                      local_fatigue=new_local)
+                      local_fatigue=new_local,
+                      escape_streak=state.escape_streak,
+                      last_user_message_at=state.last_user_message_at,
+                      reunion_pa_boost=state.reunion_pa_boost)
 
 
 def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> DriveState:
@@ -575,7 +681,10 @@ def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> Drive
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=state.drives,
-                      local_fatigue=new_local)
+                      local_fatigue=new_local,
+                      escape_streak=state.escape_streak,
+                      last_user_message_at=state.last_user_message_at,
+                      reunion_pa_boost=state.reunion_pa_boost)
 
 
 # ─── attachment非线性跳变 ─────────────────────────────────────────────────────
@@ -601,7 +710,10 @@ def pulse_attachment_nonlinear(state: DriveState, delta: float = 0.18) -> DriveS
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=state.drives,
-                      local_fatigue=new_local)
+                      local_fatigue=new_local,
+                      escape_streak=state.escape_streak,
+                      last_user_message_at=state.last_user_message_at,
+                      reunion_pa_boost=state.reunion_pa_boost)
 
 
 # ─── 悲恸引擎 ────────────────────────────────────────────────────────────────
@@ -723,6 +835,20 @@ class DesireStore:
                 conn.execute("ALTER TABLE drive_state ADD COLUMN escape_streak INTEGER DEFAULT 0")
             except Exception:
                 pass
+            # 兼容旧表：Stage 6缺席/想念展示层状态
+            try:
+                conn.execute("ALTER TABLE drive_state ADD COLUMN last_user_message_at REAL DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE drive_state ADD COLUMN reunion_pa_boost REAL DEFAULT 0")
+            except Exception:
+                pass
+            conn.execute(
+                "UPDATE drive_state SET last_user_message_at=? "
+                "WHERE last_user_message_at IS NULL OR last_user_message_at=0",
+                (time.time(),)
+            )
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS thoughts (
@@ -800,29 +926,34 @@ class DesireStore:
             if not row:
                 init_local = compute_local_fatigue(DRIVE_BASELINES["fatigue"])
                 conn.execute(
-                    "INSERT INTO drive_state (drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json) VALUES (?,?,?,?,?)",
+                    "INSERT INTO drive_state (drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json, last_user_message_at, reunion_pa_boost) VALUES (?,?,?,?,?,?,?)",
                     (json.dumps(dict(DRIVE_BASELINES)), 0, time.time(),
-                     json.dumps(dict(DRIVE_BASELINES)), json.dumps(init_local))
+                     json.dumps(dict(DRIVE_BASELINES)), json.dumps(init_local), time.time(), 0.0)
                 )
 
     def load_state(self) -> DriveState:
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json, escape_streak FROM drive_state LIMIT 1"
+                "SELECT drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json, escape_streak, last_user_message_at, reunion_pa_boost FROM drive_state LIMIT 1"
             ).fetchone()
         drives = json.loads(row[0])
         prev = json.loads(row[3]) if row[3] else dict(drives)
         local_fat = json.loads(row[4]) if row[4] else compute_local_fatigue(drives.get("fatigue", 0.0))
         escape_streak = row[5] if row[5] is not None else 0
+        last_user_message_at = row[6] if row[6] else time.time()
+        reunion_pa_boost = row[7] if row[7] is not None else 0.0
         return DriveState(drives=drives, tick_count=row[1], last_ts=row[2],
-                          prev_drives=prev, local_fatigue=local_fat, escape_streak=escape_streak)
+                          prev_drives=prev, local_fatigue=local_fat, escape_streak=escape_streak,
+                          last_user_message_at=last_user_message_at,
+                          reunion_pa_boost=reunion_pa_boost)
 
     def save_state(self, state: DriveState):
         with self._conn() as conn:
             conn.execute(
-                "UPDATE drive_state SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?, local_fatigue_json=?, escape_streak=?",
+                "UPDATE drive_state SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?, local_fatigue_json=?, escape_streak=?, last_user_message_at=?, reunion_pa_boost=?",
                 (json.dumps(state.drives), state.tick_count, state.last_ts,
-                 json.dumps(state.prev_drives), json.dumps(state.local_fatigue), state.escape_streak)
+                 json.dumps(state.prev_drives), json.dumps(state.local_fatigue), state.escape_streak,
+                 state.last_user_message_at, state.reunion_pa_boost)
             )
 
     def load_thoughts(self) -> list:
@@ -1022,6 +1153,41 @@ class DesireEngine:
     def __init__(self, db_path: str = "desire.db"):
         self.store = DesireStore(db_path)
 
+    def _longing_context(self, state: DriveState, now: float = None) -> dict:
+        now = now if now is not None else time.time()
+        hours = max(0.0, (now - state.last_user_message_at) / 3600.0)
+        longing = longing_value(hours, state.drives.get("attachment", 0.0))
+        phase = longing_phase(longing, hours)
+        return {
+            "longing": round(longing, 3),
+            "longing_phase": phase,
+            "hours_since_last_message": round(hours, 3),
+        }
+
+    def _pa_na_readout(self, state: DriveState, now: float = None,
+                       consume_reunion: bool = False) -> dict:
+        ctx = self._longing_context(state, now)
+        pa_na = pa_na_snapshot(state.drives)
+        pa_na = apply_longing_adjustment(
+            pa_na["PA"], pa_na["NA"], ctx["longing"], ctx["longing_phase"]
+        )
+        if state.reunion_pa_boost > 0:
+            pa_na = apply_reunion_boost(pa_na, state.reunion_pa_boost)
+            if consume_reunion:
+                state.reunion_pa_boost = 0.0
+                self.store.save_state(state)
+        return pa_na
+
+    def _mark_real_user_message(self, state: DriveState, now: float) -> DriveState:
+        hours = max(0.0, (now - state.last_user_message_at) / 3600.0)
+        longing_before = longing_value(hours, state.drives.get("attachment", 0.0))
+        phase_before = longing_phase(longing_before, hours)
+        state.reunion_pa_boost = reunion_boost_for_return(
+            hours, longing_before, phase_before
+        )
+        state.last_user_message_at = now
+        return state
+
     def tick(self, idle_seconds: float = 0, has_signal: bool = False,
              dialogue_density: float = 0.0) -> dict:
         now = time.time()
@@ -1056,8 +1222,12 @@ class DesireEngine:
 
         return self._state_dict(state, new_thoughts)
 
-    def pulse(self, drive_key: str, delta: float = 0.18) -> dict:
+    def pulse(self, drive_key: str, delta: float = 0.18,
+              real_user_message: bool = False, now_ts: float = None) -> dict:
+        now = now_ts if now_ts is not None else time.time()
         state = self.store.load_state()
+        if real_user_message:
+            state = self._mark_real_user_message(state, now)
         # attachment使用非线性跳变
         if drive_key == "attachment":
             state = pulse_attachment_nonlinear(state, delta)
@@ -1066,7 +1236,7 @@ class DesireEngine:
         self.store.save_state(state)
         # pulse时标记有嘉嘉信号，更新grief
         grief = self.store.load_grief()
-        grief = tick_grief(grief, state, has_signal=True, now_ts=time.time())
+        grief = tick_grief(grief, state, has_signal=True, now_ts=now)
         self.store.save_grief(grief)
         return {
             "drive_key": drive_key,
@@ -1251,7 +1421,7 @@ class DesireEngine:
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
-            "pa_na": pa_na_snapshot(state.drives),
+            "pa_na": self._pa_na_readout(state, consume_reunion=True),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts": [
@@ -1279,6 +1449,7 @@ class DesireEngine:
             },
             # 反刍念头单独统计
             "rumination_count": sum(1 for t in thoughts if t.kind == "rumination"),
+            **self._longing_context(state),
         }
 
     def _state_dict(self, state: DriveState, thoughts: list) -> dict:
@@ -1291,7 +1462,7 @@ class DesireEngine:
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
-            "pa_na": pa_na_snapshot(state.drives),
+            "pa_na": self._pa_na_readout(state, consume_reunion=True),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts_count": len(thoughts),
@@ -1299,6 +1470,7 @@ class DesireEngine:
             "rumination_count": sum(1 for t in thoughts if t.kind == "rumination"),
             "grief_layer": grief.layer,
             "rhythm_label": rhythm.label(fatigue),
+            **self._longing_context(state),
         }
 
 
@@ -1372,5 +1544,3 @@ if __name__ == "__main__":
         print(f"  curiosity冷却={ref.get('curiosity')}拍 ✓")
 
         print("\n✓ 全部通过")
-
-

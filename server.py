@@ -1041,7 +1041,7 @@ def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "") -> dict
     drive_key: attachment|curiosity|reflection|duty|social|fatigue|libido|stress
     thought: 可选，把这次经历的一句话存入念头池（flit）
     """
-    result = _desire.pulse(drive_key, delta)
+    result = _desire.pulse(drive_key, delta, real_user_message=True)
     if thought.strip():
         _desire.add_thought(thought.strip(), drive_key, strength=0.5)
     return result
