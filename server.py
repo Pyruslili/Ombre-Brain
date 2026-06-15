@@ -961,15 +961,7 @@ async def nocturne_breath(
         except Exception:
             pass
 
-        # --- Handoff: 跨窗交接便签，不衰减，永远放最前面 ---
-        try:
-            _note = handoff_note()
-            if _note and _note != "（交接便签是空的）":
-                final_parts = ["=== Handoff ===\n" + _note]
-            else:
-                final_parts = []
-        except Exception:
-            final_parts = []
+        final_parts = []
         if dream_section:
             final_parts.append(dream_section)
         if mood_header:
