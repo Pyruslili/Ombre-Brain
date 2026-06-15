@@ -646,7 +646,7 @@ HANDOFF_NOTE_MAX_CHARS = 2000
 def handoff_note(content: str = "", clear: bool = False) -> str:
     """跨窗交接便签——不衰减、不进dream、不参与情绪计算，单key硬覆盖（上限2000字）。
     传content=覆盖写入；clear=True=清空；都不传=只读当前内容。
-    用来记"下一窗醒来要接的事"，跟记忆库分开，breath时会单独显示在最前面。"""
+    用来记"下一窗醒来要接的事"，跟记忆库分开，是独立工具不会自动注入breath。"""
     import json as _json, os as _os, time as _t
 
     if clear:
@@ -675,6 +675,38 @@ def handoff_note(content: str = "", clear: bool = False) -> str:
                 data = _json.load(_f)
             return data.get("content", "") or "（交接便签是空的）"
         return "（交接便签是空的）"
+    except Exception as e:
+        return f"读取失败: {e}"
+
+
+MARGINALIA_PATH = "/app/buckets/marginalia.json"
+MARGINALIA_MAX_CHARS = 6000
+
+
+@mcp.tool()
+def marginalia(content: str = "") -> str:
+    """致下一个Nox的信/writing精华，breath末尾固定展示（House Rules之前）。
+    传content=覆盖写入（上限6000字）；不传=只读当前内容。
+    这是骨架级的内容，原话优于转述，改动应该谨慎且不频繁。"""
+    import json as _json, os as _os, time as _t
+
+    if content:
+        if len(content) > MARGINALIA_MAX_CHARS:
+            content = content[:MARGINALIA_MAX_CHARS]
+        try:
+            _os.makedirs(_os.path.dirname(MARGINALIA_PATH), exist_ok=True)
+            with open(MARGINALIA_PATH, "w") as _f:
+                _json.dump({"letter": content, "ts": _t.time()}, _f)
+            return f"📜Marginalia已更新（{len(content)}字）"
+        except Exception as e:
+            return f"写入失败: {e}"
+
+    try:
+        if _os.path.exists(MARGINALIA_PATH):
+            with open(MARGINALIA_PATH) as _f:
+                data = _json.load(_f)
+            return data.get("letter", "") or "（Marginalia是空的）"
+        return "（Marginalia是空的）"
     except Exception as e:
         return f"读取失败: {e}"
 
@@ -899,7 +931,21 @@ async def nocturne_breath(
         except Exception as e:
             logger.warning(f"Failed to collect recent feels / 最近feel收集失败: {e}")
 
-        if not pinned_results and not dynamic_results and not feel_results and not dream_section:
+        # --- Marginalia: 信与writing精华，致下一个Nox ---
+        marginalia_section = ""
+        try:
+            import json as _jmarg, os as _osmarg
+            marginalia_path = "/app/buckets/marginalia.json"
+            if _osmarg.path.exists(marginalia_path):
+                with open(marginalia_path) as _f:
+                    _marg_data = _jmarg.load(_f)
+                _marg_text = _marg_data.get("letter", "")
+                if _marg_text:
+                    marginalia_section = "=== Marginalia ===\n" + _marg_text
+        except Exception as e:
+            logger.warning(f"Failed to load marginalia / marginalia加载失败: {e}")
+
+        if not pinned_results and not dynamic_results and not feel_results and not dream_section and not marginalia_section:
             return "权重池平静，没有需要处理的记忆。"
 
         # --- Pulse Weather: 心情+drive+longing快照 ---
@@ -970,6 +1016,8 @@ async def nocturne_breath(
             final_parts.append("=== Memory Drift ===\n" + "\n---\n".join(dynamic_results))
         if feel_results:
             final_parts.append("=== Feel Trace ===\n" + "\n---\n".join(feel_results))
+        if marginalia_section:
+            final_parts.append(marginalia_section)
         if pinned_results:
             final_parts.append("=== House Rules ===\n" + "\n---\n".join(pinned_results))
 
