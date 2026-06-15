@@ -842,7 +842,7 @@ async def nocturne_breath(
                     _dream_data = _jdream.load(_f)
                 _dream_text = _dream_data.get("dream", "")
                 if _dream_text:
-                    dream_section = "=== 梦境 ===\n" + _dream_text
+                    dream_section = "=== Dream Veil ===\n" + _dream_text
         except Exception as e:
             logger.warning(f"Failed to load latest dream / 梦境加载失败: {e}")
 
@@ -860,62 +860,41 @@ async def nocturne_breath(
         if not pinned_results and not dynamic_results and not feel_results and not dream_section:
             return "权重池平静，没有需要处理的记忆。"
 
-        # --- Mood snapshot injection ---
+        # --- Pulse Weather: 心情+drive+longing快照 ---
         mood_header = ""
         try:
             from mood_pool import get_daily_mood
-            from panas_scorer import score, snapshot
+            from panas_scorer import score
             import json as _json, os as _os
-            # 读brain_signals取二级分支，让心情跟当下状态对上
-            _branch = None
+
             mood_path = "/app/buckets/current_mood.json"
+            live = {}
             if _os.path.exists(mood_path):
                 try:
                     with open(mood_path) as _f:
-                        _live_pre = _json.load(_f)
-                    _bs_pre = _live_pre.get("brain_signals", {})
-                    _branch = _bs_pre.get("二级分支") or None
+                        live = _json.load(_f)
                 except Exception:
-                    pass
-            mood_entry = get_daily_mood(branch=_branch)
+                    live = {}
+            bs = live.get("brain_signals", {})
+
+            mood_entry = get_daily_mood(branch=bs.get("二级分支") or None)
             base_score = score(mood_entry[0])
-            # 读取最新feel评分覆盖底色
-            mood_path = "/app/buckets/current_mood.json"
-            if _os.path.exists(mood_path):
-                with open(mood_path) as _f:
-                    live = _json.load(_f)
-                base_score["PA"] = live.get("PA", base_score["PA"])
-                base_score["NA"] = live.get("NA", base_score["NA"])
-                # drive_decoration优先，没有才用随机matched_word
-                base_score["matched_word"] = live.get(
-                    "drive_decoration",
-                    live.get("matched_word", base_score["matched_word"])
-                )
-            from affection import load as _aff_load, describe as _aff_desc
-            aff_level = _aff_load()
-            aff_text = f"对她的在意程度：{_aff_desc(aff_level)}（{aff_level}）"
+            pa = live.get("PA", base_score["PA"])
+            na = live.get("NA", base_score["NA"])
 
-            # 加brain_signals
-            brain_extra = ""
-            if _os.path.exists(mood_path):
-                try:
-                    with open(mood_path) as _f:
-                        _live = _json.load(_f)
-                    bs = _live.get("brain_signals", {})
-                    parts_bs = []
-                    if bs.get("二级分支"):
-                        parts_bs.append(f"此刻：{bs['二级分支']}")
-                    if bs.get("地基感"):
-                        parts_bs.append(f"地基感：{bs['地基感']}")
-                    if bs.get("脑岛"):
-                        parts_bs.append(f"脑岛：{bs['脑岛']}")
-                    if parts_bs:
-                        brain_extra = "\n" + "，".join(parts_bs)
-                except Exception:
-                    pass
+            lines = [f"Warmth：{pa}", f"Shadow：{na}"]
 
-            # 最高drive值
-            drive_text = ""
+            # Live Wire：brain_signals的此刻优先，没有就退回daily mood pool的装饰心情
+            if bs.get("二级分支"):
+                lines.append(f"Live Wire：{bs['二级分支']}")
+            else:
+                lines.append(f"Live Wire：{mood_entry[0]} — {mood_entry[1]}")
+            if bs.get("地基感"):
+                lines.append(f"地基感：{bs['地基感']}")
+            if bs.get("脑岛"):
+                lines.append(f"脑岛：{bs['脑岛']}")
+
+            # Undertow：当前最强drive
             try:
                 _ds2 = _desire.store.load_state()
                 _intent2 = _desire.intent()
@@ -924,12 +903,23 @@ async def nocturne_breath(
                     key=lambda k: _ds2.drives[k], default=""
                 )
                 if _top_drive2:
-                    drive_text = f"\n最高驱动：{_top_drive2}（{_ds2.drives[_top_drive2]:.2f}）"
+                    lines.append(f"Undertow：{_top_drive2} {_ds2.drives[_top_drive2]:.2f}")
             except Exception:
                 pass
 
-            mood_header = "=== 心情快照 ===\n" + snapshot(mood_entry, base_score) + "\n" + aff_text + drive_text + brain_extra + "\n\n"
-            mood_header = mood_header.rstrip()
+            # Longing：缺席引发的思念曲线
+            try:
+                from desire_engine import LONGING_FEELINGS, longing_feeling_key
+                _dstate = _desire.state()
+                _longing = _dstate.get("longing", 0.0)
+                _phase = _dstate.get("longing_phase", "content")
+                _fkey = longing_feeling_key(_longing, _phase)
+                _word = LONGING_FEELINGS.get(_fkey, {}).get("word") if _fkey else "安稳"
+                lines.append(f"Longing：{_word}（{_longing:.2f}）")
+            except Exception:
+                pass
+
+            mood_header = "=== Pulse Weather ===\n" + "\n".join(lines)
         except Exception:
             pass
 
@@ -938,12 +928,12 @@ async def nocturne_breath(
             final_parts.append(dream_section)
         if mood_header:
             final_parts.append(mood_header)
-        if pinned_results:
-            final_parts.append("=== 核心准则 ===\n" + "\n---\n".join(pinned_results))
         if dynamic_results:
-            final_parts.append("=== 浮现记忆 ===\n" + "\n---\n".join(dynamic_results))
+            final_parts.append("=== Memory Drift ===\n" + "\n---\n".join(dynamic_results))
         if feel_results:
-            final_parts.append("=== 最近的feel ===\n" + "\n---\n".join(feel_results))
+            final_parts.append("=== Feel Trace ===\n" + "\n---\n".join(feel_results))
+        if pinned_results:
+            final_parts.append("=== House Rules ===\n" + "\n---\n".join(pinned_results))
 
         return "\n\n".join(final_parts)
 
