@@ -245,12 +245,6 @@ def _guess_wander_domain(bucket: dict, mark_rows: list[dict] = None) -> str:
     marks = _mark_counts(mark_rows or [])
     domains = _bucket_domains(meta)
     tags = _bucket_tags(meta)
-    haystack = " ".join([
-        str(meta.get("type", "")),
-        str(meta.get("name", "")),
-        " ".join(domains),
-        " ".join(tags),
-    ]).lower()
 
     if marks["private"] or "private" in domains:
         return "private"
@@ -260,9 +254,9 @@ def _guess_wander_domain(bucket: dict, mark_rows: list[dict] = None) -> str:
         and (marks["inner"] or (marks["认"] >= 3 and _has_cross_date_recognition(mark_rows or [])))
     ):
         return "inner"
-    if "letter" in domains or "letter" in tags or "信" in haystack:
+    if "letter" in domains or "letter" in tags:
         return "letter"
-    if "writing" in domains or "writing" in tags or "写作" in haystack or "文章" in haystack:
+    if "writing" in domains or "writing" in tags:
         return "writing"
     return "memory"
 
