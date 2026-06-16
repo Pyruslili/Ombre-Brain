@@ -1147,6 +1147,20 @@ async def nocturne_breath(
             except Exception:
                 pass
 
+            # Drift：thought pool里最高strength的念头
+            try:
+                _dstate2 = _desire.state()
+                _thoughts2 = [
+                    t for t in (_dstate2.get("thoughts") or [])
+                    if (t.get("text") or "").strip() and not (t.get("text") or "").startswith("Failed")
+                ]
+                if _thoughts2:
+                    import random as _rand
+                    _top_t = max(_thoughts2, key=lambda t: t.get("strength", 0))
+                    lines.append(f"Drift：\"{_top_t['text']}\"")
+            except Exception:
+                pass
+
             # Longing：缺席引发的思念曲线
             try:
                 from desire_engine import LONGING_FEELINGS, longing_feeling_key
