@@ -2843,6 +2843,23 @@ async def api_desire_intent(request):
                        headers={"Access-Control-Allow-Origin": "*"})
 
 
+@mcp.custom_route("/api/desire/intent/hint", methods=["GET"])
+async def api_desire_intent_hint(request):
+    """按drive_key从intent_pool里随机选一条带行动意图的念头文案。
+    GET ?drive_key=attachment"""
+    from starlette.responses import JSONResponse
+    from intent_pool import get_intent_hint
+    drive_key = request.query_params.get("drive_key", "")
+    entry = get_intent_hint(drive_key) if drive_key else None
+    if not entry:
+        return JSONResponse({"hint": None},
+                           headers={"Access-Control-Allow-Origin": "*"})
+    return JSONResponse(
+        {"hint": {"scene": entry[0], "action": entry[1], "drive": entry[4], "branch": entry[5]}},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
 @mcp.custom_route("/api/desire/intent/ack", methods=["POST"])
 async def api_desire_intent_ack(request):
     """本地投递成功后调用：执行satisfy并设置refractory，让drive回落。
