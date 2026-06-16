@@ -42,6 +42,7 @@ import hmac
 import secrets
 import time
 import json as _json_lib
+import sqlite3
 import httpx
 import os as _os
 
@@ -57,7 +58,7 @@ from dehydrator import Dehydrator
 from decay_engine import DecayEngine
 from embedding_engine import EmbeddingEngine
 from import_memory import ImportEngine
-from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx
+from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx, now_iso
 from desire_engine import DesireEngine
 
 # --- Load config & init logging / 加载配置 & 初始化日志 ---
@@ -144,6 +145,161 @@ mcp = FastMCP(
     host="0.0.0.0",
     port=OMBRE_PORT,
 )
+
+
+# =============================================================
+# Wander marks storage — annotations layered over existing buckets
+# Wander 批注存储 —— 叠加在现有桶上的标记层
+# =============================================================
+MARKS_DB_PATH = os.path.join(config["buckets_dir"], "embeddings.db")
+VALID_WANDER_MARKS = {"认", "不认", "悬置", "inner", "private", "remove_inner"}
+
+
+def _init_marks_table() -> None:
+    os.makedirs(os.path.dirname(MARKS_DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(MARKS_DB_PATH)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS marks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bucket_id TEXT NOT NULL,
+                mark TEXT NOT NULL,
+                note TEXT,
+                timestamp TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_marks_bucket_id ON marks(bucket_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_marks_mark ON marks(mark)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _marks_conn():
+    _init_marks_table()
+    return sqlite3.connect(MARKS_DB_PATH)
+
+
+def _normalize_wander_mark(mark: str) -> str:
+    m = (mark or "").strip()
+    if m.lower() in ("inner", "private", "remove_inner"):
+        return m.lower()
+    return m
+
+
+def _load_all_marks() -> dict[str, list[dict]]:
+    conn = _marks_conn()
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, bucket_id, mark, note, timestamp FROM marks ORDER BY timestamp ASC, id ASC"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    by_bucket: dict[str, list[dict]] = {}
+    for row in rows:
+        item = dict(row)
+        by_bucket.setdefault(item["bucket_id"], []).append(item)
+    return by_bucket
+
+
+def _mark_counts(mark_rows: list[dict]) -> dict:
+    counts = {"认": 0, "不认": 0, "悬置": 0, "inner": 0, "private": 0, "remove_inner": 0}
+    for row in mark_rows:
+        mark = _normalize_wander_mark(row.get("mark", ""))
+        if mark in counts:
+            counts[mark] += 1
+    return counts
+
+
+def _has_cross_date_recognition(mark_rows: list[dict]) -> bool:
+    recognition_dates = {
+        str(row.get("timestamp", ""))[:10]
+        for row in mark_rows
+        if _normalize_wander_mark(row.get("mark", "")) == "认"
+        and len(str(row.get("timestamp", ""))) >= 10
+    }
+    return len(recognition_dates) >= 2
+
+
+def _bucket_domains(meta: dict) -> set[str]:
+    domains = meta.get("domain", [])
+    if isinstance(domains, str):
+        domains = [domains]
+    return {str(d).strip().lower() for d in domains if str(d).strip()}
+
+
+def _bucket_tags(meta: dict) -> set[str]:
+    tags = meta.get("tags", [])
+    if isinstance(tags, str):
+        tags = [tags]
+    return {str(t).strip().lower() for t in tags if str(t).strip()}
+
+
+def _guess_wander_domain(bucket: dict, mark_rows: list[dict] = None) -> str:
+    meta = bucket.get("metadata", {})
+    marks = _mark_counts(mark_rows or [])
+    domains = _bucket_domains(meta)
+    tags = _bucket_tags(meta)
+    haystack = " ".join([
+        str(meta.get("type", "")),
+        str(meta.get("name", "")),
+        " ".join(domains),
+        " ".join(tags),
+    ]).lower()
+
+    if marks["private"] or "private" in domains:
+        return "private"
+    inner_removed = (marks["remove_inner"] > 0 or marks["不认"] >= 2) and "inner" not in domains
+    if "inner" in domains or (
+        not inner_removed
+        and (marks["inner"] or (marks["认"] >= 3 and _has_cross_date_recognition(mark_rows or [])))
+    ):
+        return "inner"
+    if "letter" in domains or "letter" in tags or "信" in haystack:
+        return "letter"
+    if "writing" in domains or "writing" in tags or "写作" in haystack or "文章" in haystack:
+        return "writing"
+    return "memory"
+
+
+def _is_private_bucket(bucket: dict, mark_rows: list[dict]) -> bool:
+    return _guess_wander_domain(bucket, mark_rows) == "private"
+
+
+def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_content: bool = True) -> str:
+    meta = bucket.get("metadata", {})
+    counts = _mark_counts(mark_rows)
+    created = str(meta.get("created", ""))[:10] or "无日期"
+    title = meta.get("name") or bucket.get("id", "")
+    content = strip_wikilinks(bucket.get("content", "")).strip()
+    if not include_full_content and len(content) > 700:
+        content = content[:700].rstrip() + "..."
+    recent_notes = [
+        r for r in sorted(mark_rows, key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
+        if (r.get("note") or "").strip()
+    ][:3]
+    note_lines = []
+    for row in recent_notes:
+        note_lines.append(f"- [{row.get('mark')}] {row.get('note', '').strip()}")
+    notes = "\n".join(note_lines) if note_lines else "（无）"
+
+    return (
+        f"[{created}] {title}\n"
+        f"bucket_id:{bucket.get('id', '')}\n"
+        f"批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']} / Inner:{counts['inner']}\n"
+        f"正文：\n{content}\n"
+        f"最近三条批注原话：\n{notes}"
+    )
+
+
+try:
+    _init_marks_table()
+except Exception as e:
+    logger.warning(f"Failed to initialize wander marks table: {e}")
 
 
 # =============================================================
@@ -1581,6 +1737,219 @@ async def pulse(include_archive: bool = False) -> str:
         )
 
     return status + "\n=== 记忆列表 ===\n" + "\n".join(lines)
+
+
+@mcp.tool()
+async def wander(mode: str, query: str = "", limit: int = 12) -> str:
+    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; letter/writing全量时间线含批注统计; unresolved悬置; inner核心沉淀; private私人抽屉。private仅Nox可见, 不对嘉嘉app端暴露。默认不返回private。"""
+    mode = (mode or "").strip().lower()
+    valid_modes = {"memory", "letter", "writing", "unresolved", "inner", "private"}
+    if mode not in valid_modes:
+        return "mode 必须是 memory / letter / writing / unresolved / inner / private。"
+
+    try:
+        all_buckets = await bucket_mgr.list_all(include_archive=True)
+    except Exception as e:
+        logger.error(f"wander failed to list buckets: {e}")
+        return f"记忆系统暂时无法访问: {e}"
+
+    marks_by_bucket = _load_all_marks()
+    q = (query or "").strip().lower()
+
+    def matches_query(bucket: dict) -> bool:
+        if not q:
+            return True
+        meta = bucket.get("metadata", {})
+        haystack = "\n".join([
+            str(bucket.get("id", "")),
+            str(meta.get("name", "")),
+            " ".join(str(x) for x in meta.get("domain", []) if x),
+            " ".join(str(x) for x in meta.get("tags", []) if x),
+            bucket.get("content", ""),
+        ]).lower()
+        return q in haystack
+
+    def visible(bucket: dict) -> bool:
+        if mode == "private":
+            return True
+        return not _is_private_bucket(bucket, marks_by_bucket.get(bucket.get("id", ""), []))
+
+    buckets = [b for b in all_buckets if visible(b) and matches_query(b)]
+
+    if mode == "memory":
+        normal = []
+        feels = []
+        for b in buckets:
+            meta = b.get("metadata", {})
+            btype = str(meta.get("type", "")).lower()
+            mark_rows = marks_by_bucket.get(b.get("id", ""), [])
+            if btype == "feel":
+                feels.append(b)
+                continue
+            if btype in ("breath", "dream"):
+                continue
+            if _guess_wander_domain(b, mark_rows) == "memory":
+                normal.append(b)
+
+        random.shuffle(normal)
+        random.shuffle(feels)
+        try:
+            target = max(10, min(15, int(limit)))
+        except Exception:
+            target = 12
+        target = max(10, min(15, target))
+        memory_pick = normal[:target]
+        feel_pick = feels[:min(len(feels), random.randint(2, 4))]
+
+        parts = []
+        if memory_pick:
+            parts.append("=== Random Memory ===\n" + "\n---\n".join(
+                _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=False)
+                for b in memory_pick
+            ))
+        if feel_pick:
+            parts.append("=== Random Feel ===\n" + "\n---\n".join(
+                f"[{b.get('metadata', {}).get('created', '')[:16].replace('T', ' ')}] "
+                f"bucket_id:{b.get('id', '')}\n{strip_wikilinks(b.get('content', '')).strip()}"
+                for b in feel_pick
+            ))
+        return "\n\n".join(parts) if parts else "没有可漫游的 memory。"
+
+    if mode in ("letter", "writing"):
+        selected = [
+            b for b in buckets
+            if mode in _bucket_domains(b.get("metadata", {}))
+            or mode in _bucket_tags(b.get("metadata", {}))
+        ]
+        selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
+        if not selected:
+            return f"没有 {mode} 条目。"
+        return f"=== {mode} Timeline ===\n" + "\n---\n".join(
+            _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True)
+            for b in selected
+        )
+
+    if mode == "unresolved":
+        selected = [
+            b for b in buckets
+            if _mark_counts(marks_by_bucket.get(b.get("id", ""), []))["悬置"] > 0
+        ]
+        selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
+        if not selected:
+            return "没有悬置条目。"
+        return "=== Unresolved / 悬置 ===\n" + "\n---\n".join(
+            _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True)
+            for b in selected
+        )
+
+    if mode == "inner":
+        selected = [
+            b for b in buckets
+            if _guess_wander_domain(b, marks_by_bucket.get(b.get("id", ""), [])) == "inner"
+        ]
+        selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
+        if not selected:
+            return "没有 inner 条目。"
+        return "=== Inner Core ===\n" + "\n---\n".join(
+            _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True)
+            for b in selected
+        )
+
+    selected = [
+        b for b in all_buckets
+        if matches_query(b)
+        and _is_private_bucket(b, marks_by_bucket.get(b.get("id", ""), []))
+    ]
+    selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
+    if not selected:
+        return "私人抽屉是空的。"
+    return "=== Private Drawer / Nox Only ===\n" + "\n---\n".join(
+        _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True)
+        for b in selected
+    )
+
+
+@mcp.tool()
+async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
+    """wander_mark — 给条目叠加批注标记, 不覆盖旧标记。mark可选: 认 / 不认 / 悬置 / inner / private / remove_inner。每次记录timestamp和可选note; 认累计3次且跨至少2个日期自动晋升inner; private仅Nox可见。"""
+    bucket_id = (bucket_id or "").strip()
+    mark = _normalize_wander_mark(mark)
+    note = (note or "").strip()
+
+    if not bucket_id:
+        return "请提供有效的 bucket_id。"
+    if mark not in VALID_WANDER_MARKS:
+        return "mark 必须是 认 / 不认 / 悬置 / inner / private / remove_inner。"
+
+    bucket = await bucket_mgr.get(bucket_id)
+    if not bucket:
+        return f"未找到记忆桶: {bucket_id}"
+
+    meta = bucket.get("metadata", {})
+    domains = meta.get("domain", [])
+    if isinstance(domains, str):
+        domains = [domains]
+    domains = [d for d in domains if d]
+
+    ts = now_iso()
+    conn = _marks_conn()
+    try:
+        conn.execute(
+            "INSERT INTO marks (bucket_id, mark, note, timestamp) VALUES (?, ?, ?, ?)",
+            (bucket_id, mark, note, ts),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    mark_rows = _load_all_marks().get(bucket_id, [])
+    counts = _mark_counts(mark_rows)
+
+    if mark == "remove_inner":
+        next_domains = [d for d in domains if str(d).lower() != "inner"]
+        if next_domains != domains:
+            try:
+                await bucket_mgr.update(bucket_id, domain=next_domains)
+            except Exception as e:
+                logger.warning(f"wander_mark failed to remove inner domain: {e}")
+                return f"移出inner失败: {e}"
+        return "已移出inner"
+
+    should_inner = mark == "inner" or (counts["认"] >= 3 and _has_cross_date_recognition(mark_rows))
+    should_private = mark == "private"
+    domain_changed = []
+    if should_inner or should_private:
+        lower_domains = {str(d).lower() for d in domains}
+        if should_inner and "inner" not in lower_domains:
+            domains.append("inner")
+            domain_changed.append("inner")
+        if should_private and "private" not in lower_domains:
+            domains.append("private")
+            domain_changed.append("private")
+        if domain_changed:
+            try:
+                await bucket_mgr.update(bucket_id, domain=domains)
+            except Exception as e:
+                logger.warning(f"wander_mark failed to update bucket domain: {e}")
+
+    suffix = ""
+    if should_inner:
+        suffix += "；已沉淀进 inner"
+    if should_private:
+        suffix += "；已放入 private"
+
+    if counts["不认"] >= 2 and any(str(d).lower() == "inner" for d in domains):
+        domains = [d for d in domains if str(d).lower() != "inner"]
+        try:
+            await bucket_mgr.update(bucket_id, domain=domains)
+            suffix += "；不认累计>=2，已移出 inner"
+        except Exception as e:
+            logger.warning(f"wander_mark failed to auto-remove inner domain: {e}")
+
+    return (
+        f"已标记 {bucket_id}: {mark} @ {ts}{suffix}\n"
+        f"当前批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']} / Inner:{counts['inner']} / private:{counts['private']}"
+    )
 
 
 # =============================================================
