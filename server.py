@@ -43,6 +43,7 @@ import secrets
 import time
 import json as _json_lib
 import sqlite3
+from datetime import datetime, timedelta
 import httpx
 import os as _os
 
@@ -274,10 +275,13 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
     meta = bucket.get("metadata", {})
     counts = _mark_counts(mark_rows)
     created = str(meta.get("created", ""))[:10] or "无日期"
-    title = meta.get("name") or bucket.get("id", "")
+    title = meta.get("name") or (bucket.get("id", "") if include_full_content else "")
     content = strip_wikilinks(bucket.get("content", "")).strip()
     if not include_full_content and len(content) > 700:
         content = content[:700].rstrip() + "..."
+    if not include_full_content:
+        header = f"[{created}] {title}".rstrip()
+        return f"{header}\n{content}"
     recent_notes = [
         r for r in sorted(mark_rows, key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
         if (r.get("note") or "").strip()
@@ -1777,10 +1781,28 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
     buckets = [b for b in all_buckets if visible(b) and matches_query(b)]
 
     if mode == "memory":
+        cutoff = datetime.now() - timedelta(days=7)
+
+        def is_old_bucket(bucket: dict) -> bool:
+            created_raw = str(bucket.get("metadata", {}).get("created", ""))
+            if not created_raw:
+                return True
+            try:
+                created_dt = datetime.fromisoformat(created_raw[:19])
+            except (ValueError, TypeError):
+                return True
+            return created_dt <= cutoff
+
         normal = []
         feels = []
         for b in buckets:
+            if not is_old_bucket(b):
+                continue
             meta = b.get("metadata", {})
+            if meta.get("resolved") == 1 or meta.get("resolved") is True:
+                continue
+            if meta.get("digested") == 1 or meta.get("digested") is True:
+                continue
             btype = str(meta.get("type", "")).lower()
             mark_rows = marks_by_bucket.get(b.get("id", ""), [])
             if btype == "feel":
@@ -1793,13 +1815,8 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
 
         random.shuffle(normal)
         random.shuffle(feels)
-        try:
-            target = max(10, min(15, int(limit)))
-        except Exception:
-            target = 12
-        target = max(10, min(15, target))
-        memory_pick = normal[:target]
-        feel_pick = feels[:min(len(feels), random.randint(2, 4))]
+        memory_pick = normal[:3]
+        feel_pick = feels[:5]
 
         parts = []
         if memory_pick:
