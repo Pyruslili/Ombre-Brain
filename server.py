@@ -293,7 +293,6 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
 
     return (
         f"[{created}] {title}\n"
-        f"bucket_id:{bucket.get('id', '')}\n"
         f"批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']} / Inner:{counts['inner']}\n"
         f"正文：\n{content}\n"
         f"最近三条批注原话：\n{notes}"
@@ -1198,7 +1197,7 @@ async def nocturne_breath(
             results = []
             for f in feels:
                 created = f["metadata"].get("created", "")
-                entry = f"[{created}] [bucket_id:{f['id']}]\n{strip_wikilinks(f['content'])}"
+                entry = f"[{created}]\n{strip_wikilinks(f['content'])}"
                 results.append(entry)
                 if count_tokens_approx("\n---\n".join(results)) > max_tokens:
                     break
@@ -1826,8 +1825,8 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             ))
         if feel_pick:
             parts.append("=== Random Feel ===\n" + "\n---\n".join(
-                f"[{b.get('metadata', {}).get('created', '')[:16].replace('T', ' ')}] "
-                f"bucket_id:{b.get('id', '')}\n{strip_wikilinks(b.get('content', '')).strip()}"
+                f"[{b.get('metadata', {}).get('created', '')[:16].replace('T', ' ')}]\n"
+                f"{strip_wikilinks(b.get('content', '')).strip()}"
                 for b in feel_pick
             ))
         return "\n\n".join(parts) if parts else "没有可漫游的 memory。"
