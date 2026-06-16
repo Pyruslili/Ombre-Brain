@@ -2816,7 +2816,21 @@ async def api_desire_state(request):
     否则dashboard刷新/打开页面会偷偷多走一拍，tick_count/escape_streak/grief
     的计数节奏会被"谁在看"污染。"""
     from starlette.responses import JSONResponse
-    return JSONResponse(_desire.state(),
+    state = _desire.state()
+    try:
+        from mood_pool import get_daily_mood
+        import json as _j, os as _o
+        mood_path = "/app/buckets/current_mood.json"
+        live = {}
+        if _o.path.exists(mood_path):
+            with open(mood_path) as _f:
+                live = _j.load(_f)
+        bs = live.get("brain_signals", {})
+        mood_entry = get_daily_mood(branch=bs.get("二级分支") or None)
+        state["mood_word"] = mood_entry[1]
+    except Exception:
+        pass
+    return JSONResponse(state,
                        headers={"Access-Control-Allow-Origin": "*"})
 
 
