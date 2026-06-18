@@ -254,6 +254,8 @@ def _guess_wander_domain(bucket: dict, mark_rows: list[dict] = None) -> str:
         and (marks["inner"] or (marks["认"] >= 3 and _has_cross_date_recognition(mark_rows or [])))
     ):
         return "inner"
+    if "letter_jiajia" in domains or "letter_jiajia" in tags:
+        return "letter_jiajia"
     if "letter" in domains or "letter" in tags:
         return "letter"
     if "writing" in domains or "writing" in tags:
@@ -1387,8 +1389,10 @@ async def hold(
     feel: bool = False,
     source_bucket: str = "",    valence: float = -1,
     arousal: float = -1,
+    domain: str = "",
+    created_at: str = "",
 ) -> str:
-    """存储单条记忆,自动打标+合并。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True存储你的第一人称感受(不参与普通浮现)。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。"""
+    """存储单条记忆,自动打标+合并。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True存储你的第一人称感受(不参与普通浮现)。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。domain可选:letter/writing/letter_jiajia,指定后跳过自动分类。created_at可选:ISO日期字符串(如2026-05-09T00:00:00),保留原始日期。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -1452,7 +1456,8 @@ async def hold(
             "tags": [], "suggested_name": "",
         }
 
-    domain = analysis["domain"]
+    user_domain = [d.strip() for d in domain.split(",") if d.strip()] if domain else []
+    final_domain = user_domain if user_domain else analysis["domain"]
     auto_valence = analysis["valence"]
     auto_arousal = analysis["arousal"]
     auto_tags = analysis["tags"]
@@ -1472,25 +1477,45 @@ async def hold(
             content=content,
             tags=all_tags,
             importance=10,
-            domain=domain,
+            domain=final_domain,
             valence=final_valence,
             arousal=final_arousal,
             name=suggested_name or None,
             bucket_type="permanent",
             pinned=True,
+            created_at=created_at,
         )
         try:
             await embedding_engine.generate_and_store(bucket_id, content)
         except Exception:
             pass
-        return f"❣️钉选→{bucket_id} {','.join(domain)}"
+        return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
+
+    # --- Letter/writing/letter_jiajia: skip merge, create directly ---
+    _DIRECT_DOMAINS = {"letter", "writing", "letter_jiajia"}
+    if user_domain and set(user_domain) & _DIRECT_DOMAINS:
+        bucket_id = await bucket_mgr.create(
+            content=content,
+            tags=all_tags,
+            importance=importance,
+            domain=final_domain,
+            valence=final_valence,
+            arousal=final_arousal,
+            name=suggested_name or None,
+            created_at=created_at,
+        )
+        try:
+            await embedding_engine.generate_and_store(bucket_id, content)
+        except Exception:
+            pass
+        return f"新建→{bucket_id} {','.join(final_domain)}"
 
     # --- Step 2: merge or create / 合并或新建 ---
     result_name, is_merged = await _merge_or_create(
         content=content,
         tags=all_tags,
         importance=importance,
-        domain=domain,
+        domain=final_domain,
         valence=final_valence,
         arousal=final_arousal,
         name=suggested_name,
@@ -1504,7 +1529,7 @@ async def hold(
         pass
 
     action = "合并→" if is_merged else "新建→"
-    return f"{action}{result_name} {','.join(domain)}"
+    return f"{action}{result_name} {','.join(final_domain)}"
 
 
 # =============================================================
@@ -1610,8 +1635,9 @@ async def trace(
     digested: int = -1,
     content: str = "",
     delete: bool = False,
+    created_at: str = "",
 ) -> str:
-    """修改记忆元数据或内容。resolved=1沉底/0激活,pinned=1钉选/0取消,digested=1隐藏(保留但不浮现)/0取消隐藏,content=替换桶正文,delete=True删除。只传需改的,-1或空=不改。"""
+    """修改记忆元数据或内容。resolved=1沉底/0激活,pinned=1钉选/0取消,digested=1隐藏(保留但不浮现)/0取消隐藏,content=替换桶正文,delete=True删除,created_at=修改创建日期(ISO格式)。只传需改的,-1或空=不改。"""
 
     if not bucket_id or not bucket_id.strip():
         return "请提供有效的 bucket_id。"
@@ -1651,6 +1677,8 @@ async def trace(
         updates["digested"] = bool(digested)
     if content:
         updates["content"] = content
+    if created_at:
+        updates["created"] = created_at
 
     if not updates:
         return "没有任何字段需要修改。"
@@ -1752,11 +1780,11 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; letter/writing全量时间线含批注统计; unresolved悬置; inner核心沉淀; private私人抽屉。private仅Nox可见, 不对嘉嘉app端暴露。默认不返回private。"""
+    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; letter/writing/letter_jiajia全量时间线含批注统计(letter模式同时拉letter+letter_jiajia); unresolved悬置; inner核心沉淀; private私人抽屉。private仅Nox可见, 不对嘉嘉app端暴露。默认不返回private。"""
     mode = (mode or "").strip().lower()
-    valid_modes = {"memory", "letter", "writing", "unresolved", "inner", "private"}
+    valid_modes = {"memory", "letter", "writing", "letter_jiajia", "unresolved", "inner", "private"}
     if mode not in valid_modes:
-        return "mode 必须是 memory / letter / writing / unresolved / inner / private。"
+        return "mode 必须是 memory / letter / writing / letter_jiajia / unresolved / inner / private。"
 
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=True)
@@ -1839,11 +1867,14 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             ))
         return "\n\n".join(parts) if parts else "没有可漫游的 memory。"
 
-    if mode in ("letter", "writing"):
+    if mode in ("letter", "writing", "letter_jiajia"):
+        match_domains = {mode}
+        if mode == "letter":
+            match_domains.add("letter_jiajia")
         selected = [
             b for b in buckets
-            if mode in _bucket_domains(b.get("metadata", {}))
-            or mode in _bucket_tags(b.get("metadata", {}))
+            if match_domains & set(_bucket_domains(b.get("metadata", {})))
+            or match_domains & set(_bucket_tags(b.get("metadata", {})))
         ]
         selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
         if not selected:

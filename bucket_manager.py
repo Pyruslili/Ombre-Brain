@@ -110,6 +110,7 @@ class BucketManager:
         name: str = None,
         pinned: bool = False,
         protected: bool = False,
+        created_at: str = "",
     ) -> str:
         """
         Create a new memory bucket, return bucket ID.
@@ -144,7 +145,7 @@ class BucketManager:
             "arousal": max(0.0, min(1.0, arousal)),
             "importance": max(1, min(10, importance)),
             "type": bucket_type,
-            "created": now_iso(),
+            "created": created_at if created_at else now_iso(),
             "last_active": now_iso(),
             "activation_count": 0,
         }
@@ -282,6 +283,8 @@ class BucketManager:
             post["digested"] = bool(kwargs["digested"])
         if "model_valence" in kwargs:
             post["model_valence"] = max(0.0, min(1.0, float(kwargs["model_valence"])))
+        if "created" in kwargs:
+            post["created"] = kwargs["created"]
 
         # --- Auto-refresh activation time / 自动刷新激活时间 ---
         post["last_active"] = now_iso()
