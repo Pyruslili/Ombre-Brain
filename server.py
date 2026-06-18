@@ -273,6 +273,13 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
     created = str(meta.get("created", ""))[:10] or "无日期"
     title = meta.get("name") or (bucket.get("id", "") if include_full_content else "")
     content = strip_wikilinks(bucket.get("content", "")).strip()
+    # Strip leading date line from content to avoid duplication with header
+    import re as _re
+    _date_line = _re.match(r"^(?:写在开头\s*·?\s*)?20\d{2}[\.\-/]\d{1,2}[\.\-/]\d{1,2}[^\n]*\n+", content)
+    if not _date_line:
+        _date_line = _re.match(r"^写在开头[^\n]*\n+", content)
+    if _date_line:
+        content = content[_date_line.end():]
     if not include_full_content and len(content) > 700:
         content = content[:700].rstrip() + "..."
     if not include_full_content:
