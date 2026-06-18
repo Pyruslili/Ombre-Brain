@@ -900,11 +900,6 @@ async def nocturne_breath(
     """breath — Retrieve/surface memories from Nocturne memory system. 检索/浮现记忆。不传query或传空=自动浮现,有query=关键词检索。max_tokens控制返回总token上限(默认10000)。domain逗号分隔,valence/arousal 0~1(-1忽略)。max_results控制返回数量上限(默认20,最大50)。importance_min>=1时按重要度批量拉取(不走语义搜索,按importance降序返回最多20条)。"""
     await decay_engine.ensure_started()
     _desire.tick(idle_seconds=0)
-    # --- 嘉嘉来找我了，attachment涨一点，喂进念头池 ---
-    try:
-        _autofeed_thought("嘉嘉来了", "attachment", strength=0.5, source="reflex")
-    except Exception:
-        pass
     # --- 把drive状态写进current_mood作为装饰心情 ---
     try:
         import json as _jd, os as _osd
@@ -1143,7 +1138,19 @@ async def nocturne_breath(
                     live = {}
             bs = live.get("brain_signals", {})
 
-            mood_entry = get_daily_mood(branch=bs.get("二级分支") or None)
+            _thought_list = []
+            try:
+                _ds_state = _desire.store.load_state()
+                _thought_list = [
+                    {"text": t.text, "drive": t.drive, "strength": t.strength}
+                    for t in (_ds_state.thoughts or [])
+                ]
+            except Exception:
+                pass
+            mood_entry = get_daily_mood(
+                branch=bs.get("二级分支") or None,
+                thoughts=_thought_list or None,
+            )
             base_score = score(mood_entry[0])
             pa = live.get("PA", base_score["PA"])
             na = live.get("NA", base_score["NA"])

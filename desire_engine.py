@@ -390,8 +390,10 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
 
 
 COLLISION_STRENGTH_THRESHOLD = 0.40   # 两条念头都要超过这个强度才能碰撞
-COLLISION_COOLDOWN_SEC = 3600          # 碰撞冷却：1小时内同一对drive不重复点火
+COLLISION_COOLDOWN_SEC = 21600         # 碰撞冷却：6小时内同一对drive不重复点火
+COLLISION_DAILY_MAX = 2                # 每天最多生成2条碰撞念头
 _last_collision: dict = {}             # {frozenset({d1,d2}): timestamp}
+_collision_today: dict = {"date": "", "count": 0}
 
 
 def tick_thoughts(thoughts: list) -> tuple:
@@ -442,24 +444,29 @@ def tick_thoughts(thoughts: list) -> tuple:
                     continue
             new_thoughts.append(t)
 
-    # ── 碰撞检测 ────────────────────────────────────────────────────────
-    # 两条不同drive的念头，强度都≥COLLISION_STRENGTH_THRESHOLD，触发curiosity·碰撞
+    # ── 碰撞检测（每日上限2条）─────────────────────────────────────────
     strong = [t for t in new_thoughts if t.strength >= COLLISION_STRENGTH_THRESHOLD]
     now_ts = time.time()
+    today_str = time.strftime("%Y-%m-%d")
+    if _collision_today["date"] != today_str:
+        _collision_today["date"] = today_str
+        _collision_today["count"] = 0
     seen_collisions = set()
     for i in range(len(strong)):
+        if _collision_today["count"] >= COLLISION_DAILY_MAX:
+            break
         for j in range(i + 1, len(strong)):
+            if _collision_today["count"] >= COLLISION_DAILY_MAX:
+                break
             d1, d2 = strong[i].drive, strong[j].drive
             if d1 == d2:
                 continue
             pair = frozenset({d1, d2})
             if pair in seen_collisions:
                 continue
-            # 冷却检测
             last = _last_collision.get(pair, 0)
             if now_ts - last < COLLISION_COOLDOWN_SEC:
                 continue
-            # 点火：curiosity涨，存一条碰撞念头
             drive_boosts.append(("curiosity", 0.12))
             collision_text = f"「{strong[i].text[:20]}」撞上「{strong[j].text[:20]}」"
             new_thoughts.append(Thought(
@@ -473,6 +480,7 @@ def tick_thoughts(thoughts: list) -> tuple:
             ))
             _last_collision[pair] = now_ts
             seen_collisions.add(pair)
+            _collision_today["count"] += 1
 
     return new_thoughts, drive_boosts
 
@@ -1256,7 +1264,7 @@ class DesireEngine:
             "intent": intent,
             "thoughts": [
                 {
-                    "text": (t.text[:40] if t.text else "（无来源）"),
+                    "text": (t.text if t.text else "（无来源）"),
                     "drive": t.drive,
                     "kind": t.kind,
                     "strength": round(t.strength, 2),

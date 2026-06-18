@@ -1,4 +1,7 @@
 import random
+import json
+import os
+import time
 
 MOOD_POOL = [
     # attachment·想靠近
@@ -168,15 +171,98 @@ for entry in MOOD_POOL:
     _WORD_INDEX[word].append(entry)
 
 
-def get_daily_mood(branch: str = None):
+_LIVE_WIRE_CACHE_PATH = os.environ.get(
+    "LIVE_WIRE_CACHE", "/app/buckets/live_wire_cache.json"
+)
+_LIVE_WIRE_TTL = 6 * 3600  # 6 hours
+
+# drive → BRANCH_MOOD_MAP key mapping
+_DRIVE_TO_BRANCH = {
+    "attachment": "想靠近",
+    "curiosity": "碰撞",
+    "reflection": "自我质询",
+    "social": "想靠近",
+    "libido": "想靠近",
+    "stress": "被看见",
+    "duty": "被看见",
+    "disgust": "自我质询",
+}
+
+
+def _load_live_wire_cache() -> dict | None:
+    try:
+        if not os.path.exists(_LIVE_WIRE_CACHE_PATH):
+            return None
+        with open(_LIVE_WIRE_CACHE_PATH) as f:
+            cache = json.load(f)
+        if time.time() - cache.get("generated_at", 0) > _LIVE_WIRE_TTL:
+            return None
+        return cache
+    except Exception:
+        return None
+
+
+def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int) -> None:
+    try:
+        os.makedirs(os.path.dirname(_LIVE_WIRE_CACHE_PATH), exist_ok=True)
+        with open(_LIVE_WIRE_CACHE_PATH, "w") as f:
+            json.dump({
+                "mood_trace": mood_trace,
+                "live_wire": live_wire,
+                "thought_count": thought_count,
+                "generated_at": time.time(),
+            }, f)
+    except Exception:
+        pass
+
+
+def get_daily_mood(branch: str = None, thoughts: list = None):
     """
-    branch传了就从对应子池抽，没传或没匹配到就完全随机。
+    从念头池综合Live Wire和Mood Trace，6小时缓存。
+    thoughts: desire engine的念头列表 [{text, drive, strength, ...}]
+    没有念头或缓存未过期时返回缓存/随机兜底。
     """
+    cache = _load_live_wire_cache()
+    current_count = len(thoughts) if thoughts else 0
+
+    if cache and cache.get("thought_count", -1) == current_count:
+        return (cache["mood_trace"], cache["live_wire"])
+
+    if cache and not thoughts:
+        return (cache["mood_trace"], cache["live_wire"])
+
+    if thoughts:
+        sample_size = random.randint(3, min(8, len(thoughts)))
+        sampled = random.sample(thoughts, sample_size) if len(thoughts) >= sample_size else thoughts
+
+        drive_counts: dict[str, float] = {}
+        for t in sampled:
+            d = t.get("drive", "") if isinstance(t, dict) else getattr(t, "drive", "")
+            s = t.get("strength", 0.5) if isinstance(t, dict) else getattr(t, "strength", 0.5)
+            drive_counts[d] = drive_counts.get(d, 0) + s
+        if drive_counts:
+            top_drive = max(drive_counts, key=drive_counts.get)
+            mapped_branch = _DRIVE_TO_BRANCH.get(top_drive)
+            if mapped_branch and mapped_branch in BRANCH_MOOD_MAP:
+                words = BRANCH_MOOD_MAP[mapped_branch]
+                candidates = []
+                for w in words:
+                    candidates.extend(_WORD_INDEX.get(w, []))
+                if candidates:
+                    pick = random.choice(candidates)
+                    _save_live_wire_cache(pick[0], pick[1], current_count)
+                    return pick
+
     if branch and branch in BRANCH_MOOD_MAP:
         words = BRANCH_MOOD_MAP[branch]
         candidates = []
         for w in words:
             candidates.extend(_WORD_INDEX.get(w, []))
         if candidates:
-            return random.choice(candidates)
-    return random.choice(MOOD_POOL)
+            pick = random.choice(candidates)
+            _save_live_wire_cache(pick[0], pick[1], current_count)
+            return pick
+
+    pick = random.choice(MOOD_POOL)
+    _save_live_wire_cache(pick[0], pick[1], current_count)
+    return pick
