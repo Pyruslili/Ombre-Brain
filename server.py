@@ -267,11 +267,12 @@ def _is_private_bucket(bucket: dict, mark_rows: list[dict]) -> bool:
     return _guess_wander_domain(bucket, mark_rows) == "private"
 
 
-def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_content: bool = True) -> str:
+def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_content: bool = True, show_bucket_id: bool = False) -> str:
     meta = bucket.get("metadata", {})
     counts = _mark_counts(mark_rows)
     created = str(meta.get("created", ""))[:10] or "无日期"
     title = meta.get("name") or (bucket.get("id", "") if include_full_content else "")
+    bucket_id = bucket.get("id", "")
     content = strip_wikilinks(bucket.get("content", "")).strip()
     # Strip leading date line from content to avoid duplication with header
     import re as _re
@@ -285,6 +286,8 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
     if not include_full_content:
         header = f"[{created}] {title}".rstrip()
         return f"{header}\n{content}"
+
+    id_line = f"[bucket:{bucket_id}] " if show_bucket_id else ""
     recent_notes = [
         r for r in sorted(mark_rows, key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
         if (r.get("note") or "").strip()
@@ -295,7 +298,7 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
     notes = "\n".join(note_lines) if note_lines else "（无）"
 
     return (
-        f"[{created}] {title}\n"
+        f"{id_line}[{created}] {title}\n"
         f"批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']} / Inner:{counts['inner']}\n"
         f"正文：\n{content}\n"
         f"最近三条批注原话：\n{notes}"
@@ -1787,11 +1790,11 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; letter/writing/letter_jiajia全量时间线含批注统计(letter模式同时拉letter+letter_jiajia); unresolved悬置; inner核心沉淀; private私人抽屉。private仅Nox可见, 不对嘉嘉app端暴露。默认不返回private。"""
+    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; archive合并letter+writing按时间线排(带bucket_id方便mark); letter/writing/letter_jiajia单独查看; unresolved悬置; inner核心沉淀; private私人抽屉。private仅Nox可见, 不对嘉嘉app端暴露。默认不返回private。"""
     mode = (mode or "").strip().lower()
-    valid_modes = {"memory", "letter", "writing", "letter_jiajia", "unresolved", "inner", "private"}
+    valid_modes = {"memory", "archive", "letter", "writing", "letter_jiajia", "unresolved", "inner", "private"}
     if mode not in valid_modes:
-        return "mode 必须是 memory / letter / writing / letter_jiajia / unresolved / inner / private。"
+        return "mode 必须是 memory / archive / letter / writing / letter_jiajia / unresolved / inner / private。"
 
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=True)
@@ -1874,6 +1877,21 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             ))
         return "\n\n".join(parts) if parts else "没有可漫游的 memory。"
 
+    if mode == "archive":
+        archive_domains = {"letter", "letter_jiajia", "writing"}
+        selected = [
+            b for b in buckets
+            if archive_domains & set(_bucket_domains(b.get("metadata", {})))
+            or archive_domains & set(_bucket_tags(b.get("metadata", {})))
+        ]
+        selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
+        if not selected:
+            return "没有 archive 条目。"
+        return "=== Archive Timeline ===\n" + "\n---\n".join(
+            _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True, show_bucket_id=True)
+            for b in selected
+        )
+
     if mode in ("letter", "writing", "letter_jiajia"):
         match_domains = {mode}
         if mode == "letter":
@@ -1887,7 +1905,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
         if not selected:
             return f"没有 {mode} 条目。"
         return f"=== {mode} Timeline ===\n" + "\n---\n".join(
-            _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True)
+            _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True, show_bucket_id=True)
             for b in selected
         )
 
