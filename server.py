@@ -3035,6 +3035,7 @@ async def api_desire_feed(request):
             # 用引擎方法统一处理drive pulse
             result = _desire.apply_brain_signals(brain_signals)
             _last_signal_ts[0] = time.time()
+            _desire.mark_user_signal(_last_signal_ts[0])
             logger.info(f"brain_signals → drives: {result.get('applied', {})}")
         except Exception as e:
             logger.warning(f"brain_signals write failed: {e}")

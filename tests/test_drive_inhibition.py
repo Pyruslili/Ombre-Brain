@@ -12,9 +12,15 @@ from desire_engine import (
     ESCAPE_VALVE_EXCESS_GAP,
     apply_esm_inhibition,
     apply_escape_valve,
+    apply_longing_adjustment,
     pa_na_snapshot,
     DriveState,
+    DesireEngine,
+    LONGING_REUNION_THRESHOLD_HOURS,
     tick_drives,
+    longing_value,
+    longing_phase,
+    reunion_boost_for_return,
 )
 
 
@@ -168,3 +174,72 @@ def test_tick_drives_carries_escape_streak():
     for _ in range(10):
         s = tick_drives(s, now_ts=s.last_ts + 1800)
     assert s.escape_streak < ESCAPE_VALVE_STREAK_TRIGGER
+
+
+# ─── Stage 6 longing/absence展示层 ────────────────────────────────────────
+
+def test_longing_curve_uses_attachment_as_lmax_and_tau():
+    assert longing_value(0, attachment=0.8) == 0.0
+
+    low_attachment = longing_value(36, attachment=0.2)
+    high_attachment = longing_value(36, attachment=0.8)
+
+    assert 0.0 < low_attachment < 0.2
+    assert 0.0 < high_attachment < 0.8
+    assert high_attachment > low_attachment
+
+
+def test_longing_phase_boundaries():
+    assert longing_phase(0.149, 10) == "content"
+    assert longing_phase(0.15, 10) == "stirring"
+    assert longing_phase(0.35, 10) == "protest"
+    assert longing_phase(0.70, 10) == "despair"
+    assert longing_phase(0.95, 100) == "despair"
+    assert longing_phase(0.90, 504) == "detachment"
+
+
+def test_apply_longing_adjustment_uses_phase_valence():
+    # stirring uses 挂念 V=-0.05, so only NA moves by 0.05 * 0.5 * longing.
+    stirring = apply_longing_adjustment(0.4, 0.2, 0.2, "stirring")
+    assert stirring == {"PA": 0.4, "NA": 0.205}
+
+    # Protest thirds: 0.65 is the late third, mapped to 不安 V=-0.40.
+    protest_late = apply_longing_adjustment(0.4, 0.2, 0.65, "protest")
+    assert protest_late == {"PA": 0.4, "NA": 0.33}
+
+    content = apply_longing_adjustment(0.4, 0.2, 0.15, "stirring")
+    assert content == {"PA": 0.4, "NA": 0.2}
+
+
+def test_reunion_boost_threshold_and_detachment_multiplier():
+    assert reunion_boost_for_return(LONGING_REUNION_THRESHOLD_HOURS, 0.5, "protest") == 0.0
+    assert reunion_boost_for_return(2.001, 0.5, "protest") == 0.10
+    assert reunion_boost_for_return(600, 0.9, "detachment") == 0.21
+
+
+def test_reunion_boost_is_one_shot_on_next_state(tmp_path):
+    import time
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    now = time.time()
+
+    state = engine.store.load_state()
+    state.drives["attachment"] = 1.0
+    state.last_user_message_at = now - 600 * 3600
+    engine.store.save_state(state)
+
+    engine.mark_user_signal(now)
+    engine.pulse("attachment", 0.01)
+    boosted = engine.store.load_state()
+    expected_longing = longing_value(600, 1.0)
+    expected_boost = reunion_boost_for_return(600, expected_longing, "detachment")
+    assert abs(boosted.reunion_pa_boost - expected_boost) < 1e-6
+    assert boosted.last_user_message_at == now
+
+    first_read = engine.state()
+    assert first_read["longing_phase"] == "content"
+    assert first_read["hours_since_last_message"] >= 0
+    assert engine.store.load_state().reunion_pa_boost == 0.0
+
+    second_read = engine.state()
+    assert second_read["pa_na"]["PA"] <= first_read["pa_na"]["PA"]
