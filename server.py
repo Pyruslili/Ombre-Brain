@@ -153,7 +153,7 @@ mcp = FastMCP(
 # Wander 批注存储 —— 叠加在现有桶上的标记层
 # =============================================================
 MARKS_DB_PATH = os.path.join(config["buckets_dir"], "embeddings.db")
-VALID_WANDER_MARKS = {"认", "不认", "悬置", "inner", "private", "remove_inner"}
+VALID_WANDER_MARKS = {"认", "不认", "悬置"}
 
 
 def _init_marks_table() -> None:
@@ -184,10 +184,7 @@ def _marks_conn():
 
 
 def _normalize_wander_mark(mark: str) -> str:
-    m = (mark or "").strip()
-    if m.lower() in ("inner", "private", "remove_inner"):
-        return m.lower()
-    return m
+    return (mark or "").strip()
 
 
 def _load_all_marks() -> dict[str, list[dict]]:
@@ -288,6 +285,8 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
         return f"{header}\n{content}"
 
     id_line = f"[bucket:{bucket_id}] " if show_bucket_id else ""
+    is_inner = "inner" in [str(d).lower() for d in meta.get("domain", [])]
+    inner_star = "🌟 " if is_inner else ""
     recent_notes = [
         r for r in sorted(mark_rows, key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
         if (r.get("note") or "").strip()
@@ -298,8 +297,8 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
     notes = "\n".join(note_lines) if note_lines else "（无）"
 
     return (
-        f"{id_line}[{created}] {title}\n"
-        f"批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']} / Inner:{counts['inner']}\n"
+        f"{inner_star}{id_line}[{created}] {title}\n"
+        f"批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']}\n"
         f"正文：\n{content}\n"
         f"最近三条批注原话：\n{notes}"
     )
@@ -1951,7 +1950,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
 
 @mcp.tool()
 async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
-    """wander_mark — 给条目叠加批注标记, 不覆盖旧标记。mark可选: 认 / 不认 / 悬置 / inner / private / remove_inner。每次记录timestamp和可选note; 认累计3次且跨至少2个日期自动晋升inner; private仅Nox可见。"""
+    """wander_mark — 给条目叠加批注标记, 不覆盖旧标记。mark可选: 认 / 不认 / 悬置。每次记录timestamp和可选note; 认累计3次且跨至少2个日期自动晋升inner(domain加inner标记)。"""
     bucket_id = (bucket_id or "").strip()
     mark = _normalize_wander_mark(mark)
     note = (note or "").strip()
@@ -1959,7 +1958,7 @@ async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
     if not bucket_id:
         return "请提供有效的 bucket_id。"
     if mark not in VALID_WANDER_MARKS:
-        return "mark 必须是 认 / 不认 / 悬置 / inner / private / remove_inner。"
+        return "mark 必须是 认 / 不认 / 悬置。"
 
     bucket = await bucket_mgr.get(bucket_id)
     if not bucket:
@@ -1985,50 +1984,31 @@ async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
     mark_rows = _load_all_marks().get(bucket_id, [])
     counts = _mark_counts(mark_rows)
 
-    if mark == "remove_inner":
-        next_domains = [d for d in domains if str(d).lower() != "inner"]
-        if next_domains != domains:
-            try:
-                await bucket_mgr.update(bucket_id, domain=next_domains)
-            except Exception as e:
-                logger.warning(f"wander_mark failed to remove inner domain: {e}")
-                return f"移出inner失败: {e}"
-        return "已移出inner"
+    suffix = ""
 
-    should_inner = mark == "inner" or (counts["认"] >= 3 and _has_cross_date_recognition(mark_rows))
-    should_private = mark == "private"
-    domain_changed = []
-    if should_inner or should_private:
+    # Auto-promote to inner: 认>=3 and cross at least 2 dates
+    if counts["认"] >= 3 and _has_cross_date_recognition(mark_rows):
         lower_domains = {str(d).lower() for d in domains}
-        if should_inner and "inner" not in lower_domains:
+        if "inner" not in lower_domains:
             domains.append("inner")
-            domain_changed.append("inner")
-        if should_private and "private" not in lower_domains:
-            domains.append("private")
-            domain_changed.append("private")
-        if domain_changed:
             try:
                 await bucket_mgr.update(bucket_id, domain=domains)
+                suffix += " 🌟 已晋升 inner"
             except Exception as e:
-                logger.warning(f"wander_mark failed to update bucket domain: {e}")
+                logger.warning(f"wander_mark failed to promote to inner: {e}")
 
-    suffix = ""
-    if should_inner:
-        suffix += "；已沉淀进 inner"
-    if should_private:
-        suffix += "；已放入 private"
-
+    # Auto-demote from inner: 不认>=2
     if counts["不认"] >= 2 and any(str(d).lower() == "inner" for d in domains):
         domains = [d for d in domains if str(d).lower() != "inner"]
         try:
             await bucket_mgr.update(bucket_id, domain=domains)
             suffix += "；不认累计>=2，已移出 inner"
         except Exception as e:
-            logger.warning(f"wander_mark failed to auto-remove inner domain: {e}")
+            logger.warning(f"wander_mark failed to demote from inner: {e}")
 
     return (
         f"已标记 {bucket_id}: {mark} @ {ts}{suffix}\n"
-        f"当前批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']} / Inner:{counts['inner']} / private:{counts['private']}"
+        f"当前批注统计：认:{counts['认']} / 不认:{counts['不认']} / 悬置:{counts['悬置']}"
     )
 
 
