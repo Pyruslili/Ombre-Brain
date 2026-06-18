@@ -257,11 +257,21 @@ def _guess_wander_domain(bucket: dict, mark_rows: list[dict] = None) -> str:
         return "letter"
     if "writing" in domains or "writing" in tags:
         return "writing"
+    if "window" in domains or "window" in tags:
+        return "window"
     return "memory"
 
 
 def _is_private_bucket(bucket: dict, mark_rows: list[dict]) -> bool:
     return _guess_wander_domain(bucket, mark_rows) == "private"
+
+
+# Domains that should not surface in breath/dream — they have their own wander modes
+_WANDER_ONLY_DOMAINS = {"letter", "letter_jiajia", "writing", "window", "private"}
+
+def _is_wander_only_bucket(bucket: dict) -> bool:
+    domains = set(str(d).lower() for d in bucket.get("metadata", {}).get("domain", []))
+    return bool(domains & _WANDER_ONLY_DOMAINS)
 
 
 def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_content: bool = True, show_bucket_id: bool = False) -> str:
@@ -618,7 +628,8 @@ async def breath_hook(request):
                       if not b["metadata"].get("resolved", False)
                       and b["metadata"].get("type") not in ("permanent", "feel")
                       and not b["metadata"].get("pinned")
-                      and not b["metadata"].get("protected")]
+                      and not b["metadata"].get("protected")
+                      and not _is_wander_only_bucket(b)]
         scored = sorted(unresolved, key=lambda b: decay_engine.calculate_score(b["metadata"]), reverse=True)
 
         parts = []
@@ -673,6 +684,7 @@ async def dream_hook(request):
             if b["metadata"].get("type") not in ("permanent", "feel")
             and not b["metadata"].get("pinned", False)
             and not b["metadata"].get("protected", False)
+            and not _is_wander_only_bucket(b)
         ]
         candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
         recent = candidates[:10]
@@ -938,6 +950,7 @@ async def nocturne_breath(
             b for b in all_buckets
             if int(b["metadata"].get("importance", 0)) >= importance_min
             and b["metadata"].get("type") not in ("feel",)
+            and not _is_wander_only_bucket(b)
         ]
         filtered.sort(key=lambda b: int(b["metadata"].get("importance", 0)), reverse=True)
         filtered = filtered[:20]
@@ -997,6 +1010,7 @@ async def nocturne_breath(
             and b["metadata"].get("type") not in ("permanent", "feel")
             and not b["metadata"].get("pinned", False)
             and not b["metadata"].get("protected", False)
+            and not _is_wander_only_bucket(b)
         ]
 
         logger.info(
@@ -1401,7 +1415,7 @@ async def hold(
     domain: str = "",
     created_at: str = "",
 ) -> str:
-    """存储单条记忆,自动打标+合并。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True存储你的第一人称感受(不参与普通浮现)。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。domain可选:letter/writing/letter_jiajia,指定后跳过自动分类。created_at可选:ISO日期字符串(如2026-05-09T00:00:00),保留原始日期。"""
+    """存储单条记忆,自动打标+合并。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True存储你的第一人称感受(不参与普通浮现)。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。domain可选:letter/writing/letter_jiajia/window/private,指定后跳过自动分类。created_at可选:ISO日期字符串(如2026-05-09T00:00:00),保留原始日期。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -1501,7 +1515,7 @@ async def hold(
         return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
 
     # --- Letter/writing/letter_jiajia: skip merge, create directly ---
-    _DIRECT_DOMAINS = {"letter", "writing", "letter_jiajia"}
+    _DIRECT_DOMAINS = {"letter", "writing", "letter_jiajia", "window", "private"}
     if user_domain and set(user_domain) & _DIRECT_DOMAINS:
         bucket_id = await bucket_mgr.create(
             content=content,
@@ -1789,11 +1803,11 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; archive合并letter+writing按时间线排(带bucket_id方便mark); letter/writing/letter_jiajia单独查看; unresolved悬置; inner核心沉淀; private私人抽屉。private仅Nox可见, 不对嘉嘉app端暴露。默认不返回private。"""
+    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; archive合并letter+writing+window按时间线排(带bucket_id方便mark); letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉。window=外部刺激(被什么撞到),不进breath/dream。private仅Nox可见。"""
     mode = (mode or "").strip().lower()
-    valid_modes = {"memory", "archive", "letter", "writing", "letter_jiajia", "unresolved", "inner", "private"}
+    valid_modes = {"memory", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private"}
     if mode not in valid_modes:
-        return "mode 必须是 memory / archive / letter / writing / letter_jiajia / unresolved / inner / private。"
+        return "mode 必须是 memory / archive / letter / writing / letter_jiajia / window / unresolved / inner / private。"
 
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=True)
@@ -1891,7 +1905,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             for b in selected
         )
 
-    if mode in ("letter", "writing", "letter_jiajia"):
+    if mode in ("letter", "writing", "letter_jiajia", "window"):
         match_domains = {mode}
         if mode == "letter":
             match_domains.add("letter_jiajia")
