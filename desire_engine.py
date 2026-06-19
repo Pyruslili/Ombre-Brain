@@ -568,7 +568,7 @@ def tick_thoughts(thoughts: list) -> tuple:
             if now_ts - last < COLLISION_COOLDOWN_SEC:
                 continue
             drive_boosts.append(("curiosity", 0.12))
-            collision_text = f"「{strong[i].text[:20]}」撞上「{strong[j].text[:20]}」"
+            collision_text = f"「{strong[i].text}」撞上「{strong[j].text}」"
             new_thoughts.append(Thought(
                 tid=str(uuid.uuid4())[:8],
                 text=collision_text,
@@ -983,8 +983,15 @@ class DesireStore:
                      t.fed_count, getattr(t, "source", "manual"))
                 )
 
+    _GARBAGE_PATTERNS = ("API Error", "Failed to authenticate", "403", "timeout", "ETIMEDOUT")
+
     def add_thought(self, text: str, drive: str, strength: float = 0.5,
                     kind: str = "flit", source: str = "manual"):
+        text = (text or "").strip()
+        if not text:
+            return
+        if any(p in text for p in self._GARBAGE_PATTERNS):
+            return
         t = Thought(
             tid=uuid.uuid4().hex[:8],
             text=text,
