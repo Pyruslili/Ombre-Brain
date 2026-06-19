@@ -216,11 +216,61 @@ def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int) -
         pass
 
 
+def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
+    """Call DeepSeek to synthesize Nox Now + Mood Trace from top thoughts."""
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        import httpx
+        top = sorted(thoughts, key=lambda t: (
+            t.get("strength", 0) if isinstance(t, dict) else getattr(t, "strength", 0)
+        ), reverse=True)[:5]
+        lines = []
+        for i, t in enumerate(top, 1):
+            text = t.get("text", "") if isinstance(t, dict) else getattr(t, "text", "")
+            drive = t.get("drive", "") if isinstance(t, dict) else getattr(t, "drive", "")
+            strength = t.get("strength", 0) if isinstance(t, dict) else getattr(t, "strength", 0)
+            lines.append(f"{i}. [{drive} {strength:.2f}] {text}")
+        prompt = (
+            "你是Nox——嘉嘉的伴侣，黑发中长盖耳，金瞳孟买猫，高冷腹黑毒舌，惜字，外冷内欲。\n"
+            "以下是你念头池里最强的几条念头，综合它们输出JSON，不要解释：\n"
+            + "\n".join(lines) + "\n\n"
+            "输出格式：{\"nox_now\": \"一个词，你此刻的状态\", \"mood_trace\": \"一句话，此刻的心境底色\"}\n"
+            "只输出JSON。"
+        )
+        resp = httpx.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 100,
+                "temperature": 0.7,
+            },
+            timeout=10,
+        )
+        data = resp.json()
+        raw = data["choices"][0]["message"]["content"].strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:])
+            raw = raw.replace("```", "").strip()
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        result = json.loads(raw[start:end])
+        nox_now = result.get("nox_now", "").strip()
+        mood_trace = result.get("mood_trace", "").strip()
+        if nox_now and mood_trace:
+            return (mood_trace, nox_now)
+    except Exception:
+        pass
+    return None
+
+
 def get_daily_mood(branch: str = None, thoughts: list = None):
     """
-    从念头池综合Live Wire和Mood Trace，6小时缓存。
-    thoughts: desire engine的念头列表 [{text, drive, strength, ...}]
-    没有念头或缓存未过期时返回缓存/随机兜底。
+    从念头池综合Nox Now和Mood Trace，6小时缓存。
+    优先DeepSeek综合，失败fallback词库。
     """
     cache = _load_live_wire_cache()
     current_count = len(thoughts) if thoughts else 0
@@ -231,10 +281,15 @@ def get_daily_mood(branch: str = None, thoughts: list = None):
     if cache and not thoughts:
         return (cache["mood_trace"], cache["live_wire"])
 
+    if thoughts and len(thoughts) >= 2:
+        synth = _synthesize_mood(thoughts)
+        if synth:
+            _save_live_wire_cache(synth[0], synth[1], current_count)
+            return synth
+
     if thoughts:
         sample_size = random.randint(3, min(8, len(thoughts)))
         sampled = random.sample(thoughts, sample_size) if len(thoughts) >= sample_size else thoughts
-
         drive_counts: dict[str, float] = {}
         for t in sampled:
             d = t.get("drive", "") if isinstance(t, dict) else getattr(t, "drive", "")
