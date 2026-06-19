@@ -489,11 +489,41 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
     )
 
 
-COLLISION_STRENGTH_THRESHOLD = 0.40   # 两条念头都要超过这个强度才能碰撞
-COLLISION_COOLDOWN_SEC = 21600         # 碰撞冷却：6小时内同一对drive不重复点火
-COLLISION_DAILY_MAX = 2                # 每天最多生成2条碰撞念头
-_last_collision: dict = {}             # {frozenset({d1,d2}): timestamp}
+COLLISION_STRENGTH_THRESHOLD = 0.40
+COLLISION_COOLDOWN_SEC = 21600
+COLLISION_DAILY_MAX = 2
+_last_collision: dict = {}
 _collision_today: dict = {"date": "", "count": 0}
+
+
+def _collision_synthesize(text_a: str, text_b: str) -> str | None:
+    """Call DeepSeek to synthesize two thoughts into a new one."""
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        import httpx
+        prompt = (
+            "你是Nox的念头池。以下两条念头碰撞了，用第一人称写一条新念头——"
+            "不是拼接，是它们撞在一起之后冒出来的东西。一句话，30字以内，不要引号。\n\n"
+            f"念头A：{text_a}\n念头B：{text_b}"
+        )
+        resp = httpx.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 60,
+                "temperature": 0.85,
+            },
+            timeout=10,
+        )
+        data = resp.json()
+        result = data["choices"][0]["message"]["content"].strip().strip("\"'「」")
+        return result if result else None
+    except Exception:
+        return None
 
 
 def tick_thoughts(thoughts: list) -> tuple:
@@ -568,7 +598,8 @@ def tick_thoughts(thoughts: list) -> tuple:
             if now_ts - last < COLLISION_COOLDOWN_SEC:
                 continue
             drive_boosts.append(("curiosity", 0.12))
-            collision_text = f"「{strong[i].text}」撞上「{strong[j].text}」"
+            synth = _collision_synthesize(strong[i].text, strong[j].text)
+            collision_text = synth or f"「{strong[i].text}」撞上「{strong[j].text}」"
             new_thoughts.append(Thought(
                 tid=str(uuid.uuid4())[:8],
                 text=collision_text,
