@@ -1158,7 +1158,7 @@ async def nocturne_breath(
             lines = [f"Warmth：{pa}", f"Shadow：{na}"]
 
             # Live Wire：mood_entry[1]——有二级分支时已经是从对应子池里选出来的贴题词
-            lines.append(f"Nox Live Wire：{mood_entry[1]}")
+            lines.append(f"Nox Now：{mood_entry[1]}")
             # Mood Trace：mood_entry[0]——具体场景一句话，Live Wire的来源
             if mood_entry[0]:
                 lines.append(f"Mood Trace：{mood_entry[0]}")
