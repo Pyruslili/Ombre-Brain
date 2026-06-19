@@ -2897,7 +2897,9 @@ async def api_desire_state(request):
             with open(mood_path) as _f:
                 live = _j.load(_f)
         bs = live.get("brain_signals", {})
-        mood_entry = get_daily_mood(branch=bs.get("二级分支") or None)
+        thought_dicts = [{"text": t.get("text",""), "drive": t.get("drive",""), "strength": t.get("strength",0)}
+                         for t in state.get("thoughts", [])]
+        mood_entry = get_daily_mood(branch=bs.get("二级分支") or None, thoughts=thought_dicts)
         state["mood_trace"] = mood_entry[0]
         state["mood_word"] = mood_entry[1]
     except Exception:
