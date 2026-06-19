@@ -3147,25 +3147,7 @@ if __name__ == "__main__":
                     except Exception as e:
                         logger.warning(f"Rhythm/grief state log failed: {e}")
 
-                    # --- autofeed: 每3次心跳喂一条echo，避免老念头死循环 ---
-                    try:
-                        state = _desire.store.load_state()
-                        drives = state.drives
-                        top_drive = max(
-                            (k for k in drives if k != "fatigue"),
-                            key=lambda k: drives[k], default=None
-                        )
-                        _echo_counter = getattr(_desire, '_echo_counter', 0) + 1
-                        _desire._echo_counter = _echo_counter
-                        if top_drive and drives.get(top_drive, 0) > 0.3 and _echo_counter % 3 == 0:
-                            existing = _desire.store.load_thoughts()
-                            existing_texts = {getattr(t, 'text', '') for t in existing}
-                            echo = _desire.store.sample_echo(top_drive, exclude=existing_texts)
-                            if echo:
-                                _autofeed_thought(echo, top_drive, strength=0.35, source="echo")
-                                logger.info(f"Heartbeat echo → {top_drive}: {echo}")
-                    except Exception as e:
-                        logger.warning(f"Heartbeat autofeed failed: {e}")
+                    # echo机制已关闭——念头池只靠新feel分析和手动pulse补充
 
                     intent = _desire.intent()
                     if intent:
