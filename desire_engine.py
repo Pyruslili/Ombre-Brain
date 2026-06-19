@@ -104,7 +104,7 @@ SATISFY_DECAY = {
 
 # 念头阈值
 FLIT_UPGRADE_THRESHOLD = 0.80
-FLIT_DECAY_RATE = 0.90             # 0.84太快念头几tick就没了，0.90让念头多留一会儿
+FLIT_DECAY_RATE = 0.95             # 0.90还是太快，一下午就空了；0.95让念头活4-5小时
 FIXATION_BOOST_RATE = 1.10
 FIXATION_TRIGGER_THRESHOLD = 0.85
 FIXATION_DRIVE_BOOST = 0.18
@@ -563,7 +563,7 @@ def tick_thoughts(thoughts: list) -> tuple:
             if t.strength >= FLIT_UPGRADE_THRESHOLD:
                 t.kind = "fixation"
                 new_thoughts.append(t)
-            elif t.strength > 0.1:
+            elif t.strength > 0.05:
                 new_thoughts.append(t)
 
         else:  # fixation
