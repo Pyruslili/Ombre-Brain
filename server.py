@@ -2954,6 +2954,19 @@ async def api_desire_intent_ack(request):
                        headers={"Access-Control-Allow-Origin": "*"})
 
 
+@mcp.custom_route("/api/desire/ping", methods=["POST"])
+async def api_desire_ping(request):
+    """嘉嘉发消息时调用，重置longing计时器。"""
+    from starlette.responses import JSONResponse
+    try:
+        result = _desire.mark_user_signal()
+        return JSONResponse({"ok": True, **result},
+                           headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/api/desire/feed", methods=["POST"])
 async def api_desire_feed(request):
     """
