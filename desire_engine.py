@@ -80,7 +80,7 @@ FATIGUE_SENSITIVITY = {
 COUPLING = [
     ("stress",     "attachment",  0.04, "level"),
     ("stress",     "curiosity",  -0.03, "level"),
-    ("attachment", "libido",      0.05, "delta"),
+    ("attachment", "libido",      0.02, "level"),
     ("curiosity",  "reflection",  0.04, "delta"),
     ("reflection", "social",      0.03, "delta"),
     ("fatigue",    "stress",      0.03, "level"),
