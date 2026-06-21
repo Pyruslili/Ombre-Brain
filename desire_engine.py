@@ -104,19 +104,22 @@ SATISFY_DECAY = {
 
 # 念头阈值
 FLIT_UPGRADE_THRESHOLD = 0.80
-FLIT_DECAY_RATE = 0.95             # 0.90还是太快，一下午就空了；0.95让念头活4-5小时
+FLIT_DECAY_RATE = 0.95             # legacy per-tick rate, kept for fixation calc
+FLIT_HALFLIFE_HOURS = 12.0         # 时间衰减半衰期：12小时后强度减半，24小时后≈25%
 FIXATION_BOOST_RATE = 1.10
 FIXATION_TRIGGER_THRESHOLD = 0.85
 FIXATION_DRIVE_BOOST = 0.18
 FIXATION_MAX_FEEDS = 3
 
 # unsourced念头参数
-UNSOURCED_DECAY_RATE = 0.95        # 比flit衰减慢，它是模糊的
+UNSOURCED_DECAY_RATE = 0.95        # legacy per-tick rate
+UNSOURCED_HALFLIFE_HOURS = 8.0     # unsourced衰减快一点，8小时半衰期
 UNSOURCED_CRYSTALLIZE_THRESHOLD = 0.55  # 0.42太低→改0.55，让unsourced在模糊里多待一会儿
 UNSOURCED_FADE_THRESHOLD = 0.08    # 低于这个→消失
 
 # 反刍念头参数（rumination）——有自己引力的片段，不按普通flit衰减
-RUMINATION_DECAY_RATE = 0.96       # 慢慢沉，不急着消失
+RUMINATION_DECAY_RATE = 0.96       # legacy per-tick rate
+RUMINATION_HALFLIFE_HOURS = 24.0   # 反刍衰减最慢，24小时半衰期
 RUMINATION_BOOST_ON_TRIGGER = 1.05 # 被相关输入触发时加强而不是衰减
 RUMINATION_FADE_THRESHOLD = 0.06   # 低于这个才真正消失
 
@@ -232,6 +235,7 @@ class Thought:
     # 念头来源："manual"=Nox亲手存 | "cli"=CLI分析feel提取 | "echo"=旧念头回声
     #          "autofeed"=硬编码词池兜底 | "reflex"=条件反射（如breath时的「嘉嘉来了」）
     source: str = "manual"
+    last_ticked_at: float = 0.0      # 上次tick的时间戳，0表示用born_at
 
 
 # ─── 悲恸引擎状态 ─────────────────────────────────────────────────────────────
@@ -528,21 +532,33 @@ def _collision_synthesize(text_a: str, text_b: str) -> str | None:
         return None
 
 
+def _time_decay_factor(elapsed_seconds: float, halflife_hours: float) -> float:
+    """返回经过elapsed_seconds后的衰减因子(0~1)。halflife_hours小时后因子=0.5。"""
+    import math
+    elapsed_hours = max(0, elapsed_seconds / 3600.0)
+    return math.pow(0.5, elapsed_hours / halflife_hours)
+
+
 def tick_thoughts(thoughts: list) -> tuple:
     """
-    念头池更新。
+    念头池更新（时间衰减版）。
     kind行为：
-      flit     → 衰减，强度够→升级fixation
+      flit     → 按半衰期衰减，强度够→升级fixation
       fixation → 加强，触发→反哺drive，次数够→了却
-      unsourced → 缓慢衰减，撑住→结晶成flit，太弱→消失
+      unsourced → 按半衰期衰减，撑住→结晶成flit，太弱→消失
     碰撞检测：两条不同drive的念头强度都≥0.60，且drive不同，触发curiosity·碰撞
     """
     new_thoughts = []
     drive_boosts = []
+    now = time.time()
 
     for t in thoughts:
+        last = t.last_ticked_at if t.last_ticked_at > 0 else t.born_at
+        elapsed = max(0, now - last)
+
         if t.kind == "unsourced":
-            t.strength *= UNSOURCED_DECAY_RATE
+            t.strength *= _time_decay_factor(elapsed, UNSOURCED_HALFLIFE_HOURS)
+            t.last_ticked_at = now
             if t.strength >= UNSOURCED_CRYSTALLIZE_THRESHOLD:
                 t.kind = "flit"
                 t.text = t.text if t.text.strip() else f"说不清楚，大概跟{t.drive}有关"
@@ -551,15 +567,14 @@ def tick_thoughts(thoughts: list) -> tuple:
                 new_thoughts.append(t)
 
         elif t.kind == "rumination":
-            # 反刍：有自己引力的片段。慢慢沉，不被提到就缓慢衰减
-            # 被触发时在 ruminate_trigger() 里加强，这里只做自然衰减
-            t.strength *= RUMINATION_DECAY_RATE
+            t.strength *= _time_decay_factor(elapsed, RUMINATION_HALFLIFE_HOURS)
+            t.last_ticked_at = now
             if t.strength > RUMINATION_FADE_THRESHOLD:
                 new_thoughts.append(t)
-            # 低于阈值才真正消失，不转换成其他kind
 
         elif t.kind == "flit":
-            t.strength *= FLIT_DECAY_RATE
+            t.strength *= _time_decay_factor(elapsed, FLIT_HALFLIFE_HOURS)
+            t.last_ticked_at = now
             if t.strength >= FLIT_UPGRADE_THRESHOLD:
                 t.kind = "fixation"
                 new_thoughts.append(t)
