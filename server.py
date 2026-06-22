@@ -2846,7 +2846,7 @@ async def api_import_results(request):
             results.append({
                 "id": b["id"],
                 "name": b["metadata"].get("name", ""),
-                "content": b["content"][:300],
+                "content": b["content"],
                 "type": b["metadata"].get("type", ""),
                 "domain": b["metadata"].get("domain", []),
                 "tags": b["metadata"].get("tags", []),

@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nocturne · 夜曲</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
    NOCTURNE / PRIVATE ARCHIVE — single final design system
@@ -25,10 +28,10 @@
   --cool: #78a6d1;
   --warning: #c99862;
   --negative: #a86c61;
-  --font-display: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --font-number: var(--font-display);
-  --font-body: var(--font-display);
-  --font-mono: var(--font-display);
+  --font-display: "Cormorant Infant", "Cormorant Garamond", Georgia, serif;
+  --font-number: "Cormorant Garamond", Georgia, serif;
+  --font-body: Inter, "PingFang SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
   --fs-micro: .62rem;
   --fs-label: .68rem;
   --fs-meta: .72rem;
@@ -383,8 +386,8 @@ label {
 .bucket-row {
   position: relative;
   display: grid;
-  grid-template-columns: 44px minmax(260px,1.1fr) minmax(220px,.9fr) 96px;
-  gap: clamp(.8rem, 1.35vw, 1.5rem);
+  grid-template-columns: 34px minmax(190px,.68fr) minmax(360px,1.5fr) 76px;
+  gap: clamp(.55rem, .9vw, 1rem);
   align-items: center;
   min-height: 76px;
   padding: .9rem 0;
@@ -422,11 +425,11 @@ label {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink);
-  font: 300 clamp(.98rem,1.18vw,1.16rem)/1.25 var(--font-display);
+  font: 300 clamp(.88rem,1vw,1.02rem)/1.25 var(--font-display);
   letter-spacing: -.01em;
 }
-.bucket-row .name svg { width: 13px; height: 13px; flex: 0 0 13px; color: var(--accent); margin-right: .55rem; }
-.bucket-row .domain { display: block; margin: .38rem 0 0 1.68rem; }
+.bucket-row .name svg { width: 12px; height: 12px; flex: 0 0 12px; color: var(--accent); margin-right: .42rem; }
+.bucket-row .domain { display: block; margin: .3rem 0 0 1.45rem; }
 .bucket-row .preview {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -657,7 +660,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 .detail-body-label { display: block; margin-bottom: .65rem; }
 .detail-edit textarea { min-height: 260px; padding: .85rem; border: 1px solid var(--line); font-size: 1rem; line-height: 1.8; resize: vertical; }
 .detail-edit input { font-size: .88rem; }
-.detail-actions { padding-top: 2rem; border-top: 1px solid var(--line-soft); }
+.detail-actions { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line-soft); }
 .detail-actions button:last-child { opacity: .32; }
 .detail-actions button:last-child:hover { opacity: .8; }
 
@@ -701,7 +704,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 }
 
 @media (max-width: 1180px) {
-  .bucket-row { grid-template-columns: 40px minmax(220px,1fr) minmax(180px,.8fr) 80px; }
+  .bucket-row { grid-template-columns: 32px minmax(170px,.65fr) minmax(280px,1.4fr) 72px; }
 }
 @media (max-width: 900px) {
   .archive-hero { align-items: center; padding-top: 8rem; }
@@ -979,7 +982,6 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
    
 <div class="content" id="import-view" style="display:none">
   <div class="intake-shell">
-    <div class="intake-title">Fragments</div>
     <p class="intake-copy">A quiet intake for source material before it becomes memory.</p>
     <div class="config-section fragment-section">
       <h3>
@@ -1008,23 +1010,23 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
         <div>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
           <div class="label">Drop source here · or <span>select file</span></div>
-          <p style="margin-top:0.9rem;color:var(--mute);font-family:var(--font-body);font-size:var(--fs-micro);letter-spacing:0.18em;text-transform:uppercase;">JSON / Markdown / Text / Chat Export</p>
+          <p style="margin-top:0.9rem;color:var(--mute);font-family:'JetBrains Mono',monospace;font-size:var(--fs-micro);letter-spacing:0.18em;text-transform:uppercase;">JSON / Markdown / Text / Chat Export</p>
         </div>
         <input type="file" id="import-file-input" accept=".json,.txt,.md,.jsonl" style="display:none">
       </div>
 
-      <label style="display:flex;align-items:center;gap:0.5rem;font-family:var(--font-body);font-size:0.8rem;color:var(--ink-soft);">
+      <label style="display:flex;align-items:center;gap:0.5rem;font-family:Inter,'PingFang SC',system-ui,sans-serif;font-size:0.8rem;color:var(--ink-soft);">
         <input type="checkbox" id="import-preserve-raw" style="margin:0;width:auto;">
         Preserve raw text <span style="color:var(--mute);font-size:.68rem;">· 保留原文，不自动摘要仪式性内容</span>
       </label>
 
       <div id="import-progress" style="display:none;margin-top:1.5rem;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-family:var(--font-body);font-size:0.7rem;color:var(--mute);letter-spacing:0.15em;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--mute);letter-spacing:0.15em;">
           <span id="import-status-text">准备中</span>
           <span id="import-progress-text">0/0</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="import-progress-bar" style="width:0%;"></div></div>
-        <div style="display:flex;gap:1.2rem;margin-top:0.7rem;font-family:var(--font-body);font-size:0.62rem;color:var(--mute);letter-spacing:0.15em;text-transform:uppercase;">
+        <div style="display:flex;gap:1.2rem;margin-top:0.7rem;font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--mute);letter-spacing:0.15em;text-transform:uppercase;">
           <span>API <b id="import-api-calls" style="color:var(--accent-deep)">0</b></span>
           <span>新建 <b id="import-created" style="color:var(--accent-deep)">0</b></span>
           <span>合并 <b id="import-merged" style="color:var(--accent-deep)">0</b></span>
@@ -1035,7 +1037,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
         </div>
       </div>
 
-      <div id="import-errors" style="display:none;margin-top:0.8rem;padding:0.8rem;background:var(--tint-soft);border-left:2px solid var(--negative);font-size:0.72rem;color:var(--negative);max-height:120px;overflow-y:auto;font-family:var(--font-body);"></div>
+      <div id="import-errors" style="display:none;margin-top:0.8rem;padding:0.8rem;background:var(--tint-soft);border-left:2px solid var(--negative);font-size:0.72rem;color:var(--negative);max-height:120px;overflow-y:auto;font-family:'JetBrains Mono',monospace;"></div>
     </div>
   </div>
 </div>
@@ -1048,7 +1050,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
       <div class="config-row"><label>Model</label><input type="text" id="cfg-dehy-model" placeholder="gemini-2.5-flash-lite"></div>
       <div class="config-row"><label>Base URL</label><input type="text" id="cfg-dehy-url" placeholder="https://..."></div>
       <div class="config-row"><label>API Key</label><input type="password" id="cfg-dehy-key" placeholder="Reading current key"></div>
-      <div style="padding-left:125px;font-size:0.65rem;color:var(--mute-soft);margin-bottom:0.7rem;font-family:var(--font-body);">留空不改 · 不会持久化到 yaml</div>
+      <div style="padding-left:125px;font-size:0.65rem;color:var(--mute-soft);margin-bottom:0.7rem;font-family:'JetBrains Mono',monospace;">留空不改 · 不会持久化到 yaml</div>
       <div class="config-row"><label>Max Tokens</label><input type="number" id="cfg-dehy-maxtokens" min="128" max="8192"></div>
       <div class="config-row"><label>Temperature</label><input type="number" id="cfg-dehy-temp" min="0" max="2" step="0.05"></div>
     </div>
@@ -1064,19 +1066,19 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
       <h3>Recall Rules</h3>
       <p class="section-note">召回、合并与保留边界。</p>
       <div class="config-row"><label>合并阈值</label><input type="number" id="cfg-merge" min="0" max="100"></div>
-      <div style="padding-left:125px;font-size:0.62rem;color:var(--mute-soft);font-family:var(--font-body);">0–100 · 数值越高，相似记忆越不易合并。</div>
+      <div style="padding-left:125px;font-size:0.62rem;color:var(--mute-soft);font-family:'JetBrains Mono',monospace;">0–100 · 数值越高，相似记忆越不易合并。</div>
     </div>
 
     <div style="display:flex;gap:0.6rem;margin-top:1rem;">
       <button class="btn-primary" onclick="saveConfig(false)">Apply for session</button>
       <button onclick="saveConfig(true)">Write to config</button>
     </div>
-    <div id="config-status" style="margin-top:1rem;font-size:0.78rem;font-family:var(--font-body);"></div>
+    <div id="config-status" style="margin-top:1rem;font-size:0.78rem;font-family:'JetBrains Mono',monospace;"></div>
 
     <div class="config-section">
       <h3>System</h3>
       <p class="section-note">系统状态与当前运行边界。</p>
-      <div id="config-readonly" style="font-family:var(--font-body);font-size:0.66rem;color:var(--mute);line-height:1.9;letter-spacing:0.05em;">Reading system</div>
+      <div id="config-readonly" style="font-family:'JetBrains Mono',monospace;font-size:0.66rem;color:var(--mute);line-height:1.9;letter-spacing:0.05em;">Reading system</div>
     </div>
     <button class="axis-private-link" data-open-settings>Private settings / security →</button>
   </div>
@@ -1087,14 +1089,14 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
     <div class="config-section">
       <h3>Service</h3>
       <p class="section-note">服务状态与记忆引擎。</p>
-      <div id="settings-status" style="font-family:var(--font-body);font-size:0.66rem;color:var(--mute);line-height:2;letter-spacing:0.05em;">Reading service</div>
+      <div id="settings-status" style="font-family:'JetBrains Mono',monospace;font-size:0.66rem;color:var(--mute);line-height:2;letter-spacing:0.05em;">Reading service</div>
       <button onclick="loadSettingsStatus()" style="margin-top:0.5rem;font-size:var(--fs-micro);">Revisit</button>
     </div>
 
     <div class="config-section">
       <h3>Password</h3>
       <p class="section-note">更换私人档案的访问口令。</p>
-      <div id="settings-env-notice" style="display:none;font-size:0.7rem;color:var(--warning);margin-bottom:0.8rem;font-family:var(--font-body);letter-spacing:0.05em;">
+      <div id="settings-env-notice" style="display:none;font-size:0.7rem;color:var(--warning);margin-bottom:0.8rem;font-family:'JetBrains Mono',monospace;letter-spacing:0.05em;">
         当前使用环境变量 OMBRE_DASHBOARD_PASSWORD，请直接修改环境变量
       </div>
       <div id="settings-pwd-form">
@@ -1102,22 +1104,22 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
         <div class="config-row"><label>新密码</label><input type="password" id="settings-new-pwd" placeholder="新密码（至少6位）"></div>
         <div class="config-row"><label>确认</label><input type="password" id="settings-new-pwd2" placeholder="再次输入新密码"></div>
         <button class="btn-primary" onclick="changePassword()" style="margin-top:0.4rem;">Update password</button>
-        <div id="settings-pwd-msg" style="margin-top:0.7rem;font-size:0.75rem;font-family:var(--font-body);"></div>
+        <div id="settings-pwd-msg" style="margin-top:0.7rem;font-size:0.75rem;font-family:'JetBrains Mono',monospace;"></div>
       </div>
     </div>
 
     <div class="config-section">
       <h3>Vault Path</h3>
       <p class="section-note">记忆在宿主机上的存放位置。</p>
-      <div style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;line-height:1.7;font-family:var(--font-body);">
-        设置 docker-compose 中 <code style="font-family:var(--font-body);color:var(--accent-deep);">${OMBRE_HOST_VAULT_DIR:-./buckets}:/data</code> 的宿主机路径。留空则使用项目内 <code style="font-family:var(--font-body);color:var(--accent-deep);">./buckets</code>。
-        <span style="color:var(--warning);">修改后需 <code style="font-family:var(--font-body);">docker compose down && docker compose up -d</code> 才生效。</span>
+      <div style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;line-height:1.7;font-family:Inter,'PingFang SC',system-ui,sans-serif;">
+        设置 docker-compose 中 <code style="font-family:'JetBrains Mono',monospace;color:var(--accent-deep);">${OMBRE_HOST_VAULT_DIR:-./buckets}:/data</code> 的宿主机路径。留空则使用项目内 <code style="font-family:'JetBrains Mono',monospace;color:var(--accent-deep);">./buckets</code>。
+        <span style="color:var(--warning);">修改后需 <code style="font-family:'JetBrains Mono',monospace;">docker compose down && docker compose up -d</code> 才生效。</span>
       </div>
       <div class="config-row"><label>路径</label><input type="text" id="settings-host-vault" placeholder="/Users/you/Obsidian/Ombre"></div>
       <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.5rem;">
         <button class="btn-primary" onclick="saveHostVault()">保存到 .env</button>
         <button onclick="loadHostVault()">重新加载</button>
-        <span id="settings-host-vault-msg" style="font-size:0.7rem;font-family:var(--font-body);"></span>
+        <span id="settings-host-vault-msg" style="font-size:0.7rem;font-family:'JetBrains Mono',monospace;"></span>
       </div>
     </div>
 
@@ -1148,7 +1150,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
     <h2>Nocturne</h2>
     <p class="sub" id="auth-subtitle">验证身份</p>
     <div id="auth-setup-form" style="display:none;">
-      <p style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;font-family:var(--font-body);">首次使用，请设置访问密码</p>
+      <p style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;font-family:Inter,'PingFang SC',system-ui,sans-serif;">首次使用，请设置访问密码</p>
       <input type="password" id="auth-setup-pwd" placeholder="设置密码（至少6位）" autocomplete="new-password">
       <input type="password" id="auth-setup-pwd2" placeholder="确认密码" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetup()">
       <button class="btn-primary" onclick="doSetup()">设置并进入</button>
@@ -1157,7 +1159,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
       <input type="password" id="auth-login-pwd" placeholder="输入访问密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       <button class="btn-primary" onclick="doLogin()">登录</button>
     </div>
-    <div id="auth-error" style="color:var(--negative);font-size:0.72rem;margin-top:0.7rem;display:none;font-family:var(--font-body);"></div>
+    <div id="auth-error" style="color:var(--negative);font-size:0.72rem;margin-top:0.7rem;display:none;font-family:Inter,'PingFang SC',system-ui,sans-serif;"></div>
   </div>
 </div>
 
@@ -1577,6 +1579,12 @@ async function showDetail(id) {
       `<h2>${esc(meta.name || id)}</h2>
        <label class="detail-body-label">正文</label>
        <div class="detail-content" id="detail-body" data-bucket-id="${esc(id)}" data-tags="${esc(JSON.stringify(detailTags))}">${esc(b.content)}</div>
+       <div class="detail-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap">
+         <button onclick="startEdit()">编辑</button>
+         <button onclick="toggleResolved('${id}',${meta.resolved?1:0})">${meta.resolved?'捞回':'沉底'}</button>
+         <button onclick="toggleDigested('${id}',${meta.digested?1:0})">${meta.digested?'取消消化':'消化(feel)'}</button>
+         <button onclick="deleteBucket('${id}')" style="color:var(--negative);border-color:rgba(199,121,112,.35);margin-left:auto;">删除</button>
+       </div>
        <div class="detail-meta">
          <div class="field"><label>ID</label>${id}</div>
          <div class="field"><label>类型</label>${meta.type || 'dynamic'}</div>
@@ -1593,12 +1601,6 @@ async function showDetail(id) {
          <div class="field"><label>钉选</label>${meta.pinned ? '✓' : '—'}</div>
          <div class="field"><label>创建</label>${meta.created || '—'}</div>
          <div class="field"><label>最后活跃</label>${meta.last_active || '—'}</div>
-       </div>
-       <div class="detail-actions" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
-         <button onclick="startEdit()">编辑</button>
-         <button onclick="toggleResolved('${id}',${meta.resolved?1:0})">${meta.resolved?'捞回':'沉底'}</button>
-         <button onclick="toggleDigested('${id}',${meta.digested?1:0})">${meta.digested?'取消消化':'消化(feel)'}</button>
-         <button onclick="deleteBucket('${id}')" style="color:var(--negative);border-color:rgba(199,121,112,.35);margin-left:auto;">删除</button>
        </div>`;
   } catch (e) {
     content.innerHTML = '<div class="loading">This trace is out of reach · ' + e.message + '</div>';
@@ -1693,7 +1695,7 @@ async function loadNetwork() {
   } catch(e) {
     const W = canvas2.offsetWidth, H = canvas2.offsetHeight;
     ctx.fillStyle = '#888';
-    ctx.font = '12px "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif';
+    ctx.font = '12px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Constellation out of reach · ' + e.message, W/2, H/2);
   }
@@ -1786,7 +1788,7 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
       drawTrebleClef(ctx, 30, topY, staffHeight, staffColor);
       // 拍号 4/4
       ctx.fillStyle = staffColor;
-      ctx.font = '300 20px "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif';
+      ctx.font = '300 20px "Cormorant Garamond", Georgia, serif';
       ctx.textAlign = 'left';
       ctx.fillText('4', 78, topY + staffSpacing * 2 + 2);
       ctx.fillText('4', 78, topY + staffSpacing * 4);
@@ -1871,7 +1873,7 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
   });
 
   // 标签 - pinned重要的
-  ctx.font = '9.5px "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif';
+  ctx.font = '9.5px Inter, system-ui, sans-serif';
   ctx.fillStyle = labelColor;
   ctx.textAlign = 'center';
   networkNodes.forEach(p => {
@@ -2161,7 +2163,7 @@ async function loadImportResults() {
   try {
     const res = await fetch(BASE + '/api/import/results?limit=10');
     const data = await res.json();
-    if (!data.buckets || !data.buckets.length) { container.innerHTML = '<p style="color:var(--mute);font-family:var(--font-body);font-size:0.78rem;padding:1rem 0;">No recent imports.</p>'; return; }
+    if (!data.buckets || !data.buckets.length) { container.innerHTML = '<p style="color:var(--mute);font-family:Inter,system-ui,sans-serif;font-size:0.78rem;padding:1rem 0;">No recent imports.</p>'; return; }
     container.innerHTML = data.buckets.map(b => `
       <article class="import-card" id="ir-${esc(b.id)}">
         <div class="import-card-head">
@@ -2226,14 +2228,14 @@ async function detectPatterns() {
   try {
     const res = await fetch(BASE + '/api/import/patterns');
     const data = await res.json();
-    if (!data.patterns || !data.patterns.length) { container.innerHTML = '<p style="color:var(--mute);font-family:var(--font-body);font-size:.78rem;padding:1rem 0;">No recurring pattern surfaced.</p>'; return; }
+    if (!data.patterns || !data.patterns.length) { container.innerHTML = '<p style="color:var(--mute);font-family:Inter,system-ui,sans-serif;font-size:.78rem;padding:1rem 0;">No recurring pattern surfaced.</p>'; return; }
     container.innerHTML = data.patterns.map(p => `
       <div style="border:0.5px solid var(--line);padding:0.9rem 1.1rem;margin:0.5rem 0;background:var(--paper-soft);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-          <b style="font-family:var(--font-body);font-weight:400;color:var(--ink);">${p.pattern_name}</b>
-          <span style="font-family:var(--font-body);font-size:0.65rem;color:var(--mute);">出现 ${p.count} 次</span>
+          <b style="font-family:Inter,system-ui,sans-serif;font-weight:400;color:var(--ink);">${p.pattern_name}</b>
+          <span style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:var(--mute);">出现 ${p.count} 次</span>
         </div>
-        <p style="font-family:var(--font-body);font-size:0.82rem;margin:0.4rem 0;color:var(--ink-soft);">${p.pattern_content}</p>
+        <p style="font-family:Inter,system-ui,sans-serif;font-size:0.82rem;margin:0.4rem 0;color:var(--ink-soft);">${p.pattern_content}</p>
         <div style="display:flex;gap:0.4rem;">
           <button onclick="reviewAction('${p.bucket_ids[0]}','pin')" style="padding:0.3rem 0.7rem;font-size:var(--fs-micro);">固定</button>
           <button onclick="reviewAction('${p.bucket_ids[0]}','important')" style="padding:0.3rem 0.7rem;font-size:var(--fs-micro);">重要</button>
