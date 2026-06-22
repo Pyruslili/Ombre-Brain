@@ -2182,20 +2182,6 @@ async def dream() -> str:
                 _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
         except Exception:
             pass
-    if dream_text:
-        try:
-            import json as _j, time as _t
-            with open("/app/buckets/latest_dream.json", "w") as _f:
-                _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
-        except Exception:
-            pass        
-    if dream_text:
-        try:
-            import json as _j, time as _t
-            with open("/app/buckets/latest_dream.json", "w") as _f:
-                _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
-        except Exception:
-            pass
     feel_list = "\n---\n".join(parts)
     if dream_text:
         final_text = header + dream_text + "\n\n---\n\n" + feel_list + connection_hint + crystal_hint
