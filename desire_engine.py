@@ -113,7 +113,7 @@ FIXATION_MAX_FEEDS = 3
 
 # unsourced念头参数
 UNSOURCED_DECAY_RATE = 0.95        # legacy per-tick rate
-UNSOURCED_HALFLIFE_HOURS = 8.0     # unsourced衰减快一点，8小时半衰期
+UNSOURCED_HALFLIFE_HOURS = 14.0    # 固定strength=0.3，14h半衰期→约26.7h才跌破FADE，保底24h
 UNSOURCED_CRYSTALLIZE_THRESHOLD = 0.55  # 0.42太低→改0.55，让unsourced在模糊里多待一会儿
 UNSOURCED_FADE_THRESHOLD = 0.08    # 低于这个→消失
 
@@ -922,6 +922,12 @@ class DesireStore:
                 conn.execute("ALTER TABLE thoughts ADD COLUMN source TEXT DEFAULT 'manual'")
             except Exception:
                 pass
+            # 兼容旧表：补last_ticked_at列——没有这列时每次tick都从born_at重新
+            # 算衰减，等于把已经衰减过的strength再乘一次衰减因子，越tick越快消失。
+            try:
+                conn.execute("ALTER TABLE thoughts ADD COLUMN last_ticked_at REAL DEFAULT 0")
+            except Exception:
+                pass
 
             # 回声池：CLI从feel里提炼出的真实念头存档于此。
             # autofeed从这里抽，抽到的是旧念头的回声，不是预制台词。
@@ -1015,20 +1021,20 @@ class DesireStore:
     def load_thoughts(self) -> list:
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT tid, text, drive, kind, strength, born_at, fed_count, source FROM thoughts"
+                "SELECT tid, text, drive, kind, strength, born_at, fed_count, source, last_ticked_at FROM thoughts"
             ).fetchall()
         return [Thought(tid=r[0], text=r[1], drive=r[2], kind=r[3],
                         strength=r[4], born_at=r[5], fed_count=r[6],
-                        source=(r[7] or "manual")) for r in rows]
+                        source=(r[7] or "manual"), last_ticked_at=(r[8] or 0.0)) for r in rows]
 
     def save_thoughts(self, thoughts: list):
         with self._conn() as conn:
             conn.execute("DELETE FROM thoughts")
             for t in thoughts:
                 conn.execute(
-                    "INSERT INTO thoughts VALUES (?,?,?,?,?,?,?,?)",
+                    "INSERT INTO thoughts VALUES (?,?,?,?,?,?,?,?,?)",
                     (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at,
-                     t.fed_count, getattr(t, "source", "manual"))
+                     t.fed_count, getattr(t, "source", "manual"), t.last_ticked_at)
                 )
 
     _GARBAGE_PATTERNS = ("API Error", "Failed to authenticate", "403", "timeout", "ETIMEDOUT")
@@ -1051,9 +1057,9 @@ class DesireStore:
         )
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO thoughts VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO thoughts VALUES (?,?,?,?,?,?,?,?,?)",
                 (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at,
-                 t.fed_count, t.source)
+                 t.fed_count, t.source, t.last_ticked_at)
             )
 
     # ─── 回声池 ──────────────────────────────────────────────────────────
@@ -1187,9 +1193,9 @@ class DesireStore:
         )
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO thoughts VALUES (?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO thoughts VALUES (?,?,?,?,?,?,?,?,?)",
                 (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at,
-                 t.fed_count, t.source)
+                 t.fed_count, t.source, t.last_ticked_at)
             )
 
     def trigger_ruminations(self, drive: str):

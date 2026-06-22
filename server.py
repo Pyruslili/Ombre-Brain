@@ -2997,6 +2997,7 @@ async def api_desire_feed(request):
     FEED_BATCH_THRESHOLD = 4   # 超过这个数量才节流
     FEED_KEEP_FULL = 3         # 保留几条按原strength入池
     FEED_DISCOUNT_STEP = 0.08  # 其余每条额外递减的折扣
+    FEED_STRENGTH_FLOOR = 0.22 # 打折下限——flit 12h半衰期下，低于这个不到24h就fade没了
 
     if len(thoughts) > FEED_BATCH_THRESHOLD:
         thoughts = sorted(thoughts, key=lambda t: float(t.get("strength", 0.45)), reverse=True)
@@ -3008,7 +3009,7 @@ async def api_desire_feed(request):
         strength = float(t.get("strength", 0.45))
         if len(thoughts) > FEED_BATCH_THRESHOLD and i >= FEED_KEEP_FULL:
             rank = i - FEED_KEEP_FULL + 1
-            strength = max(0.1, strength * (1 - FEED_DISCOUNT_STEP * rank))
+            strength = max(FEED_STRENGTH_FLOOR, strength * (1 - FEED_DISCOUNT_STEP * rank))
         if text:
             try:
                 _desire.add_thought(text, drive, strength=strength, source="cli")
