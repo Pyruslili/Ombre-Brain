@@ -1101,7 +1101,12 @@ async def nocturne_breath(
         # --- Feel section: 8 most recent feels (no title shown) ---
         feel_results = []
         try:
-            feels = [b for b in all_buckets if b["metadata"].get("type") == "feel"]
+            feels = [
+                b for b in all_buckets
+                if b["metadata"].get("type") == "feel"
+                and not b["metadata"].get("digested", False)
+                and not b["metadata"].get("resolved", False)
+            ]
             feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
             for f in feels[:8]:
                 created = f["metadata"].get("created", "")[:16].replace("T", " ")
@@ -1235,7 +1240,12 @@ async def nocturne_breath(
     if domain.strip().lower() == "feel":
         try:
             all_buckets = await bucket_mgr.list_all(include_archive=False)
-            feels = [b for b in all_buckets if b["metadata"].get("type") == "feel"]
+            feels = [
+                b for b in all_buckets
+                if b["metadata"].get("type") == "feel"
+                and not b["metadata"].get("digested", False)
+                and not b["metadata"].get("resolved", False)
+            ]
             feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
             if not feels:
                 return "没有留下过 feel。"
