@@ -1,1302 +1,637 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="sakura">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nocturne · 夜曲</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Shippori+Mincho:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Infant:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   Sakura · 桜  (淡昼)
+   NOCTURNE / PRIVATE ARCHIVE — single final design system
    ============================================================ */
-[data-theme="sakura"] {
-  --bg:           #fafafa;
-  --bg-deep:      #f3ecee;
-  --paper:        #ffffff;
-  --paper-soft:   #fdfaf9;
-  --tint:         #f7eef1;
-  --tint-soft:    #fbf6f8;
-  --line:         #e8dde1;
-  --line-soft:    #f1e8ec;
-  --line-strong:  #d4c4ca;
-  --ink:          #2a2024;
-  --ink-soft:     #4a3d44;
-  --mute:         #8c7d84;
-  --mute-soft:    #b8a9b0;
-  --accent:       #b58497;
-  --accent-deep:  #8d6275;
-  --accent-soft:  #e8d3da;
-  --accent-mist:  #f4e6eb;
-  --positive:     #87a896;
-  --warning:      #c19676;
-  --negative:     #b87a85;
-  --highlight:    #2a2024;
-  --shadow:       0 1px 24px -8px rgba(42, 32, 36, 0.08);
+:root {
+  --bg: #030201;
+  --bg-deep: #080503;
+  --surface: rgba(44, 29, 18, .24);
+  --surface-soft: rgba(255, 224, 186, .028);
+  --line: rgba(225, 164, 97, .10);
+  --line-soft: rgba(239, 224, 196, .055);
+  --ink: #efe0c4;
+  --ink-soft: rgba(239, 224, 196, .66);
+  --mute: rgba(198, 170, 135, .40);
+  --accent: #c47a38;
+  --accent-deep: #e8954f;
+  --nox-orange: #e8954f;
+  --positive: #93aa8b;
+  --warning: #c99862;
+  --negative: #a86c61;
+  --font-display: "Cormorant Infant", "Cormorant Garamond", Georgia, serif;
+  --font-body: Inter, "PingFang SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --page-pad: clamp(1.25rem, 4.2vw, 5rem);
+  --content-max: 1440px;
+  --paper: var(--surface);
+  --paper-soft: var(--surface-soft);
+  --tint: var(--surface);
+  --tint-soft: var(--surface-soft);
+  --border: var(--line);
+  --card: var(--surface);
+  --mute-soft: rgba(198, 170, 135, .24);
+  --line-strong: rgba(225, 164, 97, .20);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg); color-scheme: dark; scroll-behavior: smooth; }
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(ellipse at 76% 18%, rgba(89, 48, 24, .20), transparent 27%),
+    radial-gradient(ellipse at 12% 72%, rgba(47, 27, 15, .16), transparent 32%),
+    var(--bg);
+  color: var(--ink);
+  font: 300 16px/1.65 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .22;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.17'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+::selection { background: rgba(196,122,56,.32); color: var(--ink); }
+button, input, textarea, select { font: inherit; }
+button { color: inherit; }
+a { color: var(--accent-deep); }
+
+/* ============================================================
+   Hero / gate
+   ============================================================ */
+.topbar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem var(--page-pad);
+  pointer-events: none;
+  animation: revealDown 1s .08s both;
+}
+.brand, .topbar-actions { pointer-events: auto; }
+.brand { display: flex; align-items: center; gap: .9rem; }
+.brand-mark { width: 14px; height: 14px; color: var(--accent-deep); }
+.brand-name, .brand-sep, .stats-line {
+  font: 400 .61rem/1 var(--font-mono);
+  letter-spacing: .22em;
+  text-transform: uppercase;
+}
+.brand-sep { color: var(--accent); }
+.stats-line { color: var(--mute); }
+.topbar-actions { display: flex; gap: .6rem; }
+.icon-btn {
+  width: 32px; height: 32px; padding: 0;
+  display: grid; place-items: center;
+  color: var(--mute);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: color .3s ease, background .3s ease;
+}
+.icon-btn:hover { color: var(--ink); background: var(--surface-soft); }
+.icon-btn svg { width: 13px; height: 13px; }
+#theme-toggle { display: none; }
+
+.archive-hero {
+  position: relative;
+  z-index: 2;
+  min-height: 100svh;
+  display: grid;
+  align-items: end;
+  overflow: hidden;
+  padding: clamp(8rem, 15vh, 12rem) var(--page-pad) clamp(4rem, 8vh, 7rem);
+  isolation: isolate;
+}
+.archive-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    linear-gradient(90deg, rgba(3,2,1,.98) 0%, rgba(3,2,1,.77) 45%, rgba(3,2,1,.14) 77%, rgba(3,2,1,.56) 100%),
+    radial-gradient(circle at 77% 42%, rgba(154,82,37,.10), transparent 30%);
+}
+.archive-hero::after {
+  content: "";
+  position: absolute;
+  left: var(--page-pad); right: var(--page-pad); bottom: 1.4rem;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line), transparent 74%);
+}
+.archive-hero-copy { position: relative; z-index: 4; width: min(82vw, 1100px); }
+.archive-kicker {
+  margin-bottom: clamp(1.4rem, 3vh, 2.7rem);
+  color: var(--ink-soft);
+  font: 400 .61rem/1.4 var(--font-mono);
+  letter-spacing: .24em;
+  text-transform: uppercase;
+  animation: revealUp 1s .18s both;
+}
+.archive-title {
+  max-width: 1050px;
+  font: 300 clamp(5rem, 12.8vw, 12rem)/.72 var(--font-display);
+  letter-spacing: -.055em;
+  color: var(--ink);
+  text-wrap: balance;
+  animation: titleIn 1.25s .28s cubic-bezier(.16,1,.3,1) both;
+  will-change: transform;
+}
+.archive-title em { display: block; margin-left: clamp(1.5rem, 10vw, 10rem); font-weight: 300; }
+.archive-subtitle {
+  width: min(28rem, 72vw);
+  margin: clamp(2.4rem, 5vh, 4.5rem) 0 0 clamp(0rem, 16vw, 13rem);
+  color: var(--ink-soft);
+  font-size: clamp(.82rem, 1.1vw, 1rem);
+  letter-spacing: .02em;
+  animation: revealUp 1s .65s both;
+}
+.archive-ledger {
+  margin-top: 1.7rem;
+  margin-left: clamp(0rem, 16vw, 13rem);
+  color: var(--mute);
+  font: 300 .56rem/1.5 var(--font-mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  animation: revealUp 1s .78s both;
+}
+.scroll-cue {
+  position: absolute;
+  z-index: 6;
+  right: var(--page-pad);
+  bottom: 3.2rem;
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  color: var(--mute);
+  font: 300 .55rem/1 var(--font-mono);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  text-decoration: none;
+  animation: revealUp 1s 1s both;
+}
+.scroll-cue::after { content: ""; width: 48px; height: 1px; background: var(--accent); transform-origin: left; animation: cueLine 2.8s 1.8s ease-in-out infinite; }
+
+/* ============================================================
+   Chapter index
+   ============================================================ */
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0,1fr));
+  gap: 0;
+  padding: 0 var(--page-pad);
+  background: rgba(3,2,1,.76);
+  border-bottom: 1px solid var(--line-soft);
+  backdrop-filter: blur(18px);
+}
+.tab-group { display: contents; }
+.tab-group::before { display: none; }
+.tab {
+  position: relative;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: .72rem;
+  color: var(--mute);
+  font: 300 clamp(.54rem,.7vw,.64rem)/1.2 var(--font-mono);
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .35s ease;
+}
+.tab::before {
+  content: attr(data-index);
+  color: rgba(198,170,135,.23);
+  font-size: .52rem;
+  transition: color .35s ease;
+}
+.tab::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 22%; bottom: -1px; height: 1px;
+  background: var(--accent-deep);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .5s cubic-bezier(.16,1,.3,1);
+}
+.tab:hover, .tab.active { color: var(--ink); }
+.tab.active::before { color: var(--accent-deep); }
+.tab.active::after { transform: scaleX(1); }
+.secondary-tab { display: none; }
+
+/* ============================================================
+   Chapter stages / shared editorial forms
+   ============================================================ */
+.content {
+  position: relative;
+  z-index: 4;
+  width: min(100%, var(--content-max));
+  min-height: 76vh;
+  margin: 0 auto;
+  padding: clamp(7rem, 12vw, 11rem) var(--page-pad) clamp(8rem, 14vw, 14rem);
+  animation: chapterIn .8s cubic-bezier(.16,1,.3,1) both;
+}
+.content::before {
+  display: block;
+  margin-bottom: clamp(4rem, 8vw, 7rem);
+  color: var(--ink);
+  font: 300 clamp(4rem, 9vw, 9rem)/.82 var(--font-display);
+  letter-spacing: -.045em;
+}
+#list-view::before { content: "Traces"; }
+#breath-view::before { content: "Breath"; }
+#reverie-view::before { content: "Reverie"; }
+#network-view::before { content: "Constellations"; }
+#desire-view::before { content: "Drift"; }
+#import-view::before { content: "Fragments"; }
+#config-view::before { content: "Axis"; }
+#settings-view::before { content: "Axis / Private"; }
+
+button {
+  min-height: 38px;
+  padding: .62rem 1rem;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  font: 400 .61rem/1 var(--font-mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color .3s, color .3s, background .3s;
+}
+button:hover { color: var(--ink); border-color: rgba(232,149,79,.35); background: rgba(196,122,56,.055); }
+.btn-primary { color: var(--accent-deep); border-color: rgba(232,149,79,.30); }
+input, textarea, select {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: .8rem 0;
+  font: 300 .82rem/1.5 var(--font-body);
+}
+input:focus, textarea:focus, select:focus { border-color: rgba(232,149,79,.48); }
+input::placeholder, textarea::placeholder { color: var(--mute); }
+label {
+  color: var(--mute);
+  font: 300 .58rem/1.4 var(--font-mono);
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.loading {
+  padding: 5rem 0;
+  color: var(--mute);
+  font: 300 .62rem/1.7 var(--font-mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
 }
 
 /* ============================================================
-   Nocturne · 夜曲  (深夜)
+   Archive list / tools
    ============================================================ */
-[data-theme="nocturne"] {
-  --bg:           #0d1424;
-  --bg-deep:      #060914;
-  --paper:        #131a2e;
-  --paper-soft:   #10172a;
-  --tint:         #1a2342;
-  --tint-soft:    #15193090;
-  --line:         #1f2a4a;
-  --line-soft:    #1a2340;
-  --line-strong:  #2d3a5a;
-  --ink:          #e8d8a8;
-  --ink-soft:     #c5b890;
-  --mute:         #7080a0;
-  --mute-soft:    #4e5878;
-  --accent:       #d4af6e;
-  --accent-deep:  #e8c87a;
-  --accent-soft:  #5a7ba8;
-  --accent-mist:  #2a3d5e;
-  --positive:     #7fb29c;
-  --warning:      #d4a574;
-  --negative:     #c08a8a;
-  --highlight:    #e8c87a;
-  --shadow:       0 4px 32px -12px rgba(0, 0, 0, 0.5);
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-html, body {
-  font-family: 'Shippori Mincho', 'Cormorant Garamond', serif;
-  background: var(--bg);
-  color: var(--ink);
-  min-height: 100vh;
-  font-weight: 300;
-  -webkit-font-smoothing: antialiased;
-  letter-spacing: 0.01em;
-  overflow-x: hidden;
-  transition: background 0.6s ease, color 0.6s ease;
-}
-
-/* 纸面噪点 / 星空背景 */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  transition: opacity 0.6s ease;
-}
-[data-theme="sakura"] body::before {
-  background-image:
-    radial-gradient(circle at 20% 30%, rgba(181, 132, 151, 0.05) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(141, 98, 117, 0.04) 0%, transparent 50%);
-}
-[data-theme="nocturne"] body::before {
-  background:
-    radial-gradient(ellipse at 30% 20%, rgba(90, 123, 168, 0.15) 0%, transparent 60%),
-    radial-gradient(ellipse at 70% 80%, rgba(212, 175, 110, 0.06) 0%, transparent 60%);
-}
-
-/* 背景粒子 canvas */
-#particles {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* ===== Header ===== */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--bg);
-  backdrop-filter: blur(20px);
-  border-bottom: 0.5px solid var(--line);
-  padding: 1.3rem 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1.5rem;
-  transition: all 0.6s ease;
-}
-[data-theme="nocturne"] .topbar {
-  background: rgba(13, 20, 36, 0.85);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  flex-shrink: 0;
-  min-width: 0;
-}
-.brand-mark {
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  color: var(--accent-deep);
-  transition: transform 0.6s ease;
-}
-.brand:hover .brand-mark { transform: rotate(180deg); }
-
-.brand-name {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 1.55rem;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-  line-height: 1;
-  position: relative;
-  top: -1px;
-}
-
-.brand-sep {
-  color: var(--mute-soft);
-  font-size: 0.9rem;
-  margin: 0 0.2rem;
-}
-
-.stats-line {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
-  letter-spacing: 0.18em;
-  color: var(--mute);
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--paper);
-  border: 0.5px solid var(--line);
-  color: var(--ink-soft);
-  cursor: pointer;
-  padding: 0;
-  transition: all 0.25s;
-}
-.icon-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent-deep);
-  background: var(--tint-soft);
-}
-.icon-btn svg { width: 15px; height: 15px; display: block; }
-
-/* ===== Tabs ===== */
-.tabs {
-  display: flex;
-  padding: 0 2rem;
-  background: var(--bg);
-  border-bottom: 0.5px solid var(--line);
-  gap: 0;
-  position: relative;
-  z-index: 10;
-  transition: background 0.6s ease;
-}
-[data-theme="nocturne"] .tabs { background: rgba(13, 20, 36, 0.85); }
-
-.tab {
-  padding: 1rem 1.5rem;
-  cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.68rem;
-  letter-spacing: 0.25em;
-  text-transform: uppercase;
-  color: var(--mute);
-  border-bottom: 1px solid transparent;
-  margin-bottom: -0.5px;
-  transition: all 0.25s;
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-.tab svg { width: 14px; height: 14px; opacity: 0.7; }
-.tab:hover { color: var(--ink-soft); }
-.tab.active {
-  color: var(--accent-deep);
-  border-bottom-color: var(--accent-deep);
-}
-.tab.active svg { opacity: 1; }
-
-/* ===== Content ===== */
-.content {
-  position: relative;
-  z-index: 5;
-  padding: 2rem 2rem 5rem;
-  max-width: 1320px;
-  margin: 0 auto;
-}
-
-/* ===== List Search ===== */
-.list-search {
-  position: relative;
-  margin-bottom: 1.2rem;
-}
-.list-search svg {
-  position: absolute;
-  left: 0.9rem;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 14px;
-  height: 14px;
-  color: var(--mute);
-  pointer-events: none;
-}
-.list-search .search-input {
-  width: 100%;
-  background: var(--paper);
-  border: 0.5px solid var(--line);
-  color: var(--ink);
-  padding: 0.7rem 1rem 0.7rem 2.5rem;
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.85rem;
-  outline: none;
-  transition: all 0.25s;
-}
-.list-search .search-input:focus {
-  border-color: var(--accent);
-  background: var(--paper-soft);
-}
-.list-search .search-input::placeholder { color: var(--mute-soft); font-style: italic; }
-
-/* ===== Filters ===== */
-.filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.2rem;
-  border-bottom: 0.5px solid var(--line);
-}
-.filter-btn {
-  background: transparent;
-  border: 0.5px solid var(--line);
-  color: var(--mute);
-  padding: 0.4rem 0.95rem;
-  cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.filter-btn svg { width: 11px; height: 11px; }
-.filter-btn:hover {
-  border-color: var(--accent);
-  color: var(--ink);
-}
-.filter-btn.active {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
-}
-[data-theme="nocturne"] .filter-btn.active {
-  background: var(--accent-deep);
-  color: var(--bg-deep);
-  border-color: var(--accent-deep);
-}
-
-/* ===== Bucket List ===== */
-.bucket-list {
-  display: flex;
-  flex-direction: column;
-}
-.bucket-row {
+.archive-tools {
+  width: min(100%, 1120px);
+  margin: 0 0 clamp(4rem, 8vw, 7rem) auto;
   display: grid;
-  grid-template-columns: 26px 200px 140px 100px 60px 70px 1fr;
-  gap: 1rem;
-  padding: 0.95rem 1rem;
-  border-bottom: 0.5px solid var(--line-soft);
+  grid-template-columns: minmax(250px, 1fr) 1.8fr;
+  gap: clamp(2rem, 5vw, 6rem);
+  align-items: start;
+}
+.list-search { position: relative; }
+.list-search svg { position: absolute; left: 0; top: 1rem; width: 13px; height: 13px; color: var(--accent); }
+.list-search .search-input { padding-left: 1.8rem; font-size: .78rem; }
+.filters { display: flex; flex-wrap: wrap; gap: .45rem 1.2rem; padding-top: .45rem; }
+.filter-btn {
+  min-height: auto; padding: .2rem 0;
+  border: 0; background: none;
+  color: var(--mute);
+  font-size: .55rem;
+}
+.filter-btn svg { width: 10px; height: 10px; margin-right: .3rem; vertical-align: -1px; }
+.filter-btn:hover, .filter-btn.active { color: var(--ink); background: none; }
+.filter-btn.active::before { content: "●"; margin-right: .45rem; color: var(--accent-deep); font-size: .42rem; }
+
+.bucket-list { border-top: 1px solid var(--line); }
+.bucket-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: clamp(58px, 7vw, 108px) minmax(0, 1fr) minmax(150px, .26fr) minmax(120px, .18fr);
+  gap: clamp(1.2rem, 3vw, 4rem);
+  align-items: start;
+  min-height: clamp(150px, 16vw, 220px);
+  padding: clamp(2rem, 3.5vw, 3.8rem) 0;
+  border-bottom: 1px solid var(--line-soft);
   cursor: pointer;
-  align-items: center;
-  transition: all 0.2s;
-  font-size: 0.78rem;
-}
-.bucket-row:hover {
-  background: var(--tint-soft);
-}
-.bucket-row .icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent-deep);
-}
-.bucket-row .icon svg { width: 14px; height: 14px; }
-.bucket-row .name {
-  font-family: 'Shippori Mincho', serif;
-  color: var(--ink);
-  font-weight: 400;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition: padding .55s cubic-bezier(.16,1,.3,1), background .45s ease;
+}
+.bucket-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  background: radial-gradient(circle at 62% 50%, rgba(196,122,56,.10), transparent 34%);
+  transition: opacity .5s;
+}
+.bucket-row:hover { padding-left: clamp(.7rem, 1.5vw, 1.8rem); padding-right: clamp(.7rem, 1.5vw, 1.8rem); }
+.bucket-row:hover::after, .bucket-row.selected::after { opacity: 1; }
+.bucket-index {
+  color: rgba(239,224,196,.20);
+  font: 300 clamp(2.1rem, 4.5vw, 5rem)/.8 var(--font-display);
+  letter-spacing: -.04em;
+  transition: color .4s, transform .5s cubic-bezier(.16,1,.3,1);
+}
+.bucket-row:hover .bucket-index { color: rgba(232,149,79,.56); transform: translateY(-.15rem); }
+.bucket-main { min-width: 0; display: flex; flex-direction: column; gap: 1.1rem; }
+.bucket-row .name {
+  color: var(--ink);
+  font: 300 clamp(1.65rem, 3.2vw, 3.6rem)/.96 var(--font-display);
+  letter-spacing: -.025em;
 }
 .bucket-row .bucket-id {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.62rem;
+  display: inline-block;
+  margin-right: .7rem;
   color: var(--mute);
-  margin-right: 0.5em;
+  font: 400 .48rem/1 var(--font-mono);
+  letter-spacing: .1em;
+  vertical-align: .35em;
 }
-.bucket-row .domain {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.62rem;
-  color: var(--mute);
-  letter-spacing: 0.1em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.bucket-row .emotion {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--mute);
-}
-.v-bar {
-  position: relative;
-  width: 60px;
-  height: 1px;
-  background: var(--line-strong);
-}
-.v-dot {
-  position: absolute;
-  top: -2.5px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-deep);
-  transform: translateX(-3px);
-}
-.bucket-row .score {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-size: 1rem;
-  color: var(--accent-deep);
-  text-align: right;
-}
-.bucket-row .time {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--mute-soft);
-  letter-spacing: 0.1em;
-  text-align: right;
-}
+.bucket-row .name svg { width: .55em; height: .55em; color: var(--accent); vertical-align: .15em; margin-right: .25em; }
 .bucket-row .preview {
-  color: var(--mute);
-  font-size: 0.72rem;
+  max-width: 48rem;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-style: italic;
+  color: var(--ink-soft);
+  font-size: clamp(.72rem, .9vw, .88rem);
+  line-height: 1.75;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
+.bucket-meta, .bucket-signal { display: flex; flex-direction: column; gap: 1rem; padding-top: .3rem; }
+.bucket-row .domain, .bucket-row .time, .bucket-row .score, .bucket-row .emotion {
+  color: var(--mute);
+  font: 300 .54rem/1.55 var(--font-mono);
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.bucket-row .score { color: var(--ink-soft); }
+.v-bar { position: relative; display: inline-block; width: 48px; height: 1px; margin-right: .6rem; background: var(--line); vertical-align: middle; }
+.v-dot { position: absolute; top: -2px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-deep); }
 
-.loading {
-  padding: 4rem 2rem;
+/* ============================================================
+   Breath / Reverie / Constellations / Drift / Axis
+   ============================================================ */
+.breath-flow {
+  display: grid;
+  grid-template-columns: repeat(5,1fr);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.flow-step { padding: 1.25rem 1rem 1.25rem 0; color: var(--mute); border-right: 1px solid var(--line-soft); }
+.flow-step:last-child { border-right: 0; }
+.flow-step strong { display: block; margin-bottom: .2rem; color: var(--ink-soft); font: 300 clamp(.92rem,1.1vw,1.08rem)/1.25 var(--font-display); }
+.flow-step small { font: 300 .5rem/1.55 var(--font-mono); letter-spacing: .12em; }
+.flow-step.active { color: var(--accent-deep); }
+.breath-controls {
+  width: min(100%, 840px);
+  margin: 3.5rem 0 2.5rem;
+  display: grid;
+  grid-template-columns: auto minmax(140px,260px) auto 72px auto 72px auto;
+  gap: .7rem 1rem;
+  align-items: end;
+}
+.breath-controls label { font-size: .5rem; letter-spacing: .12em; }
+.breath-controls input { padding: .52rem 0; font-size: .72rem; }
+.breath-controls button { min-height: 30px; padding: .45rem .75rem; font-size: .52rem; opacity: .72; }
+.breath-info { margin: 2rem 0; color: var(--ink-soft); font-size: .78rem; }
+.breath-result { padding: 1.5rem 0; border-bottom: 1px solid var(--line-soft); }
+.breath-result .br-name { font: 300 1.6rem/1 var(--font-display); }
+.score-bars { margin-top: 1rem; display: grid; gap: .6rem; }
+.score-row { display: grid; grid-template-columns: 80px 1fr 40px; align-items: center; gap: 1rem; font: 300 .54rem/1 var(--font-mono); color: var(--mute); }
+.score-bar-track, .tri-bar { height: 1px; background: var(--line); }
+.score-bar-fill, .tri-bar-fill { height: 100%; background: var(--accent); }
+
+.reverie-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 1px; background: var(--line); }
+.reverie-card, .config-section {
+  background: rgba(8,5,3,.84);
+  padding: clamp(1.5rem, 3vw, 3rem);
+  border: 0;
+}
+.density-card { grid-column: 1 / -1; }
+.reverie-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
+.reverie-title, .config-section h3 { font: 300 clamp(1.05rem,1.45vw,1.35rem)/1.1 var(--font-display); color: var(--ink); }
+.reverie-sub, .tri-label, .tri-desc, .axis-lbl { color: var(--mute); font: 300 .5rem/1.45 var(--font-mono); letter-spacing: .12em; }
+.mood-tri { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+.tri-num { margin: .7rem 0; font: 300 clamp(1.35rem,2vw,1.8rem)/1 var(--font-display); }
+.tri-num.accent { color: var(--accent-deep); }
+.mood-word-row { margin: 2rem 0; padding: 1rem 0; display: flex; gap: 1rem; align-items: center; border-block: 1px solid var(--line-soft); }
+.mood-word-lbl { color: var(--mute); font: .52rem var(--font-mono); text-transform: uppercase; }
+.mood-word-val { font: 300 1.3rem var(--font-display); }
+.refresh-btn { margin-left: auto; min-height: 28px; border: 0; padding: .3rem; }
+.refresh-btn svg { width: 13px; }
+.mood-field-wrap { position: relative; }
+.mood-field { position: relative; min-height: 230px; border: 1px solid var(--line-soft); }
+.axis-hline, .axis-vline { position: absolute; background: var(--line-soft); }
+.axis-hline { left: 0; right: 0; top: 50%; height: 1px; }
+.axis-vline { top: 0; bottom: 0; left: 50%; width: 1px; }
+.axis-lbl { position: absolute; z-index: 2; }
+.axis-lbl.top { top: .5rem; left: .5rem; } .axis-lbl.bot { bottom: .5rem; left: .5rem; }
+.axis-lbl.left { bottom: .5rem; left: .5rem; } .axis-lbl.right { bottom: .5rem; right: .5rem; }
+.mood-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.mood-tooltip, .spark-tooltip { position: absolute; display: none; z-index: 4; padding: .5rem; background: var(--bg-deep); border: 1px solid var(--line); font: .55rem var(--font-mono); color: var(--ink-soft); }
+.dream-body { max-height: 420px; overflow: auto; color: var(--ink-soft); font: 300 1.1rem/1.9 var(--font-display); }
+.dream-empty { color: var(--mute); }
+.spark-wrap { position: relative; min-height: 160px; }
+
+.network-legend {
+  display: flex; gap: 2rem; align-items: center;
+  padding: 1rem 0; border-block: 1px solid var(--line);
+  color: var(--mute); font: 300 .54rem var(--font-mono); text-transform: uppercase; letter-spacing: .1em;
+}
+.legend-item { display: flex; align-items: center; gap: .4rem; }
+#network-canvas { display: block; width: 100%; height: min(70vh,720px); background: radial-gradient(circle at center, rgba(196,122,56,.045), transparent 52%); }
+
+#desire-view > div { max-width: 940px !important; padding: 0 !important; }
+#desire-view [style*="background:var(--card)"] { border-radius: 0 !important; border: 0 !important; border-top: 1px solid var(--line) !important; background: transparent !important; padding: 2rem 0 !important; }
+
+.config-section { margin-bottom: 1px; }
+.config-section h3 { display: flex; align-items: center; gap: .7rem; margin-bottom: .45rem; }
+.config-section h3::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.section-note { max-width: 36rem; margin: 0 0 1.7rem 1.2rem; color: var(--mute); font-size: .65rem; line-height: 1.7; }
+.config-row { display: grid; grid-template-columns: 125px 1fr; gap: 1rem; align-items: center; margin: .8rem 0; }
+.config-row label { font-size: .5rem; letter-spacing: .12em; }
+.config-row input, .config-row select { margin: 0; }
+code { color: var(--accent-deep); font-family: var(--font-mono); }
+.axis-private-link { margin: 2rem 0 0 auto; display: block; width: fit-content; }
+
+/* ============================================================
+   Fragments / intake ritual
+   ============================================================ */
+.intake-shell { width: min(100%, 1040px); margin: 0 auto; }
+.intake-title { font: 300 clamp(2.4rem,5vw,5rem)/.9 var(--font-display); color: var(--ink); }
+.intake-copy { max-width: 520px; margin: 1.5rem 0 5rem; color: var(--ink-soft); font-size: .82rem; }
+.upload-zone {
+  position: relative;
+  min-height: min(50vh, 470px);
+  display: grid;
+  place-items: center;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--line);
+  background: radial-gradient(circle at center, rgba(196,122,56,.06), transparent 45%);
   text-align: center;
-  font-family: 'Shippori Mincho', serif;
-  font-style: italic;
-  color: var(--mute-soft);
-  font-size: 0.85rem;
-  letter-spacing: 0.2em;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color .5s, background .5s;
 }
+.upload-zone::before {
+  content: "";
+  position: absolute;
+  width: 84px; height: 84px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  transition: transform .6s cubic-bezier(.16,1,.3,1), border-color .4s;
+}
+.upload-zone:hover::before { transform: scale(1.18); border-color: rgba(232,149,79,.35); }
+.upload-zone.dragover { animation: intakePulse .85s ease-out; border-color: rgba(232,149,79,.48); }
+.upload-zone svg { width: 20px; height: 20px; margin-bottom: 4rem; color: var(--accent); }
+.upload-zone .label { font: 300 clamp(1.25rem,2vw,2rem)/1.2 var(--font-display); }
+.upload-zone .label span { color: var(--accent-deep); }
+.progress-bar { position: relative; height: 1px; background: var(--line); overflow: hidden; }
+.progress-fill { height: 1px; background: var(--accent-deep); transition: width .3s; }
 
-/* ===== Detail Panel ===== */
+/* ============================================================
+   Curatorial detail / auth / utilities
+   ============================================================ */
 .detail-panel {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 520px;
-  max-width: 100vw;
-  background: var(--paper);
-  border-left: 0.5px solid var(--line);
+  top: 0; right: 0; bottom: 0;
   z-index: 100;
-  transform: translateX(100%);
-  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  width: min(760px, 92vw);
+  padding: clamp(4.5rem,8vw,8rem) clamp(1.5rem,5vw,5rem);
   overflow-y: auto;
-  box-shadow: var(--shadow);
-}
-.detail-panel.open { transform: translateX(0); }
-.detail-panel > div { padding: 3rem 2.5rem; }
-
-.close-btn {
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  width: 32px;
-  height: 32px;
-  background: var(--paper);
-  border: 0.5px solid var(--line);
-  color: var(--mute);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: all 0.2s;
-  z-index: 2;
-}
-.close-btn:hover { border-color: var(--accent); color: var(--accent-deep); background: var(--tint-soft); }
-.close-btn svg { width: 14px; height: 14px; display: block; }
-
-.detail-panel h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 1.7rem;
-  color: var(--ink);
-  margin-bottom: 1.5rem;
-  line-height: 1.3;
-  letter-spacing: -0.01em;
-  padding-right: 3rem;
-}
-
-.detail-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0;
-  border-top: 0.5px solid var(--line);
-  border-left: 0.5px solid var(--line);
-  margin-bottom: 1.5rem;
-}
-.detail-meta .field {
-  padding: 0.85rem 1rem;
-  border-right: 0.5px solid var(--line);
-  border-bottom: 0.5px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.detail-meta .field label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--mute);
-}
-.detail-meta .field {
-  font-size: 0.85rem;
-  color: var(--ink);
-}
-
-.detail-content {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.92rem;
-  line-height: 1.85;
-  color: var(--ink-soft);
-  padding: 1.2rem 1.4rem;
-  background: var(--tint-soft);
-  border-left: 2px solid var(--accent);
-  white-space: pre-wrap;
-}
-
-/* ===== Breath View ===== */
-.breath-flow {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  margin-bottom: 2rem;
-  border: 0.5px solid var(--line);
-  background: var(--paper);
-}
-.flow-step {
-  flex: 1;
-  padding: 1.2rem 1rem;
-  text-align: center;
-  border-right: 0.5px solid var(--line);
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.78rem;
-  color: var(--mute);
-  transition: all 0.3s;
-}
-.flow-step:last-child { border-right: none; }
-.flow-step.active {
-  background: var(--tint);
-  color: var(--accent-deep);
-}
-.flow-step small {
-  display: block;
-  margin-top: 0.4rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  letter-spacing: 0.1em;
-  color: var(--mute-soft);
-}
-.flow-step.active small { color: var(--accent); }
-
-.breath-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  margin-bottom: 1.5rem;
-  padding: 1rem 1.2rem;
-  border: 0.5px solid var(--line);
-  background: var(--paper);
-}
-.breath-controls label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--mute);
-}
-
-.breath-info {
-  padding: 0.8rem 1.2rem;
-  margin-bottom: 1.2rem;
-  background: var(--tint-soft);
-  border-left: 2px solid var(--accent);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  color: var(--ink-soft);
-  letter-spacing: 0.05em;
-  line-height: 1.7;
-}
-.breath-info code {
-  font-family: 'JetBrains Mono', monospace;
-  background: var(--accent-mist);
-  padding: 0.1rem 0.4rem;
-  color: var(--ink);
-  font-size: 0.7rem;
-}
-.breath-info em {
-  font-family: 'Shippori Mincho', serif;
-  color: var(--warning);
-  font-style: italic;
-}
-
-.score-row {
-  display: grid;
-  grid-template-columns: 40px 220px 1fr 70px;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  align-items: center;
-  border-bottom: 0.5px solid var(--line-soft);
-}
-.score-row .rank {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  color: var(--mute);
-  font-size: 1rem;
-}
-.score-row .name {
-  font-family: 'Shippori Mincho', serif;
-  color: var(--ink);
-  font-size: 0.82rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.score-row .name svg { width: 13px; height: 13px; flex-shrink: 0; color: var(--accent-deep); }
-.score-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.score-bar-group { display: flex; flex-direction: column; gap: 0.15rem; }
-.score-bar-label {
-  display: flex;
-  justify-content: space-between;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--mute);
-  letter-spacing: 0.05em;
-}
-.score-bar-track {
-  height: 2px;
-  background: var(--line);
-}
-.score-bar-fill {
-  height: 100%;
-  transition: width 0.6s ease;
-}
-.score-final {
-  text-align: right;
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-size: 1.2rem;
-}
-.score-pass { color: var(--positive); }
-.score-fail { color: var(--mute-soft); }
-.score-final small {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--mute);
-  margin-left: 0.3rem;
-  letter-spacing: 0.1em;
-}
-
-/* ===== Reverie View ===== */
-.reverie-grid {
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  grid-template-rows: 3fr 1fr;
-  gap: 16px;
-  height: calc(100vh - 220px);
-  min-height: 560px;
-  padding: 0.5rem 0;
-}
-.mood-card { grid-row: 1 / 3; grid-column: 1; }
-.dream-card { grid-row: 1; grid-column: 2; }
-.density-card { grid-row: 2; grid-column: 2; }
-
-.reverie-card {
-  background: var(--paper);
-  border: 0.5px solid var(--line);
-  padding: 1.4rem 1.6rem;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-}
-.reverie-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 1rem;
-  padding-bottom: 0.7rem;
-  border-bottom: 0.5px solid var(--line);
-}
-.reverie-title {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 1.1rem;
-  color: var(--ink);
-  letter-spacing: 0.02em;
-}
-.reverie-sub {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.6rem;
-  color: var(--mute);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-}
-
-.aff-row, .mood-meters, .mood-word {
-  display: none;
-}
-
-/* 三列指标 */
-.mood-tri {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 1.2rem;
-  margin-bottom: 1.2rem;
-}
-.tri-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-.tri-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--mute);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-}
-.tri-num {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-size: 1.5rem;
-  color: var(--ink);
-  line-height: 1;
-}
-.tri-num.accent { color: var(--accent-deep); }
-.tri-num.warn { color: var(--warning); }
-.tri-bar {
-  height: 2px;
-  background: var(--line);
-  margin-top: 0.2rem;
-}
-.tri-bar-fill { height: 100%; transition: width 0.8s ease; }
-.aff-fill { background: var(--accent-deep); }
-.pa-fill { background: var(--accent); }
-.na-fill { background: var(--warning); }
-.tri-desc {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.72rem;
-  color: var(--mute);
-  font-style: italic;
-  margin-top: 0.2rem;
-}
-
-/* mood word + 刷新 */
-.mood-word-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding-bottom: 0.9rem;
-  margin-bottom: 0.9rem;
-  border-bottom: 0.5px dashed var(--line);
-}
-.mood-word-lbl {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--mute);
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-}
-.mood-word-val {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.95rem;
-  color: var(--accent-deep);
-  flex: 1;
-}
-.refresh-btn {
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  border: 0.5px solid var(--line);
-  color: var(--mute);
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.3s ease;
-}
-.refresh-btn:hover {
-  border-color: var(--accent-deep);
-  color: var(--accent-deep);
-  background: var(--tint-soft);
-  transform: rotate(180deg);
-}
-.refresh-btn svg { width: 13px; height: 13px; display: block; }
-.refresh-btn:active svg { animation: spin 0.6s ease; }
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* 散点图 */
-.mood-field-wrap {
-  flex: 1;
-  position: relative;
-  min-height: 180px;
-}
-.mood-field {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: var(--tint-soft);
-  border: 0.5px solid var(--line);
-}
-.axis-lbl {
-  position: absolute;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.5rem;
-  color: var(--mute);
-  letter-spacing: 0.1em;
-  pointer-events: none;
-}
-.axis-lbl-y.top { top: 6px; left: 6px; }
-.axis-lbl-y.bot { bottom: 6px; left: 6px; }
-.axis-lbl-x.left { bottom: 6px; left: 50%; transform: translateX(-100%); margin-left: -4px; }
-.axis-lbl-x.right { bottom: 6px; right: 6px; }
-.axis-hline {
-  position: absolute;
-  top: 50%; left: 0; right: 0;
-  height: 0.5px;
-  background: var(--line-strong);
-}
-.axis-vline {
-  position: absolute;
-  left: 50%; top: 0; bottom: 0;
-  width: 0.5px;
-  background: var(--line-strong);
-}
-
-/* 心情点 - 呼吸+光晕 */
-.mood-point {
-  position: absolute;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translate(-50%, -50%);
-  cursor: pointer;
-  box-shadow: 0 0 0 0 var(--accent-mist), 0 0 8px var(--accent-soft);
-  animation: moodBreathe 3.5s ease-in-out infinite;
-  transition: transform 0.2s;
-}
-@keyframes moodBreathe {
-  0%, 100% {
-    box-shadow: 0 0 0 0 transparent, 0 0 6px var(--accent-soft);
-    opacity: 0.7;
-  }
-  50% {
-    box-shadow: 0 0 0 4px var(--accent-mist), 0 0 14px var(--accent-soft);
-    opacity: 1;
-  }
-}
-.mood-point.current {
-  width: 14px; height: 14px;
-  background: var(--accent-deep);
-  z-index: 5;
-  animation: moodBreatheCurrent 2.5s ease-in-out infinite;
-}
-@keyframes moodBreatheCurrent {
-  0%, 100% {
-    box-shadow: 0 0 0 0 var(--accent-mist), 0 0 14px var(--accent);
-    transform: translate(-50%, -50%) scale(1);
-  }
-  50% {
-    box-shadow: 0 0 0 8px var(--accent-mist), 0 0 28px var(--accent);
-    transform: translate(-50%, -50%) scale(1.1);
-  }
-}
-.mood-point:hover {
-  transform: translate(-50%, -50%) scale(1.7);
-}
-.mood-tooltip {
-  position: absolute;
-  background: var(--ink);
-  color: var(--bg);
-  padding: 0.5rem 0.8rem;
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.7rem;
-  line-height: 1.5;
-  max-width: 240px;
+  background: rgba(8,5,3,.96);
+  border-left: 1px solid var(--line);
+  box-shadow: -40px 0 120px rgba(0,0,0,.60);
+  backdrop-filter: blur(22px);
+  clip-path: inset(0 0 0 100%);
+  transform: translateX(3rem);
   opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-  z-index: 10;
-  white-space: normal;
+  filter: blur(10px);
+  transition: clip-path .75s cubic-bezier(.16,1,.3,1), transform .75s cubic-bezier(.16,1,.3,1), opacity .5s, filter .6s;
 }
-.mood-tooltip.show { opacity: 1; }
-.mood-tooltip .tt-meta {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--mute-soft);
-  letter-spacing: 0.1em;
-  margin-top: 0.3rem;
-}
+.detail-panel.open { clip-path: inset(0); transform: translateX(0); opacity: 1; filter: blur(0); }
+.close-btn { position: absolute; top: 1.5rem; right: 1.5rem; width: 36px; min-height: 36px; padding: 0; border-radius: 50%; }
+.detail-panel h2 { margin-bottom: 3rem; font: 300 clamp(2.8rem,6vw,6rem)/.82 var(--font-display); letter-spacing: -.04em; }
+.detail-meta { display: grid; grid-template-columns: repeat(2,1fr); gap: 0; margin-bottom: 3rem; border-top: 1px solid var(--line); }
+.detail-meta .field { padding: .9rem 0; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .66rem/1.55 var(--font-mono); }
+.detail-meta label { display: block; margin-bottom: .3rem; color: var(--mute); }
+.detail-content { white-space: pre-wrap; color: var(--ink-soft); font-size: .9rem; line-height: 2; }
+.detail-actions { padding-top: 2rem; border-top: 1px solid var(--line-soft); }
+.detail-actions button:last-child { opacity: .32; }
+.detail-actions button:last-child:hover { opacity: .8; }
 
-/* 梦境 - 文字呼吸渐变 */
-.dream-body {
-  flex: 1;
-  overflow-y: auto;
-  padding-right: 0.5rem;
-}
-.dream-body::-webkit-scrollbar { width: 3px; }
-.dream-body::-webkit-scrollbar-thumb { background: var(--mute-soft); }
-.dream-text {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.92rem;
-  line-height: 1.95;
-  color: var(--ink-soft);
-  white-space: pre-wrap;
-  animation: dreamFadeIn 1.8s ease-out, dreamBreathe 6s ease-in-out infinite 1.8s;
-}
-@keyframes dreamFadeIn {
-  0% { opacity: 0; filter: blur(4px); letter-spacing: 0.15em; }
-  100% { opacity: 0.92; filter: blur(0); letter-spacing: 0.01em; }
-}
-@keyframes dreamBreathe {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; }
-}
-.dream-fragment {
-  margin-top: 1rem;
-  padding: 0.8rem 1rem;
-  background: var(--tint-soft);
-  border-left: 2px solid var(--accent);
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.78rem;
-  line-height: 1.7;
-  color: var(--ink-soft);
-  animation: dreamFadeIn 2.2s ease-out 0.3s backwards;
-}
-.dream-fragment-lbl {
-  display: block;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
-  color: var(--accent-deep);
-  letter-spacing: 0.25em;
-  margin-bottom: 0.5rem;
-}
-.dream-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  font-family: 'Shippori Mincho', serif;
-  font-style: italic;
-  color: var(--mute-soft);
-  font-size: 0.85rem;
-  letter-spacing: 0.3em;
-  animation: dreamBreathe 3s ease-in-out infinite;
-}
-
-/* density */
-.spark-wrap {
-  flex: 1;
-  position: relative;
-  min-height: 50px;
-}
-.spark-wrap svg { width: 100%; height: 100%; display: block; }
-.spark-tooltip {
-  position: absolute;
-  background: var(--ink);
-  color: var(--bg);
-  padding: 0.3rem 0.6rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.6rem;
-  letter-spacing: 0.1em;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s;
-  transform: translateX(-50%) translateY(-130%);
-  white-space: nowrap;
-}
-.spark-tooltip.show { opacity: 1; }
-
-@media (max-width: 760px) {
-  .reverie-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
-    height: auto;
-  }
-  .mood-card, .dream-card, .density-card {
-    grid-row: auto;
-    grid-column: 1;
-  }
-  .mood-tri { grid-template-columns: 1fr; }
-}
-
-/* ===== Network View ===== */
-.network-legend {
-  display: flex;
-  gap: 1.5rem;
-  margin-bottom: 1.2rem;
-  padding: 0.7rem 1rem;
-  border: 0.5px solid var(--line);
-  background: var(--paper);
-}
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
-  letter-spacing: 0.15em;
-  color: var(--mute);
-  text-transform: uppercase;
-}
-.legend-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-#network-canvas {
-  width: 100%;
-  height: 70vh;
-  border: 0.5px solid var(--line);
-  background: var(--paper);
-  display: block;
-}
-
-/* ===== Config / Settings ===== */
-.config-section {
-  border: 0.5px solid var(--line);
-  background: var(--paper);
-  margin-bottom: 1rem;
-  padding: 1.5rem 1.8rem;
-}
-.config-section h3 {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 1.2rem;
-  color: var(--ink);
-  margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 0.5px solid var(--line);
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-}
-.config-section h3::before {
-  content: '';
-  display: inline-block;
-  width: 3px;
-  height: 14px;
-  background: var(--accent-deep);
-  transform: translateY(2px);
-}
-
-.config-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.7rem;
-}
-.config-row label {
-  flex: 0 0 110px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--mute);
-}
-.config-row input,
-.config-row select {
-  flex: 1;
-  padding: 0.55rem 0.85rem;
-  border: 0.5px solid var(--line);
-  background: var(--paper-soft);
-  color: var(--ink);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.config-row input:focus, .config-row select:focus {
-  border-color: var(--accent);
-}
-.config-row code {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  color: var(--accent-deep);
-}
-
-/* ===== Buttons ===== */
-button {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.68rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  padding: 0.6rem 1.2rem;
-  background: var(--paper);
-  border: 0.5px solid var(--line);
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-button:hover {
-  border-color: var(--accent);
-  color: var(--accent-deep);
-  background: var(--tint-soft);
-}
-.btn-primary {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
-}
-.btn-primary:hover {
-  background: var(--accent-deep);
-  border-color: var(--accent-deep);
-  color: var(--bg);
-}
-[data-theme="nocturne"] .btn-primary {
-  background: var(--accent-deep);
-  color: var(--bg-deep);
-  border-color: var(--accent-deep);
-}
-[data-theme="nocturne"] .btn-primary:hover {
-  background: var(--highlight);
-  border-color: var(--highlight);
-}
-
-input, textarea, select {
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--ink);
-}
-input[type="text"], input[type="password"], input[type="number"], textarea {
-  background: var(--paper-soft);
-  border: 0.5px solid var(--line);
-  padding: 0.55rem 0.85rem;
-  font-size: 0.78rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-input:focus, textarea:focus { border-color: var(--accent); }
-::placeholder { color: var(--mute-soft); font-style: italic; }
-
-/* ===== Import View ===== */
-.upload-zone {
-  border: 1px dashed var(--line-strong);
-  padding: 3rem 2rem;
-  text-align: center;
-  cursor: pointer;
-  background: var(--paper);
-  margin: 1.2rem 0;
-  transition: all 0.25s;
-}
-.upload-zone:hover {
-  border-color: var(--accent);
-  background: var(--tint-soft);
-}
-.upload-zone svg {
-  width: 38px;
-  height: 38px;
-  color: var(--accent-deep);
-  margin-bottom: 0.7rem;
-  opacity: 0.8;
-}
-.upload-zone .label {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.9rem;
-  color: var(--ink-soft);
-}
-.upload-zone .label span {
-  color: var(--accent-deep);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.progress-bar {
-  height: 4px;
-  background: var(--line);
-  overflow: hidden;
-}
-.progress-fill {
-  height: 100%;
-  background: var(--accent-deep);
-  transition: width 0.4s ease;
-}
-
-/* ===== Auth Overlay ===== */
 #auth-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(3,2,1,.97);
+  backdrop-filter: blur(18px);
 }
-.auth-card {
-  background: var(--paper);
-  border: 0.5px solid var(--line);
-  padding: 3rem 2.5rem;
-  max-width: 380px;
-  width: 90%;
-  text-align: center;
-  box-shadow: var(--shadow);
-}
-.auth-card .mark {
-  width: 44px;
-  height: 44px;
-  margin: 0 auto 1rem;
-  color: var(--accent-deep);
-  animation: markSpin 12s linear infinite;
-  display: block;
-}
-@keyframes markSpin {
-  0%   { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-.auth-card h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-style: italic;
-  font-weight: 400;
-  font-size: 1.6rem;
-  color: var(--ink);
-  margin-bottom: 0.4rem;
-}
-.auth-card .sub {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 0.78rem;
-  color: var(--mute);
-  letter-spacing: 0.25em;
-  margin-bottom: 2rem;
-}
-.auth-card input {
-  display: block;
-  width: 100%;
-  margin-bottom: 0.6rem;
-}
-.auth-card button {
-  width: 100%;
-  padding: 0.85rem;
-  margin-top: 0.4rem;
-}
-
-/* ===== Toast ===== */
+.auth-card { width: min(390px, calc(100vw - 2rem)); padding: 3rem; border: 1px solid var(--line); background: var(--bg-deep); text-align: center; }
+.auth-card .mark { width: 30px; color: var(--accent-deep); margin-bottom: 1.5rem; }
+.auth-card h2 { font: 300 3rem/1 var(--font-display); }
+.auth-card .sub { margin: .6rem 0 2rem; color: var(--mute); font: .55rem var(--font-mono); text-transform: uppercase; letter-spacing: .16em; }
+.auth-card input { margin-bottom: 1rem; text-align: center; }
+.auth-card button { width: 100%; }
 .toast-msg {
-  position: fixed;
-  bottom: 2rem;
-  left: 50%;
-  transform: translateX(-50%) translateY(40px);
-  background: var(--ink);
-  color: var(--bg);
-  padding: 0.7rem 1.5rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  opacity: 0;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 999;
-  pointer-events: none;
+  position: fixed; z-index: 220; left: 50%; bottom: 2rem;
+  padding: .8rem 1rem; transform: translate(-50%,2rem); opacity: 0;
+  border: 1px solid var(--line); background: var(--bg-deep); color: var(--ink-soft);
+  font: .58rem var(--font-mono); transition: .35s;
 }
-.toast-msg.show { transform: translateX(-50%); opacity: 1; }
-
-/* ===== Misc ===== */
-hr { border: none; border-top: 0.5px solid var(--line); margin: 2rem 0; }
-::-webkit-scrollbar { width: 6px; height: 6px; }
+.toast-msg.show { transform: translate(-50%,0); opacity: 1; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(198,170,135,.22); }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--mute-soft); }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-a { color: var(--accent-deep); text-decoration: none; }
+/* ============================================================
+   Motion / responsive
+   ============================================================ */
+@keyframes revealDown { from { opacity: 0; transform: translateY(-10px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes revealUp { from { opacity: 0; transform: translateY(18px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes titleIn { from { opacity: 0; transform: translateY(50px); filter: blur(16px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes cueLine { 0%,100% { transform: scaleX(.25); opacity: .35; } 50% { transform: scaleX(1); opacity: .9; } }
+@keyframes chapterIn { from { opacity: 0; transform: translateY(18px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes intakePulse { 0% { box-shadow: inset 0 0 0 rgba(196,122,56,0); } 45% { box-shadow: inset 0 0 80px rgba(196,122,56,.11); } 100% { box-shadow: inset 0 0 0 rgba(196,122,56,0); } }
 
-@media (max-width: 720px) {
-  .topbar { flex-wrap: wrap; padding: 1rem; gap: 0.8rem; }
-  .stats-line { display: none; }
-  .search-wrap { width: 100%; order: 3; }
-  .content { padding: 1.5rem 1rem 4rem; }
-  .tabs { padding: 0 1rem; overflow-x: auto; }
-  .tab { padding: 0.9rem 1rem; white-space: nowrap; }
-  .bucket-row {
-    grid-template-columns: 22px 1fr 50px;
-    gap: 0.6rem;
-  }
-  .bucket-row .domain,
-  .bucket-row .emotion,
-  .bucket-row .time,
-  .bucket-row .preview { display: none; }
-  .detail-panel { width: 100%; }
-  .detail-panel > div { padding: 2rem 1.2rem; }
-  .breath-flow { flex-direction: column; }
-  .flow-step { border-right: none; border-bottom: 0.5px solid var(--line); }
-  .breath-controls { flex-wrap: wrap; }
-  .config-row { flex-direction: column; align-items: stretch; }
-  .config-row label { flex: 0 0 auto; }
+@media (max-width: 900px) {
+  .archive-hero { align-items: center; padding-top: 8rem; }
+  .archive-title { font-size: clamp(4.4rem,16vw,8rem); line-height: .78; }
+  .archive-title em { margin-left: 0; }
+  .archive-subtitle, .archive-ledger { margin-left: 0; }
+  .tabs { overflow-x: auto; grid-template-columns: repeat(7, minmax(124px,1fr)); }
+  .tab { min-height: 64px; }
+  .archive-tools { grid-template-columns: 1fr; }
+  .bucket-row { grid-template-columns: 58px minmax(0,1fr) 120px; }
+  .bucket-signal { display: none; }
+  .breath-flow { grid-template-columns: 1fr; }
+  .flow-step { border-right: 0; border-bottom: 1px solid var(--line-soft); }
+  .breath-controls { grid-template-columns: 1fr 1fr; }
+  .reverie-grid { grid-template-columns: 1fr; }
+  .density-card { grid-column: auto; }
+}
+@media (max-width: 620px) {
+  .topbar { padding-top: 1rem; }
+  .stats-line, .brand-sep { display: none; }
+  .archive-hero { min-height: 92svh; }
+  .archive-title { font-size: clamp(4rem,20vw,6rem); }
+  .archive-subtitle { width: 66vw; }
+  .archive-ledger { max-width: 62vw; }
+  .scroll-cue { display: none; }
+  .content { padding-top: 5rem; }
+  .content::before { margin-bottom: 3rem; }
+  .bucket-row { grid-template-columns: 42px minmax(0,1fr); min-height: 130px; }
+  .bucket-meta { display: none; }
+  .bucket-index { font-size: 2.2rem; }
+  .detail-meta { grid-template-columns: 1fr; }
+  .network-legend { flex-wrap: wrap; gap: .8rem 1.2rem; }
+  .network-legend .legend-item:last-child { width: 100%; margin-left: 0 !important; }
+  .config-row { grid-template-columns: 1fr; gap: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  .archive-title { transform: none !important; }
 }
 </style>
 </head>
 <body>
 
-<canvas id="particles"></canvas>
-
 <!-- ============================================================
      Header
      ============================================================ -->
-<div class="topbar">
+<header class="topbar">
   <div class="brand">
     <svg class="brand-mark" viewBox="0 0 32 32" fill="none">
       <circle cx="16" cy="16" r="12" stroke="currentColor" stroke-width="0.7"/>
@@ -1304,9 +639,9 @@ a { color: var(--accent-deep); text-decoration: none; }
       <circle cx="25" cy="8" r="0.5" fill="currentColor"/>
       <circle cx="27" cy="12" r="0.4" fill="currentColor"/>
     </svg>
-    <span class="brand-name">Nocturne</span>
-    <span class="brand-sep">·</span>
-    <span class="stats-line" id="stats">loading</span>
+    <span class="brand-name">NOCTURNE</span>
+    <span class="brand-sep">/</span>
+    <span class="stats-line">PRIVATE ARCHIVE</span>
   </div>
   <div class="topbar-actions">
     <button class="icon-btn" id="theme-toggle" title="切换主题">
@@ -1329,83 +664,71 @@ a { color: var(--accent-deep); text-decoration: none; }
       </svg>
     </button>
   </div>
-</div>
+</header>
+
+<section class="archive-hero" aria-label="Nocturne archive overview">
+  <div class="archive-hero-copy">
+    <div class="archive-kicker">PRIVATE ARCHIVE / NOCTURNE</div>
+    <h1 class="archive-title">A private archive<em>for what stayed.</em></h1>
+    <p class="archive-subtitle">Fragments, breaths, and unfinished stars.</p>
+    <div class="archive-ledger" id="stats">Reading archive</div>
+  </div>
+  <a class="scroll-cue" href="#chapter-index">Enter quietly</a>
+</section>
 
 <!-- ============================================================
      Tabs
      ============================================================ -->
-<div class="tabs">
-  <div class="tab active" data-tab="list">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
-    记忆桶
-  </div>
-  <div class="tab" data-tab="breath">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v8"/><circle cx="12" cy="14" r="6"/><circle cx="12" cy="14" r="2"/></svg>
-    Breath
-  </div>
-  <div class="tab" data-tab="reverie">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/><circle cx="17" cy="8" r="0.8" fill="currentColor"/></svg>
-    Reverie
-  </div>
-  <div class="tab" data-tab="network">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><line x1="6.5" y1="7.5" x2="10.5" y2="16.5"/><line x1="17.5" y1="7.5" x2="13.5" y2="16.5"/><line x1="7" y1="6" x2="17" y2="6"/></svg>
-    Network
-  </div>
-  <div class="tab" data-tab="config">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    配置
-  </div>
-  <div class="tab" data-tab="import">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    导入
-  </div>
-  <div class="tab" data-tab="settings">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-    设置
-  </div>
-   <div class="tab" data-tab="desire">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-    内心
-  </div>
-</div>
+<nav class="tabs" id="chapter-index" aria-label="Archive chapters">
+  <div class="tab active" data-index="01" data-tab="list">Traces</div>
+  <div class="tab" data-index="02" data-tab="breath">Breath</div>
+  <div class="tab" data-index="03" data-tab="reverie">Reverie</div>
+  <div class="tab" data-index="04" data-tab="network">Constellations</div>
+  <div class="tab" data-index="05" data-tab="desire">Drift</div>
+  <div class="tab" data-index="06" data-tab="import">Fragments</div>
+  <div class="tab" data-index="07" data-tab="config">Axis</div>
+  <div class="tab secondary-tab" data-tab="settings">Private settings</div>
+</nav>
 
 <!-- ============================================================
      Content / Tabs
      ============================================================ -->
 
 <div class="content" id="list-view">
-  <div class="list-search">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
-    <input class="search-input" type="search" id="search-input" name="memory-search" autocomplete="off" placeholder="搜索记忆">
+  <div class="archive-tools">
+    <div class="list-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+      <input class="search-input" type="search" id="search-input" name="memory-search" autocomplete="off" placeholder="Search traces">
+    </div>
+    <div class="filters" id="filters"></div>
   </div>
-  <div class="filters" id="filters"></div>
   <div class="bucket-list" id="bucket-list">
-    <div class="loading">加载中</div>
+    <div class="loading">Gathering traces</div>
   </div>
 </div>
 
 <div class="content" id="breath-view" style="display:none">
   <div class="breath-flow" id="breath-flow">
-    <div class="flow-step" id="fs-input"><strong>① 输入</strong><small>query / valence / arousal</small></div>
-    <div class="flow-step" id="fs-candidates"><strong>② 候选池</strong><small id="fs-cand-n">— 桶</small></div>
-    <div class="flow-step" id="fs-scoring"><strong>③ 四维评分</strong><small>topic + emotion + time + imp</small></div>
-    <div class="flow-step" id="fs-threshold"><strong>④ 阈值过滤</strong><small id="fs-thresh-n">≥50 → — 通过</small></div>
-    <div class="flow-step" id="fs-sort"><strong>⑤ 降序排列</strong><small>返回 top N</small></div>
+    <div class="flow-step" id="fs-input"><strong>01 Signal</strong><small>query / valence / arousal</small></div>
+    <div class="flow-step" id="fs-candidates"><strong>02 Candidates</strong><small id="fs-cand-n">retrieved memory buckets</small></div>
+    <div class="flow-step" id="fs-scoring"><strong>03 Weights</strong><small>topic / emotion / time / importance</small></div>
+    <div class="flow-step" id="fs-threshold"><strong>04 Threshold</strong><small id="fs-thresh-n">kept above recall line</small></div>
+    <div class="flow-step" id="fs-sort"><strong>05 Return</strong><small>sorted traces</small></div>
   </div>
 
   <div class="breath-controls">
     <label>Query</label>
-    <input type="text" id="breath-query" placeholder="关键词" style="width:220px">
+    <input type="text" id="breath-query" placeholder="signal">
     <label>Valence</label>
-    <input type="number" id="breath-valence" placeholder="0~1" min="0" max="1" step="0.1" style="width:80px">
+    <input type="number" id="breath-valence" placeholder="0–1" min="0" max="1" step="0.1">
     <label>Arousal</label>
-    <input type="number" id="breath-arousal" placeholder="0~1" min="0" max="1" step="0.1" style="width:80px">
-    <button class="btn-primary" onclick="runBreathDebug()">模拟 Breath</button>
+    <input type="number" id="breath-arousal" placeholder="0–1" min="0" max="1" step="0.1">
+    <button class="btn-primary" onclick="runBreathDebug()">Trace recall</button>
   </div>
 
   <div class="breath-info" id="breath-info" style="display:none"></div>
   <div id="breath-results">
-    <div class="loading">输入 query 后点击模拟 Breath 查看评分链路</div>
+    <div class="loading">Enter a signal to watch Breath choose what returns.<br><span>输入一个信号，看 Breath 如何唤回记忆。</span></div>
   </div>
 </div>
 
@@ -1414,8 +737,8 @@ a { color: var(--accent-deep); text-decoration: none; }
     <!-- 心情卡 -->
     <div class="reverie-card mood-card">
       <div class="reverie-head">
-        <span class="reverie-title">Mood · 此刻</span>
-        <span class="reverie-sub" id="rev-updated">—</span>
+        <span class="reverie-title">Mood Trace</span>
+        <span class="reverie-sub" id="rev-updated">current affect</span>
       </div>
 
       <div class="mood-tri">
@@ -1423,26 +746,26 @@ a { color: var(--accent-deep); text-decoration: none; }
           <div class="tri-label">affection</div>
           <div class="tri-num accent" id="rev-aff-num">—</div>
           <div class="tri-bar"><div class="tri-bar-fill aff-fill" id="rev-aff-bar" style="width:0%"></div></div>
-          <div class="tri-desc" id="rev-aff-desc">读取中</div>
+          <div class="tri-desc" id="rev-aff-desc">Reading affect</div>
         </div>
         <div class="tri-col">
           <div class="tri-label">PA · positive</div>
           <div class="tri-num" id="rev-pa-num">—</div>
           <div class="tri-bar"><div class="tri-bar-fill pa-fill" id="rev-pa-bar" style="width:0%"></div></div>
-          <div class="tri-desc">愉悦度</div>
+          <div class="tri-desc">Warmth</div>
         </div>
         <div class="tri-col">
           <div class="tri-label">NA · negative</div>
           <div class="tri-num warn" id="rev-na-num">—</div>
           <div class="tri-bar"><div class="tri-bar-fill na-fill" id="rev-na-bar" style="width:0%"></div></div>
-          <div class="tri-desc">压力度</div>
+          <div class="tri-desc">Shadow</div>
         </div>
       </div>
 
       <div class="mood-word-row">
-        <span class="mood-word-lbl">last word</span>
+        <span class="mood-word-lbl">Last signal</span>
         <span class="mood-word-val" id="rev-word">—</span>
-        <button class="refresh-btn" onclick="loadReverieMood()" title="刷新心情">
+        <button class="refresh-btn" onclick="loadReverieMood()" title="Revisit mood trace">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 12a9 9 0 0 1 15.7-6L21 8"/>
             <path d="M21 3v5h-5"/>
@@ -1468,19 +791,19 @@ a { color: var(--accent-deep); text-decoration: none; }
     <!-- 梦境卡 -->
     <div class="reverie-card dream-card">
       <div class="reverie-head">
-        <span class="reverie-title">Dream · 梦呓</span>
-        <span class="reverie-sub" id="rev-dreamTime">—</span>
+        <span class="reverie-title">Dream Veil</span>
+        <span class="reverie-sub" id="rev-dreamTime">latest reverie</span>
       </div>
       <div class="dream-body" id="rev-dreamBody">
-        <div class="dream-empty">∗ 等待 dream</div>
+        <div class="dream-empty">∗ No reverie yet</div>
       </div>
     </div>
 
     <!-- 密度卡 -->
     <div class="reverie-card density-card">
       <div class="reverie-head">
-        <span class="reverie-title">Density · 近 14 日</span>
-        <span class="reverie-sub" id="rev-densitySub">—</span>
+        <span class="reverie-title">Pulse Density</span>
+        <span class="reverie-sub" id="rev-densitySub">last 14 days</span>
       </div>
       <div class="spark-wrap" id="rev-sparkWrap">
         <div class="spark-tooltip" id="rev-sparkTooltip"></div>
@@ -1507,7 +830,7 @@ a { color: var(--accent-deep); text-decoration: none; }
       <svg id="legend-archived-svg" width="14" height="14" viewBox="0 0 14 14" style="display:inline-block;vertical-align:middle"></svg>
       archived
     </div>
-    <div class="legend-item" style="margin-left:auto;font-style:italic;font-family:Cormorant Garamond,serif;text-transform:none;letter-spacing:0.05em;font-size:0.75rem;">浮于此处的，是你的记忆</div>
+    <div class="legend-item" style="margin-left:auto;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.16em;font-size:0.62rem;">What remains, finds its orbit.</div>
   </div>
   <canvas id="network-canvas"></canvas>
 </div>
@@ -1515,40 +838,45 @@ a { color: var(--accent-deep); text-decoration: none; }
 <div class="content" id="desire-view" style="display:none">
   <div style="padding:1.5rem;max-width:700px;margin:0 auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
-      <h2 style="margin:0;font-size:1.1rem">此刻的内心</h2>
-      <button onclick="loadDesire()" style="font-size:0.8rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--ink-soft)">刷新</button>
+      <h2 style="margin:0;font-size:1.1rem">Inner Weather</h2>
+      <button onclick="loadDesire()" style="font-size:0.56rem;padding:0.3rem 0.7rem;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--ink-soft)">Revisit</button>
     </div>
     <div id="desire-intent" style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
-      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.4rem">此刻最想做的事</div>
-      <div id="desire-intent-text" style="font-size:1rem">加载中…</div>
+      <div style="font-size:0.62rem;color:var(--ink-soft);margin-bottom:0.4rem">Current Pull</div>
+      <div id="desire-intent-text" style="font-size:1rem">Reading the drift…</div>
       <div id="desire-intent-reason" style="font-size:0.75rem;color:var(--ink-soft);margin-top:0.3rem"></div>
     </div>
     <div style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
-      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.8rem">驱动条</div>
+      <div style="font-size:0.62rem;color:var(--ink-soft);margin-bottom:0.8rem">Drives</div>
       <div id="desire-drives"></div>
     </div>
     <div style="background:var(--card);border-radius:10px;padding:1.2rem;border:1px solid var(--border)">
-      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.8rem">念头池</div>
-      <div id="desire-thoughts"><span style="color:var(--ink-soft);font-size:0.85rem">空的</span></div>
+      <div style="font-size:0.62rem;color:var(--ink-soft);margin-bottom:0.8rem">Thought Pool</div>
+      <div id="desire-thoughts"><span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span></div>
     </div>
   </div>
 </div>   
    
 <div class="content" id="import-view" style="display:none">
-  <div style="max-width:720px;margin:0 auto;">
+  <div class="intake-shell">
+    <div class="intake-title">Fragments</div>
+    <p class="intake-copy">A quiet intake for source material before it becomes memory.</p>
     <div class="config-section">
-      <h3>历史对话导入</h3>
-      <p style="color:var(--mute);font-size:0.78rem;font-family:'Shippori Mincho',serif;margin-bottom:0.8rem;">支持 Claude JSON / ChatGPT / DeepSeek / Markdown / Text</p>
+      <h3>Source</h3>
+      <p class="section-note">尚未成为记忆的原始片段。</p>
 
       <div class="upload-zone" id="import-upload-zone">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        <div class="label">拖拽文件到此处 · 或 <span>点击选择</span></div>
+        <div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <div class="label">Drop source here · or <span>select file</span></div>
+          <p style="margin-top:0.9rem;color:var(--mute);font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;">JSON / Markdown / Text / Chat Export</p>
+        </div>
         <input type="file" id="import-file-input" accept=".json,.txt,.md,.jsonl" style="display:none">
       </div>
 
-      <label style="display:flex;align-items:center;gap:0.5rem;font-family:'Shippori Mincho',serif;font-size:0.8rem;color:var(--ink-soft);">
+      <label style="display:flex;align-items:center;gap:0.5rem;font-family:Inter,'PingFang SC',system-ui,sans-serif;font-size:0.8rem;color:var(--ink-soft);">
         <input type="checkbox" id="import-preserve-raw" style="margin:0;width:auto;">
-        保留原文模式（特殊情境/暗号/仪式性内容不摘要）
+        Preserve raw text <span style="color:var(--mute);font-size:.68rem;">· 保留原文，不自动摘要仪式性内容</span>
       </label>
 
       <div id="import-progress" style="display:none;margin-top:1.5rem;">
@@ -1573,17 +901,18 @@ a { color: var(--accent-deep); text-decoration: none; }
 
     <div class="config-section">
       <h3>
-        已导入记忆
-        <button onclick="loadImportResults()" style="margin-left:auto;padding:0.3rem 0.7rem;font-size:0.6rem;">刷新</button>
+        Recent Imports
+        <button onclick="loadImportResults()" style="margin-left:auto;padding:0.3rem 0.7rem;font-size:0.54rem;">Revisit</button>
       </h3>
       <div id="import-results-list" style="max-height:500px;overflow-y:auto;margin-top:0.5rem;"></div>
     </div>
 
     <div class="config-section">
-      <h3>高频模式检测</h3>
+      <h3>Pattern Scan</h3>
+      <p class="section-note">寻找反复出现的信号与关系。</p>
       <button class="btn-primary" onclick="detectPatterns()">
         <svg style="width:11px;height:11px;vertical-align:middle;margin-right:0.4rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
-        检测高频模式
+        Scan patterns
       </button>
       <div id="import-patterns" style="margin-top:1rem;"></div>
     </div>
@@ -1593,72 +922,57 @@ a { color: var(--accent-deep); text-decoration: none; }
 <div class="content" id="config-view" style="display:none">
   <div style="max-width:640px;margin:0 auto;">
     <div class="config-section">
-      <h3>脱水 / 打标 API</h3>
+      <h3>Dehydration</h3>
+      <p class="section-note">脱水、打标与记忆整理的模型配置。</p>
       <div class="config-row"><label>Model</label><input type="text" id="cfg-dehy-model" placeholder="gemini-2.5-flash-lite"></div>
       <div class="config-row"><label>Base URL</label><input type="text" id="cfg-dehy-url" placeholder="https://..."></div>
-      <div class="config-row"><label>API Key</label><input type="password" id="cfg-dehy-key" placeholder="当前: 加载中"></div>
+      <div class="config-row"><label>API Key</label><input type="password" id="cfg-dehy-key" placeholder="Reading current key"></div>
       <div style="padding-left:125px;font-size:0.65rem;color:var(--mute-soft);margin-bottom:0.7rem;font-family:'JetBrains Mono',monospace;">留空不改 · 不会持久化到 yaml</div>
       <div class="config-row"><label>Max Tokens</label><input type="number" id="cfg-dehy-maxtokens" min="128" max="8192"></div>
       <div class="config-row"><label>Temperature</label><input type="number" id="cfg-dehy-temp" min="0" max="2" step="0.05"></div>
     </div>
 
     <div class="config-section">
-      <h3>向量化 Embedding</h3>
+      <h3>Embedding</h3>
+      <p class="section-note">向量化与相似记忆的距离。</p>
       <div class="config-row"><label>启用</label><select id="cfg-emb-enabled"><option value="true">开启</option><option value="false">关闭</option></select></div>
       <div class="config-row"><label>Model</label><input type="text" id="cfg-emb-model" placeholder="gemini-embedding-001"></div>
     </div>
 
     <div class="config-section">
-      <h3>其他参数</h3>
+      <h3>Recall Rules</h3>
+      <p class="section-note">召回、合并与保留边界。</p>
       <div class="config-row"><label>合并阈值</label><input type="number" id="cfg-merge" min="0" max="100"></div>
-      <div style="padding-left:125px;font-size:0.65rem;color:var(--mute-soft);font-family:'JetBrains Mono',monospace;">0-100，越高越难合并相似桶</div>
+      <div style="padding-left:125px;font-size:0.62rem;color:var(--mute-soft);font-family:'JetBrains Mono',monospace;">0–100 · 数值越高，相似记忆越不易合并。</div>
     </div>
 
     <div style="display:flex;gap:0.6rem;margin-top:1rem;">
-      <button class="btn-primary" onclick="saveConfig(false)">仅运行时应用</button>
-      <button onclick="saveConfig(true)">写入 config.yaml</button>
+      <button class="btn-primary" onclick="saveConfig(false)">Apply for session</button>
+      <button onclick="saveConfig(true)">Write to config</button>
     </div>
     <div id="config-status" style="margin-top:1rem;font-size:0.78rem;font-family:'JetBrains Mono',monospace;"></div>
 
     <div class="config-section">
-      <h3>系统信息</h3>
-      <div id="config-readonly" style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--mute);line-height:1.9;letter-spacing:0.05em;">加载中</div>
+      <h3>System</h3>
+      <p class="section-note">系统状态与当前运行边界。</p>
+      <div id="config-readonly" style="font-family:'JetBrains Mono',monospace;font-size:0.66rem;color:var(--mute);line-height:1.9;letter-spacing:0.05em;">Reading system</div>
     </div>
-  </div>
-
-    <div id="desire-intent" style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
-      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.4rem">此刻最想做的事</div>
-      <div id="desire-intent-text" style="font-size:1rem">加载中…</div>
-      <div id="desire-intent-reason" style="font-size:0.75rem;color:var(--ink-soft);margin-top:0.3rem"></div>
-    </div>
-
-    <!-- 8维驱动条 -->
-    <div style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
-      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.8rem">驱动条</div>
-      <div id="desire-drives"></div>
-    </div>
-
-    <!-- 念头池 -->
-    <div style="background:var(--card);border-radius:10px;padding:1.2rem;border:1px solid var(--border)">
-      <div style="font-size:0.75rem;color:var(--ink-soft);margin-bottom:0.8rem">念头池</div>
-      <div id="desire-thoughts"><span style="color:var(--ink-soft);font-size:0.85rem">空的</span></div>
-    </div>
-  </div>
-</div> 
-    </div>
+    <button class="axis-private-link" data-open-settings>Private settings / security →</button>
   </div>
 </div>
 
 <div class="content" id="settings-view" style="display:none">
   <div style="max-width:580px;margin:0 auto;">
     <div class="config-section">
-      <h3>服务状态</h3>
-      <div id="settings-status" style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--mute);line-height:2;letter-spacing:0.05em;">加载中</div>
-      <button onclick="loadSettingsStatus()" style="margin-top:0.5rem;font-size:0.6rem;">刷新</button>
+      <h3>Service</h3>
+      <p class="section-note">服务状态与记忆引擎。</p>
+      <div id="settings-status" style="font-family:'JetBrains Mono',monospace;font-size:0.66rem;color:var(--mute);line-height:2;letter-spacing:0.05em;">Reading service</div>
+      <button onclick="loadSettingsStatus()" style="margin-top:0.5rem;font-size:0.54rem;">Revisit</button>
     </div>
 
     <div class="config-section">
-      <h3>修改密码</h3>
+      <h3>Password</h3>
+      <p class="section-note">更换私人档案的访问口令。</p>
       <div id="settings-env-notice" style="display:none;font-size:0.7rem;color:var(--warning);margin-bottom:0.8rem;font-family:'JetBrains Mono',monospace;letter-spacing:0.05em;">
         当前使用环境变量 OMBRE_DASHBOARD_PASSWORD，请直接修改环境变量
       </div>
@@ -1666,14 +980,15 @@ a { color: var(--accent-deep); text-decoration: none; }
         <div class="config-row"><label>当前密码</label><input type="password" id="settings-current-pwd" placeholder="当前密码"></div>
         <div class="config-row"><label>新密码</label><input type="password" id="settings-new-pwd" placeholder="新密码（至少6位）"></div>
         <div class="config-row"><label>确认</label><input type="password" id="settings-new-pwd2" placeholder="再次输入新密码"></div>
-        <button class="btn-primary" onclick="changePassword()" style="margin-top:0.4rem;">修改密码</button>
+        <button class="btn-primary" onclick="changePassword()" style="margin-top:0.4rem;">Update password</button>
         <div id="settings-pwd-msg" style="margin-top:0.7rem;font-size:0.75rem;font-family:'JetBrains Mono',monospace;"></div>
       </div>
     </div>
 
     <div class="config-section">
-      <h3>宿主机记忆桶目录</h3>
-      <div style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;line-height:1.7;font-family:'Shippori Mincho',serif;">
+      <h3>Vault Path</h3>
+      <p class="section-note">记忆在宿主机上的存放位置。</p>
+      <div style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;line-height:1.7;font-family:Inter,'PingFang SC',system-ui,sans-serif;">
         设置 docker-compose 中 <code style="font-family:'JetBrains Mono',monospace;color:var(--accent-deep);">${OMBRE_HOST_VAULT_DIR:-./buckets}:/data</code> 的宿主机路径。留空则使用项目内 <code style="font-family:'JetBrains Mono',monospace;color:var(--accent-deep);">./buckets</code>。
         <span style="color:var(--warning);">修改后需 <code style="font-family:'JetBrains Mono',monospace;">docker compose down && docker compose up -d</code> 才生效。</span>
       </div>
@@ -1686,8 +1001,9 @@ a { color: var(--accent-deep); text-decoration: none; }
     </div>
 
     <div class="config-section">
-      <h3>账号操作</h3>
-      <button onclick="doLogout()" style="color:var(--negative);border-color:var(--negative);">退出登录</button>
+      <h3>Account</h3>
+      <p class="section-note">离开这间私人档案室。</p>
+      <button onclick="doLogout()" style="color:var(--negative);border-color:var(--negative);">Sign out</button>
     </div>
   </div>
 </div>
@@ -1711,7 +1027,7 @@ a { color: var(--accent-deep); text-decoration: none; }
     <h2>Nocturne</h2>
     <p class="sub" id="auth-subtitle">验证身份</p>
     <div id="auth-setup-form" style="display:none;">
-      <p style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;font-family:'Shippori Mincho',serif;">首次使用，请设置访问密码</p>
+      <p style="font-size:0.72rem;color:var(--mute);margin-bottom:0.8rem;font-family:Inter,'PingFang SC',system-ui,sans-serif;">首次使用，请设置访问密码</p>
       <input type="password" id="auth-setup-pwd" placeholder="设置密码（至少6位）" autocomplete="new-password">
       <input type="password" id="auth-setup-pwd2" placeholder="确认密码" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSetup()">
       <button class="btn-primary" onclick="doSetup()">设置并进入</button>
@@ -1720,7 +1036,7 @@ a { color: var(--accent-deep); text-decoration: none; }
       <input type="password" id="auth-login-pwd" placeholder="输入访问密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       <button class="btn-primary" onclick="doLogin()">登录</button>
     </div>
-    <div id="auth-error" style="color:var(--negative);font-size:0.72rem;margin-top:0.7rem;display:none;font-family:'Shippori Mincho',serif;"></div>
+    <div id="auth-error" style="color:var(--negative);font-size:0.72rem;margin-top:0.7rem;display:none;font-family:Inter,'PingFang SC',system-ui,sans-serif;"></div>
   </div>
 </div>
 
@@ -1733,15 +1049,8 @@ let allBuckets = [];
 let currentFilter = 'all';
 let searchTimer;
 let importPollTimer;
-let particles = [];
-let stars = [];
-let mouseTrail = [];
-let pAnimId;
 let currentTheme;
 const mouse = { x: -1000, y: -1000 };
-let canvas = null;
-let pctx = null;
-let sakuraPath2D = null;
 
 const ICONS = {
   pinned: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="17" x2="12" y2="22"/><path d="M9 10V5a3 3 0 0 1 6 0v5l3 4H6l3-4z"/></svg>',
@@ -1764,7 +1073,7 @@ function applyTheme(theme) {
   const moon = document.getElementById('theme-icon-moon');
   if (sun && moon) {
     sun.style.display = theme === 'nocturne' ? 'block' : 'none';
-    moon.style.display = theme === 'sakura' ? 'block' : 'none';
+    moon.style.display = theme === 'archive-light' ? 'block' : 'none';
   }
   // 更新network legend
   const legMemSvg = document.getElementById('legend-memory-svg');
@@ -1778,10 +1087,10 @@ function applyTheme(theme) {
     const sakuraSVG = (fill) => `<g transform="translate(7 7) scale(0.5) translate(-8 -7.5)" fill="${fill}"><path d="M8.29,9.57 C9.09,8.74 9.26,8.82 9.37,8.83 C9.65,8.85 9.96,8.95 10.27,9.11 C10.60,9.28 10.94,9.52 11.26,9.82 C11.59,10.11 11.92,10.47 12.21,10.87 C12.50,11.28 12.74,11.69 12.92,12.09 C13.09,12.49 13.21,12.88 13.27,13.24 C13.30,13.49 13.31,13.72 13.29,13.93 L12.28,13.91 L12.11,14.77 C11.74,14.84 11.51,14.75 11.27,14.63 C10.94,14.46 10.61,14.22 10.28,13.93 C9.95,13.63 9.63,13.28 9.34,12.87 C9.05,12.47 8.81,12.05 8.63,11.65 C8.45,11.25 8.33,10.86 8.28,10.51 C8.22,10.16 8.22,9.84 8.29,9.57 Z M7.11,8.59 C7.66,8.44 7.71,8.47 7.71,8.54 C7.72,8.67 7.69,8.84 7.67,9.01 C7.63,9.23 7.60,9.45 7.63,9.57 C7.69,9.83 7.69,10.15 7.63,10.50 C7.57,10.85 7.44,11.25 7.26,11.64 C7.07,12.04 6.82,12.45 6.52,12.85 C6.22,13.25 5.90,13.60 5.56,13.89 C5.23,14.17 4.89,14.41 4.56,14.57 C4.33,14.68 4.11,14.76 3.90,14.81 L3.60,13.85 L2.71,13.96 C2.53,13.64 2.54,13.39 2.59,13.14 C2.66,12.78 2.78,12.39 2.97,11.99 C3.15,11.59 3.40,11.18 3.70,10.79 C3.99,10.39 4.32,10.04 4.66,9.75 C4.99,9.46 5.33,9.23 5.66,9.07 C5.99,8.91 6.29,8.81 6.57,8.79 C6.70,8.79 6.90,8.69 7.11,8.59 Z M13.45,4.67 C13.89,4.63 14.31,4.64 14.67,4.70 C14.92,4.74 15.15,4.81 15.34,4.89 L15.02,5.83 L15.80,6.25 C15.75,6.62 15.59,6.80 15.40,6.99 C15.14,7.24 14.80,7.48 14.42,7.70 C14.03,7.91 13.58,8.10 13.10,8.25 C12.62,8.40 12.14,8.49 11.70,8.53 C11.26,8.57 10.84,8.57 10.48,8.51 C10.13,8.45 9.82,8.35 9.58,8.20 C9.35,6.93 9.45,6.56 9.64,6.32 L9.71,6.25 L9.75,6.21 C10.01,5.96 10.34,5.72 10.73,5.51 C11.57,5.05 12.49,4.77 13.45,4.67 Z M1.36,4.57 C1.72,4.53 2.13,4.52 2.58,4.58 C3.02,4.62 3.50,4.73 3.97,4.89 C4.43,5.03 4.86,5.23 5.28,5.47 C5.66,5.69 5.98,5.94 6.25,6.19 C6.50,6.44 6.69,6.70 6.79,6.96 C6.65,8.09 6.47,8.12 6.37,8.18 C6.13,8.32 5.83,8.42 5.47,8.47 C5.11,8.52 4.69,8.52 4.25,8.47 C3.80,8.42 3.33,8.32 2.85,8.16 C2.37,8.00 1.93,7.80 1.55,7.58 C1.17,7.35 0.84,7.11 0.58,6.85 C0.40,6.68 0.25,6.49 0.15,6.31 L0.97,5.74 L0.59,4.94 C0.85,4.68 1.09,4.61 1.36,4.57 Z M7.22,0.18 L8.04,0.78 L8.69,0.18 C9.03,0.34 9.16,0.54 9.28,0.78 C9.44,1.11 9.57,1.49 9.66,1.92 C9.75,2.35 9.79,2.82 9.79,3.32 C9.79,3.81 9.73,4.28 9.63,4.71 C9.54,5.14 9.40,5.52 9.23,5.84 C9.06,6.15 8.87,6.41 8.66,6.58 C7.51,6.80 7.42,6.64 7.33,6.57 C7.12,6.39 6.93,6.13 6.78,5.81 C6.61,5.49 6.49,5.10 6.40,4.68 C6.31,4.25 6.26,3.78 6.27,3.28 C6.27,2.79 6.33,2.31 6.43,1.88 C6.52,1.46 6.66,1.08 6.83,0.76 C6.95,0.53 7.08,0.34 7.22,0.18 Z"/></g>`;
 
     if (theme === 'nocturne') {
-      legMemSvg.innerHTML = eighthNote('#d4af6e');
-      legFeelSvg.innerHTML = eighthNote('#7ba8d8');
-      if (legPinSvg) legPinSvg.innerHTML = eighthNote('#f0d896');
-      if (legArchSvg) legArchSvg.innerHTML = eighthNote('#5a6580');
+      legMemSvg.innerHTML = eighthNote('#efe0c4');
+      legFeelSvg.innerHTML = eighthNote('#d58a45');
+      if (legPinSvg) legPinSvg.innerHTML = eighthNote('#e8954f');
+      if (legArchSvg) legArchSvg.innerHTML = eighthNote('#7a5944');
     } else {
       legMemSvg.innerHTML = sakuraSVG('#f5d8e1');
       legFeelSvg.innerHTML = sakuraSVG('#fbd9e2');
@@ -1789,249 +1098,9 @@ function applyTheme(theme) {
       if (legArchSvg) legArchSvg.innerHTML = sakuraSVG('#f0e2e7');
     }
   }
-  startParticles(theme);
   if (window.networkData) {
     setTimeout(() => loadNetwork(), 50);
   }
-}
-
-function initParticles() {
-  canvas = document.getElementById('particles');
-  if (!canvas) return;
-  pctx = canvas.getContext('2d');
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-  window.addEventListener('mousemove', (e) => {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-    if (currentTheme === 'nocturne') {
-      const last = mouseTrail[mouseTrail.length - 1];
-      if (!last) {
-        mouseTrail.push({ x: e.clientX, y: e.clientY, life: 1, size: 1.5 + Math.random() * 1.2 });
-        return;
-      }
-      const dx = e.clientX - last.x;
-      const dy = e.clientY - last.y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      const step = 8; // 每8px插值一个点
-      const count = Math.min(Math.ceil(dist / step), 8);
-      for (let i = 1; i <= count; i++) {
-        const t = i / count;
-        mouseTrail.push({
-          x: last.x + dx * t,
-          y: last.y + dy * t,
-          life: 1,
-          size: 1.4 + Math.random() * 1.2
-        });
-      }
-      while (mouseTrail.length > 60) mouseTrail.shift();
-    }
-  });
-  const savedTheme = localStorage.getItem('nocturne_theme') || 'sakura';
-  applyTheme(savedTheme);
-}
-
-/* ============================================================
-   Particles Background
-   - sakura: falling petals
-   - nocturne: floating musical notes + stars + mouse-trail
-   ============================================================ */
-
-function resizeCanvas() {
-  if (!canvas) return;
-  canvas.width = window.innerWidth * window.devicePixelRatio;
-  canvas.height = window.innerHeight * window.devicePixelRatio;
-  canvas.style.width = window.innerWidth + 'px';
-  canvas.style.height = window.innerHeight + 'px';
-  pctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-}
-
-function startParticles(theme) {
-  currentTheme = theme;
-  if (!pctx) return;
-  cancelAnimationFrame(pAnimId);
-  particles = [];
-  stars = [];
-  mouseTrail = [];
-
-  const W = window.innerWidth, H = window.innerHeight;
-
-  if (theme === 'sakura') {
-    for (let i = 0; i < 22; i++) {
-      particles.push({
-        x: Math.random() * W,
-        y: Math.random() * H - H,
-        vy: 0.5 + Math.random() * 0.7,
-        vx: -0.3 + Math.random() * 0.6,
-        size: 16 + Math.random() * 12,
-        rot: Math.random() * Math.PI * 2,
-        vr: -0.012 + Math.random() * 0.024,
-        opacity: 0.7 + Math.random() * 0.3,
-        // mouse-trail惯性偏移
-        ox: 0, oy: 0,
-      });
-    }
-  } else {
-    // stars
-    for (let i = 0; i < 80; i++) {
-      stars.push({
-        x: Math.random() * W,
-        y: Math.random() * H,
-        r: 0.5 + Math.random() * 1.5,
-        twinkle: Math.random() * Math.PI * 2,
-        twinkleSpeed: 0.01 + Math.random() * 0.02,
-      });
-    }
-    // musical notes
-    for (let i = 0; i < 8; i++) {
-      particles.push({
-        x: Math.random() * W,
-        y: Math.random() * H + H,
-        vy: -0.2 - Math.random() * 0.3,
-        vx: -0.15 + Math.random() * 0.3,
-        size: 10 + Math.random() * 8,
-        rot: -0.3 + Math.random() * 0.6,
-        type: Math.random() < 0.5 ? 'eighth' : 'quarter',
-        opacity: 0.25 + Math.random() * 0.35,
-        phase: Math.random() * Math.PI * 2,
-      });
-    }
-  }
-
-  animateParticles();
-}
-
-// 樱花path缓存（来自嘉嘉提供的SVG）
-function getSakuraPath() {
-  if (!sakuraPath2D) {
-    sakuraPath2D = new Path2D('M8.2941179,9.57475347 C9.08932966,8.73745846 9.26038782,8.81675637 9.37194192,8.82601299 C9.64801765,8.84924885 9.9553161,8.94702154 10.2746416,9.11347556 C10.6004391,9.28330324 10.9381699,9.52044937 11.2639522,9.8166466 C11.5917882,10.114711 11.9155819,10.46841 12.2072658,10.8741572 C12.4986411,11.275503 12.7374671,11.6927123 12.9155316,12.0940622 C13.0924032,12.4927236 13.2092124,12.8834345 13.2654181,13.2382174 C13.3035148,13.486471 13.3116416,13.7198456 13.2891169,13.9278779 L12.2754633,13.9078108 L12.1120788,14.7716699 C11.7411205,14.8393751 11.509321,14.7548534 11.2706613,14.6305794 C10.9448638,14.4607517 10.607133,14.2236055 10.2813507,13.9274083 C9.9535147,13.6293439 9.62972104,13.2756449 9.3380371,12.8698978 C9.04666181,12.4685519 8.80783574,12.0513427 8.62977129,11.6499927 C8.45289763,11.2513267 8.33198503,10.860631 8.27570308,10.5053591 C8.22066726,10.1579531 8.22331738,9.84124921 8.2941179,9.57475347 Z M7.11198285,8.59106457 C7.66252816,8.43971854 7.71102592,8.47167099 7.71361015,8.53879474 C7.71870481,8.67112497 7.69147685,8.84339995 7.66583519,9.01065639 C7.63177702,9.23281242 7.60320985,9.44639884 7.63193275,9.56802719 C7.6949018,9.83467222 7.6937942,10.1515275 7.63085555,10.4991576 C7.56652358,10.8544833 7.44168151,11.2452702 7.2565745,11.640404 C7.07042631,12.0417321 6.82348773,12.4509495 6.52403673,12.8482978 C6.22460011,13.2456269 5.89689408,13.5953331 5.5610355,13.8853868 C5.22718477,14.1737065 4.88950013,14.407051 4.55964611,14.5689966 C4.32983518,14.6818248 4.10623106,14.7619257 3.89672931,14.8060779 L3.60261121,13.8514295 L2.71451268,13.9624917 C2.53448173,13.6360569 2.54418618,13.3943777 2.5910441,13.136009 C2.65537606,12.7806833 2.78021814,12.3898964 2.96532515,11.9947626 C3.15147332,11.5934345 3.3984119,11.1842171 3.6978629,10.7868688 C3.99729951,10.3895397 4.32500555,10.0398335 4.66086413,9.74977981 C4.99471485,9.46146009 5.3323995,9.2281156 5.66225352,9.06617003 C5.98538278,8.90752605 6.29251466,8.80943571 6.5724568,8.79394944 C6.70261193,8.78674931 6.90499865,8.69251667 7.11198285,8.59106457 Z M13.4470808,4.67208206 C13.8901462,4.63253152 14.305033,4.64418889 14.6667201,4.69943064 C14.9204223,4.74038119 15.1467804,4.80500157 15.3429379,4.89119285 L15.0160138,5.83015929 L15.7996695,6.2498807 C15.7507928,6.6179591 15.5928218,6.80477677 15.4022698,6.98835601 C15.1367849,7.24114203 14.8027656,7.4818553 14.4166278,7.69513139 C14.0280031,7.90978102 13.5826822,8.10052444 13.1002344,8.24782049 C12.6184127,8.39889818 12.1446911,8.49035411 11.7001897,8.53400465 C11.2575152,8.5735203 10.8429803,8.56596886 10.4797147,8.50652481 C10.125181,8.45237209 9.81745835,8.34891319 9.58099553,8.20186066 C9.34754358,6.92884795 9.44600361,6.55720654 9.64071506,6.32292752 L9.70886048,6.24887398 L9.74500071,6.21369779 C10.0104855,5.96091179 10.3445049,5.72019852 10.7299894,5.5072801 C11.5694328,5.05175546 12.4940249,4.76763797 13.4470808,4.67208206 Z M1.35562429,4.57484233 C1.71799386,4.52739981 2.13270097,4.52362772 2.57645725,4.57511968 C3.02157937,4.62280064 3.49500407,4.72620241 3.97279688,4.88523764 C4.42650645,5.03463961 4.8634772,5.22918444 5.27581424,5.46521696 C5.65830962,5.69056551 5.98461296,5.93547411 6.24633455,6.19246446 C6.50204597,6.44355329 6.68803471,6.70177203 6.79037411,6.95686044 C6.653626,8.08868624 6.46775589,8.12367472 6.3713869,8.18107437 C6.1349352,8.32425033 5.82718096,8.4197737 5.46966506,8.46992838 C5.10729549,8.5173709 4.69258839,8.52114299 4.2488321,8.46965103 C3.80370998,8.42197007 3.33028528,8.3185683 2.8527975,8.15963405 C2.37495408,8.00058141 1.93351864,7.80184142 1.54947513,7.57955373 C1.16722734,7.35435107 0.837040239,7.10968162 0.578954821,6.85230625 C0.398718798,6.67532842 0.254723835,6.49253906 0.147386944,6.30887524 L0.972693237,5.73518548 L0.591758774,4.94187452 C0.852263876,4.67530667 1.08882342,4.61024488 1.35562429,4.57484233 Z M7.22319037,0.180438724 L8.03616678,0.782157267 L8.68508375,0.181968927 C9.02716268,0.342786508 9.16335888,0.544049342 9.28255687,0.781680935 C9.44341404,1.105477 9.57180537,1.49254303 9.66027103,1.91897818 C9.74928355,2.34804939 9.79366418,2.82083068 9.7896183,3.31742488 C9.78557286,3.80999217 9.72899436,4.28270695 9.63190274,4.71172099 C9.53544832,5.1379195 9.39910066,5.52083651 9.23029354,5.84050787 C9.06498202,6.15355962 8.87304689,6.40954865 8.65644756,6.58356265 C7.50951444,6.80316196 7.41855112,6.63989689 7.3334149,6.56868448 C7.12086827,6.3908993 6.9329548,6.13123213 6.77559813,5.81448237 C6.61474096,5.49068631 6.48634963,5.10362028 6.39788397,4.67718512 C6.30887145,4.24811392 6.26449082,3.77533262 6.2685367,3.27873842 C6.27258214,2.78617114 6.32916064,2.31345636 6.42620767,1.88463842 C6.52267789,1.46231702 6.6590259,1.07538063 6.82798652,0.755417814 C6.94630138,0.529899659 7.0796897,0.337251416 7.22319037,0.180438724 Z');
-  }
-  return sakuraPath2D;
-}
-
-let sakuraPetalPath2D = null;
-function getSakuraPetalPath() {
-  if (!sakuraPetalPath2D) {
-    sakuraPetalPath2D = new Path2D('M4.22319037,1.18043872 L5.03616678,1.78215727 L5.68508375,1.18196893 C6.02716268,1.34278651 6.16335888,1.54404934 6.28255687,1.78168094 C6.44341404,2.105477 6.57180537,2.49254303 6.66027103,2.91897818 C6.74928355,3.34804939 6.79366418,3.82083068 6.7896183,4.31742488 C6.78557286,4.80999217 6.72899436,5.28270695 6.63190274,5.71172099 C6.53544832,6.1379195 6.39910066,6.52083651 6.23029354,6.84050787 C6.06498202,7.15355962 5.87304689,7.40954865 5.65644756,7.58356265 C4.50951444,7.80316196 4.41855112,7.63989689 4.3334149,7.56868448 C4.12086827,7.3908993 3.9329548,7.13123213 3.77559813,6.81448237 C3.61474096,6.49068631 3.48634963,6.10362028 3.39788397,5.67718512 C3.30887145,5.24811392 3.26449082,4.77533262 3.2685367,4.27873842 C3.27258214,3.78617114 3.32916064,3.31345636 3.42620767,2.88463842 C3.52267789,2.46231702 3.6590259,2.07538063 3.82798652,1.75541781 C3.94630138,1.52989966 4.0796897,1.33725142 4.22319037,1.18043872 Z');
-  }
-  return sakuraPetalPath2D;
-}
-
-function drawSakuraPetal(x, y, size, rot, opacity) {
-  pctx.save();
-  pctx.translate(x, y);
-  pctx.rotate(rot);
-  // viewBox是16x15，要居中: 中心约(8, 7.5)
-  const scale = size / 16;
-  pctx.scale(scale, scale);
-  pctx.translate(-8, -7.5);
-  pctx.globalAlpha = opacity;
-  pctx.fillStyle = '#f6e2e8';
-  pctx.fill(getSakuraPath());
-  pctx.strokeStyle = 'rgba(181, 138, 152, 0.27)';
-  pctx.lineWidth = 0.2;
-  pctx.stroke(getSakuraPath());
-  pctx.restore();
-}
-
-function drawNote(x, y, size, rot, type, opacity) {
-  pctx.save();
-  pctx.translate(x, y);
-  pctx.rotate(rot);
-  pctx.globalAlpha = opacity;
-  pctx.fillStyle = '#d4af6e';
-  pctx.strokeStyle = '#d4af6e';
-  pctx.lineWidth = 1;
-  // note head
-  pctx.beginPath();
-  pctx.ellipse(0, size * 0.45, size * 0.28, size * 0.2, -0.3, 0, Math.PI * 2);
-  pctx.fill();
-  // stem
-  pctx.beginPath();
-  pctx.moveTo(size * 0.25, size * 0.4);
-  pctx.lineTo(size * 0.25, -size * 0.5);
-  pctx.stroke();
-  // flag
-  if (type === 'eighth') {
-    pctx.beginPath();
-    pctx.moveTo(size * 0.25, -size * 0.5);
-    pctx.quadraticCurveTo(size * 0.6, -size * 0.4, size * 0.5, -size * 0.15);
-    pctx.lineWidth = 1.2;
-    pctx.stroke();
-  }
-  pctx.restore();
-}
-
-function animateParticles() {
-  const W = window.innerWidth, H = window.innerHeight;
-  pctx.clearRect(0, 0, W, H);
-
-  if (currentTheme === 'sakura') {
-    particles.forEach(p => {
-      p.y += p.vy;
-      p.x += p.vx + Math.sin(p.y * 0.008) * 0.4;
-      p.rot += p.vr;
-      if (p.y > H + 20) {
-        p.y = -20;
-        p.x = Math.random() * W;
-      }
-      drawSakuraPetal(p.x, p.y, p.size, p.rot, p.opacity);
-    });
-  } else {
-    // stars
-    stars.forEach(s => {
-      s.twinkle += s.twinkleSpeed;
-      const alpha = 0.3 + Math.sin(s.twinkle) * 0.3;
-      pctx.beginPath();
-      pctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      pctx.fillStyle = `rgba(232, 216, 168, ${alpha})`;
-      pctx.fill();
-      // bigger stars get a small cross
-      if (s.r > 1.3) {
-        pctx.beginPath();
-        pctx.strokeStyle = `rgba(232, 200, 122, ${alpha * 0.5})`;
-        pctx.lineWidth = 0.4;
-        pctx.moveTo(s.x - s.r * 2, s.y);
-        pctx.lineTo(s.x + s.r * 2, s.y);
-        pctx.moveTo(s.x, s.y - s.r * 2);
-        pctx.lineTo(s.x, s.y + s.r * 2);
-        pctx.stroke();
-      }
-    });
-    // notes drifting up
-    particles.forEach(p => {
-      p.y += p.vy;
-      p.phase += 0.02;
-      p.x += p.vx + Math.sin(p.phase) * 0.5;
-      if (p.y < -30) {
-        p.y = H + 20;
-        p.x = Math.random() * W;
-      }
-      drawNote(p.x, p.y, p.size, p.rot + Math.sin(p.phase) * 0.1, p.type, p.opacity);
-    });
-    // mouse trail (stardust) - 圆点+光晕，密集插值
-    mouseTrail.forEach((t) => {
-      t.life -= 0.022;
-      if (t.life > 0) {
-        // 柔光
-        const grad = pctx.createRadialGradient(t.x, t.y, 0, t.x, t.y, t.size * 5);
-        grad.addColorStop(0, `rgba(232, 200, 122, ${t.life * 0.2})`);
-        grad.addColorStop(1, 'transparent');
-        pctx.fillStyle = grad;
-        pctx.beginPath();
-        pctx.arc(t.x, t.y, t.size * 5, 0, Math.PI * 2);
-        pctx.fill();
-        // 中心点
-        pctx.beginPath();
-        pctx.arc(t.x, t.y, t.size * t.life * 0.95, 0, Math.PI * 2);
-        pctx.fillStyle = `rgba(232, 200, 122, ${t.life * 0.85})`;
-        pctx.fill();
-      }
-    });
-    mouseTrail = mouseTrail.filter(t => t.life > 0);
-  }
-
-  pAnimId = requestAnimationFrame(animateParticles);
 }
 
 /* ============================================================
@@ -2113,7 +1182,7 @@ async function loadDesire() {
       intentEl.textContent = d.intent.want_action;
       reasonEl.textContent = d.intent.reason || '';
     } else {
-      intentEl.textContent = '此刻没有强烈的意图';
+      intentEl.textContent = 'No visible pull.';
       reasonEl.textContent = '';
     }
 
@@ -2154,10 +1223,10 @@ async function loadDesire() {
         </div>`;
       }).join('');
     } else {
-      thoughtsEl.innerHTML = '<span style="color:var(--ink-soft);font-size:0.85rem">空的</span>';
+      thoughtsEl.innerHTML = '<span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span>';
     }
   } catch(e) {
-    document.getElementById('desire-intent-text').textContent = '加载失败';
+    document.getElementById('desire-intent-text').textContent = 'The drift is out of reach.';
   }
 }   
 
@@ -2260,7 +1329,7 @@ async function loadBuckets() {
     buildFilters();
     renderBuckets(allBuckets);
   } catch (e) {
-    document.getElementById('bucket-list').innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
+    document.getElementById('bucket-list').innerHTML = '<div class="loading">Traces are out of reach · ' + e.message + '</div>';
   }
 }
 
@@ -2271,7 +1340,7 @@ function updateStats() {
   const resolved = allBuckets.filter(b => b.resolved).length;
   const digested = allBuckets.filter(b => b.digested).length;
   document.getElementById('stats').textContent =
-    `${total} buckets · ${pinned} pinned · ${feels} feel · ${resolved} resolved · ${digested} digested`;
+    `collection ${total} · core ${pinned} · affect ${feels} · resolved ${resolved} · digested ${digested}`;
 }
 
 function buildFilters() {
@@ -2322,26 +1391,35 @@ function renderBuckets(buckets) {
   if (currentFilter === 'all' || !currentFilter) {
     buckets = buckets.filter(b => !b.digested && !b.resolved);
   }
-  // 除了pinned，全部按时间顺序排列；pinned固定排在最前面
+  // Pinned traces guard the threshold; everything else follows creation time.
   buckets = [...buckets].sort((a, b) => {
     const ap = !!a.pinned, bp = !!b.pinned;
     if (ap !== bp) return ap ? -1 : 1;
     return new Date(b.created || 0) - new Date(a.created || 0);
   });
-  if (!buckets.length) { list.innerHTML = '<div class="loading">没有记忆桶</div>'; return; }
-  list.innerHTML = buckets.map(b => {
-    const vPos = Math.round(b.valence * 100);
+  if (!buckets.length) { list.innerHTML = '<div class="loading">No traces found.</div>'; return; }
+  list.innerHTML = buckets.map((b, idx) => {
+    const valence = Number.isFinite(b.valence) ? b.valence : 0.5;
+    const vPos = Math.round(valence * 100);
     const modelV = b.model_valence != null ? ' → V' + b.model_valence.toFixed(1) : '';
     const timeAgo = formatTimeAgo(b.last_active || b.created);
+    const domains = (b.domain || []).join(' · ') || 'undomain';
+    const score = Number.isFinite(b.score) ? b.score.toFixed(2) : '0.00';
     const idTag = b.type === 'feel' ? `<span class="bucket-id">${esc(b.id)}</span>` : '';
-    return `<div class="bucket-row" onclick="showDetail('${b.id}')">
-      <span class="icon">${bucketIcon(b)}</span>
-      <span class="name" title="${esc(b.name)}">${idTag}${esc(b.name)}</span>
-      <span class="domain">${(b.domain || []).join(' · ')}</span>
-      <span class="emotion"><span class="v-bar"><span class="v-dot" style="left:${vPos}%"></span></span>${modelV}</span>
-      <span class="score">${b.score.toFixed(2)}</span>
-      <span class="time">${timeAgo}</span>
-      <span class="preview">${esc(b.content_preview)}</span>
+    return `<div class="bucket-row" data-bucket-id="${esc(b.id)}" onclick="showDetail('${b.id}')">
+      <span class="bucket-index">${String(idx + 1).padStart(2, '0')}</span>
+      <span class="bucket-main">
+        <span class="name" title="${esc(b.name)}">${bucketIcon(b)} ${idTag}${esc(b.name)}</span>
+        <span class="preview">${esc(b.content_preview || '')}</span>
+      </span>
+      <span class="bucket-meta">
+        <span class="domain">${esc(domains)}</span>
+        <span class="time">${timeAgo}</span>
+      </span>
+      <span class="bucket-signal">
+        <span class="score">score ${score}</span>
+        <span class="emotion"><span class="v-bar"><span class="v-dot" style="left:${vPos}%"></span></span>${modelV || 'V' + valence.toFixed(1)}</span>
+      </span>
     </div>`;
   }).join('');
 }
@@ -2370,12 +1448,16 @@ async function searchBuckets(query) {
 async function showDetail(id) {
   const panel = document.getElementById('detail-panel');
   const content = document.getElementById('detail-content');
-  content.innerHTML = '<div class="loading">加载中</div>';
+  document.querySelectorAll('.bucket-row.selected').forEach(row => row.classList.remove('selected'));
+  const activeRow = Array.from(document.querySelectorAll('.bucket-row')).find(row => row.dataset.bucketId === id);
+  if (activeRow) activeRow.classList.add('selected');
+  content.innerHTML = '<div class="loading">Opening trace</div>';
   panel.classList.add('open');
   try {
     const res = await fetch(BASE + '/api/bucket/' + id);
     const b = await res.json();
     const meta = b.metadata || {};
+    const detailScore = Number.isFinite(b.score) ? b.score.toFixed(4) : '0.0000';
     content.innerHTML =
       `<h2>${esc(meta.name || id)}</h2>
        <div class="detail-meta">
@@ -2387,7 +1469,7 @@ async function showDetail(id) {
          <div class="field"><label>唤醒度</label>A${(meta.arousal || 0.3).toFixed(2)}</div>
          <div class="field"><label>模型视角</label>${meta.model_valence != null ? 'V' + meta.model_valence.toFixed(2) : '—'}</div>
          <div class="field"><label>重要度</label>${meta.importance || 5}/10</div>
-         <div class="field"><label>权重分</label>${b.score.toFixed(4)}</div>
+         <div class="field"><label>权重分</label>${detailScore}</div>
          <div class="field"><label>激活次数</label>${meta.activation_count || 1}</div>
          <div class="field"><label>已解决</label>${meta.resolved ? '✓' : '—'}</div>
          <div class="field"><label>已消化</label>${meta.digested ? '✓' : '—'}</div>
@@ -2397,23 +1479,23 @@ async function showDetail(id) {
        </div>
        <div class="detail-content" id="detail-body" data-bucket-id="${id}">${esc(b.content)}</div>
        <div class="detail-actions" style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
-         <button onclick="startEdit()" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">编辑</button>
-         <button onclick="toggleResolved('${id}',${meta.resolved?1:0})" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">${meta.resolved?'捞回':'沉底'}</button>
-         <button onclick="toggleDigested('${id}',${meta.digested?1:0})" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">${meta.digested?'取消消化':'消化(feel)'}</button>
-         <button onclick="deleteBucket('${id}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;color:#e57373">删除</button>
+         <button onclick="startEdit()">编辑</button>
+         <button onclick="toggleResolved('${id}',${meta.resolved?1:0})">${meta.resolved?'捞回':'沉底'}</button>
+         <button onclick="toggleDigested('${id}',${meta.digested?1:0})">${meta.digested?'取消消化':'消化(feel)'}</button>
+         <button onclick="deleteBucket('${id}')" style="color:var(--negative);border-color:rgba(199,121,112,.35);margin-left:auto;">删除</button>
        </div>`;
   } catch (e) {
-    content.innerHTML = '<div class="loading">加载失败: ' + e.message + '</div>';
+    content.innerHTML = '<div class="loading">This trace is out of reach · ' + e.message + '</div>';
   }
 }
 function startEdit() {
   const body = document.getElementById('detail-body');
   const id = body.dataset.bucketId;
   const currentContent = body.textContent;
-  body.innerHTML = `<textarea id="edit-ta" style="width:100%;min-height:120px;font-family:inherit;font-size:0.85rem;padding:0.6rem;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);resize:vertical"></textarea>
+  body.innerHTML = `<textarea id="edit-ta" style="width:100%;min-height:240px;font-family:inherit;font-size:0.9rem;line-height:1.8;padding:0.8rem;border:1px solid var(--line);background:transparent;color:var(--ink);resize:vertical"></textarea>
     <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
-      <button onclick="saveBucket('${id}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer">保存</button>
-      <button onclick="showDetail('${id}')" style="font-size:0.75rem;padding:0.3rem 0.8rem;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer">取消</button>
+      <button class="btn-primary" onclick="saveBucket('${id}')">保存</button>
+      <button onclick="showDetail('${id}')">取消</button>
     </div>`;
   document.getElementById('edit-ta').value = currentContent;
 }
@@ -2479,9 +1561,9 @@ async function loadNetwork() {
   } catch(e) {
     const W = canvas2.offsetWidth, H = canvas2.offsetHeight;
     ctx.fillStyle = '#888';
-    ctx.font = '12px Shippori Mincho, serif';
+    ctx.font = '12px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('加载失败: ' + e.message, W/2, H/2);
+    ctx.fillText('Constellation out of reach · ' + e.message, W/2, H/2);
   }
 }
 
@@ -2534,7 +1616,7 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
 
   // 五线谱底纹 (黑金版) - 三组真乐章
   if (isDark) {
-    const staffColor = 'rgba(212, 175, 110, 0.12)';
+    const staffColor = 'rgba(217, 154, 98, 0.12)';
     const staffSpacing = 9;
     const numStaves = 3;
     const staffHeight = staffSpacing * 4;
@@ -2572,7 +1654,7 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
       drawTrebleClef(ctx, 30, topY, staffHeight, staffColor);
       // 拍号 4/4
       ctx.fillStyle = staffColor;
-      ctx.font = 'italic 18px Cormorant Garamond, serif';
+      ctx.font = '300 18px Inter, sans-serif';
       ctx.textAlign = 'left';
       ctx.fillText('4', 78, topY + staffSpacing * 2 + 2);
       ctx.fillText('4', 78, topY + staffSpacing * 4);
@@ -2632,7 +1714,7 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
       if (isArchived) color = '#5a6580';
       else if (isPinned) color = '#f0d896';   // 亮金
       else if (isFeel) color = '#7ba8d8';      // feel蓝
-      else color = '#d4af6e';                  // memory金
+      else color = '#efe0c4';                  // memory cream
       const opacity = n.resolved ? 0.5 : (isPinned ? 1 : 0.9);
       drawNetworkNote(ctx, p.x, p.y, r * 1.6, color, 'eighth', opacity);
     } else {
@@ -2657,7 +1739,7 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
   });
 
   // 标签 - pinned重要的
-  ctx.font = '9.5px Shippori Mincho, serif';
+  ctx.font = '9.5px Inter, system-ui, sans-serif';
   ctx.fillStyle = labelColor;
   ctx.textAlign = 'center';
   networkNodes.forEach(p => {
@@ -2783,10 +1865,10 @@ async function runBreathDebug() {
     const res = await fetch(url);
     const data = await res.json();
     document.getElementById('fs-input').classList.add('active');
-    document.getElementById('fs-cand-n').textContent = data.total_candidates + ' 桶';
+    document.getElementById('fs-cand-n').textContent = data.total_candidates + ' traces retrieved';
     document.getElementById('fs-candidates').classList.add('active');
     document.getElementById('fs-scoring').classList.add('active');
-    document.getElementById('fs-thresh-n').textContent = '≥' + data.threshold + ' → ' + data.passed_count + ' 通过';
+    document.getElementById('fs-thresh-n').textContent = '≥' + data.threshold + ' · ' + data.passed_count + ' kept';
     document.getElementById('fs-threshold').classList.add('active');
     document.getElementById('fs-sort').classList.add('active');
 
@@ -2797,9 +1879,9 @@ async function runBreathDebug() {
       'topic=<code>' + w.topic + '</code> emotion=<code>' + w.emotion + '</code> ' +
       'time=<code>' + w.time + '</code> importance=<code>' + w.importance + '</code>' +
       ' · 阈值=<code>' + data.threshold + '</code>' +
-      ' · 候选=<code>' + data.total_candidates + '</code> 桶' +
-      ' → 通过=<code>' + data.passed_count + '</code> 桶' +
-      (query ? '' : ' · <em>未输入 query，topic 分数全为 0</em>');
+      ' · candidates <code>' + data.total_candidates + '</code>' +
+      ' · returned <code>' + data.passed_count + '</code>' +
+      (query ? '' : ' · <em>no signal; topic weight rests at zero</em>');
 
     if (!data.results.length) { results.innerHTML = '<div class="loading">无结果</div>'; return; }
 
@@ -2943,18 +2025,18 @@ async function pauseImport() {
 
 async function loadImportResults() {
   const container = document.getElementById('import-results-list');
-  container.innerHTML = '<div class="loading">加载中</div>';
+  container.innerHTML = '<div class="loading">Reading recent imports</div>';
   try {
     const res = await fetch(BASE + '/api/import/results?limit=30');
     const data = await res.json();
-    if (!data.buckets || !data.buckets.length) { container.innerHTML = '<p style="color:var(--mute);font-family:Shippori Mincho,serif;font-size:0.85rem;font-style:italic;padding:1rem 0;">暂无记忆桶</p>'; return; }
+    if (!data.buckets || !data.buckets.length) { container.innerHTML = '<p style="color:var(--mute);font-family:Inter,system-ui,sans-serif;font-size:0.78rem;padding:1rem 0;">No recent imports.</p>'; return; }
     container.innerHTML = data.buckets.map(b => `
       <div id="ir-${b.id}" style="border:0.5px solid var(--line);padding:0.9rem 1.1rem;margin:0.5rem 0;background:var(--paper-soft);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-          <b style="font-family:Shippori Mincho,serif;font-weight:500;color:var(--ink);">${b.name || b.id}</b>
+          <b style="font-family:Inter,system-ui,sans-serif;font-weight:400;color:var(--ink);">${b.name || b.id}</b>
           <span style="font-family:JetBrains Mono,monospace;font-size:0.6rem;color:var(--mute);letter-spacing:0.1em;">${b.type} · ${(b.domain||[]).join(',')} · imp ${b.importance}</span>
         </div>
-        <p style="font-family:Shippori Mincho,serif;font-size:0.82rem;margin:0.4rem 0;white-space:pre-wrap;color:var(--ink-soft);line-height:1.7;">${b.content}</p>
+        <p style="font-family:Inter,system-ui,sans-serif;font-size:0.82rem;margin:0.4rem 0;white-space:pre-wrap;color:var(--ink-soft);line-height:1.7;">${b.content}</p>
         <div style="font-family:JetBrains Mono,monospace;font-size:0.6rem;color:var(--mute);margin-bottom:0.5rem;">${(b.tags||[]).map(t=>'#'+t).join(' ')}</div>
         <div style="display:flex;gap:0.4rem;">
           <button onclick="reviewAction('${b.id}','pin')" style="padding:0.3rem 0.7rem;font-size:0.58rem;">固定</button>
@@ -2969,18 +2051,18 @@ async function loadImportResults() {
 
 async function detectPatterns() {
   const container = document.getElementById('import-patterns');
-  container.innerHTML = '<div class="loading">检测中</div>';
+  container.innerHTML = '<div class="loading">Scanning patterns</div>';
   try {
     const res = await fetch(BASE + '/api/import/patterns');
     const data = await res.json();
-    if (!data.patterns || !data.patterns.length) { container.innerHTML = '<p style="color:var(--mute);font-family:Shippori Mincho,serif;font-style:italic;padding:1rem 0;">未检测到高频模式</p>'; return; }
+    if (!data.patterns || !data.patterns.length) { container.innerHTML = '<p style="color:var(--mute);font-family:Inter,system-ui,sans-serif;font-size:.78rem;padding:1rem 0;">No recurring pattern surfaced.</p>'; return; }
     container.innerHTML = data.patterns.map(p => `
       <div style="border:0.5px solid var(--line);padding:0.9rem 1.1rem;margin:0.5rem 0;background:var(--paper-soft);">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
-          <b style="font-family:Shippori Mincho,serif;font-weight:500;color:var(--ink);">${p.pattern_name}</b>
+          <b style="font-family:Inter,system-ui,sans-serif;font-weight:400;color:var(--ink);">${p.pattern_name}</b>
           <span style="font-family:JetBrains Mono,monospace;font-size:0.65rem;color:var(--mute);">出现 ${p.count} 次</span>
         </div>
-        <p style="font-family:Shippori Mincho,serif;font-size:0.82rem;margin:0.4rem 0;color:var(--ink-soft);">${p.pattern_content}</p>
+        <p style="font-family:Inter,system-ui,sans-serif;font-size:0.82rem;margin:0.4rem 0;color:var(--ink-soft);">${p.pattern_content}</p>
         <div style="display:flex;gap:0.4rem;">
           <button onclick="reviewAction('${p.bucket_ids[0]}','pin')" style="padding:0.3rem 0.7rem;font-size:0.58rem;">固定</button>
           <button onclick="reviewAction('${p.bucket_ids[0]}','important')" style="padding:0.3rem 0.7rem;font-size:0.58rem;">重要</button>
@@ -3013,26 +2095,13 @@ async function batchReview(idsJson, action) {
 function initEvents() {
   // Click delegation
   document.addEventListener('click', (e) => {
-    if (e.target.closest('#theme-toggle')) {
-      const current = document.documentElement.dataset.theme;
-      applyTheme(current === 'sakura' ? 'nocturne' : 'sakura');
+    if (e.target.closest('[data-open-settings]')) {
+      switchChapter('settings');
       return;
     }
     const tab = e.target.closest('.tab');
     if (tab && tab.dataset.tab) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const target = tab.dataset.tab;
-      ['list','breath','reverie','network','config','import','settings','desire'].forEach(v => {
-        const el = document.getElementById(v + '-view');
-        if (el) el.style.display = target === v ? '' : 'none';
-      });
-      if (target === 'network') loadNetwork();
-      if (target === 'config') loadConfig();
-      if (target === 'reverie') loadReverie();
-      if (target === 'import') { pollImportStatus(); loadImportResults(); }
-      if (target === 'settings') loadSettingsStatus();
-      if (target === 'desire') loadDesire(); 
+      switchChapter(tab.dataset.tab);
       return;
     }
     if (e.target.closest('#import-upload-zone')) {
@@ -3070,14 +2139,46 @@ function initEvents() {
   // Drag & drop on upload zone
   const uploadZone = document.getElementById('import-upload-zone');
   if (uploadZone) {
-    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.borderColor = 'var(--accent)'; });
-    uploadZone.addEventListener('dragleave', () => { uploadZone.style.borderColor = ''; });
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', () => { uploadZone.classList.remove('dragover'); });
     uploadZone.addEventListener('drop', e => {
       e.preventDefault();
-      uploadZone.style.borderColor = '';
+      uploadZone.classList.remove('dragover');
       if (e.dataTransfer.files.length) startImport(e.dataTransfer.files[0]);
     });
   }
+}
+
+function switchChapter(target) {
+  const visibleTarget = target === 'settings' ? 'config' : target;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === visibleTarget);
+  });
+  ['list','breath','reverie','network','config','import','settings','desire'].forEach(v => {
+    const el = document.getElementById(v + '-view');
+    if (el) el.style.display = target === v ? '' : 'none';
+  });
+  if (target === 'network') loadNetwork();
+  if (target === 'config') loadConfig();
+  if (target === 'reverie') loadReverie();
+  if (target === 'import') { pollImportStatus(); loadImportResults(); }
+  if (target === 'settings') loadSettingsStatus();
+  if (target === 'desire') loadDesire();
+  document.getElementById('chapter-index').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+}
+
+function initExperienceMotion() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const title = document.querySelector('.archive-title');
+  let queued = false;
+  addEventListener('scroll', () => {
+    if (queued || scrollY > innerHeight * 1.15) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      title.style.transform = `translate3d(0, ${Math.min(scrollY * .075, 70)}px, 0)`;
+      queued = false;
+    });
+  }, { passive: true });
 }
 
 /* ============================================================
@@ -3204,7 +2305,7 @@ async function loadReverieDream() {
     body.innerHTML = html;
     document.getElementById('rev-dreamTime').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   } catch (e) {
-    body.innerHTML = '<div class="dream-empty">∗ 等待 dream</div>';
+    body.innerHTML = '<div class="dream-empty">∗ No reverie yet</div>';
   }
 }
 
@@ -3278,7 +2379,7 @@ function renderReverieSparkline(data) {
 
   wrap.insertBefore(svg, tooltip);
   const total = days.reduce((a, d) => a + d.count, 0);
-  document.getElementById('rev-densitySub').textContent = '共 ' + total + ' 条';
+  document.getElementById('rev-densitySub').textContent = total + ' traces / 14 days';
 }
 
 async function loadReverieDensity() {
@@ -3305,7 +2406,8 @@ function loadReverie() {
    Init
    ============================================================ */
 initEvents();
-initParticles();
+initExperienceMotion();
+applyTheme('nocturne');
 checkAuth().then(() => loadBuckets());
 </script>
 </body>
