@@ -2307,6 +2307,11 @@ async def api_bucket_update(request):
         kwargs["pinned"] = bool(body["pinned"])
     if "name" in body:
         kwargs["name"] = body["name"]
+    if "tags" in body:
+        tags = body["tags"]
+        if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+            return JSONResponse({"error": "tags must be a list of strings"}, status_code=400)
+        kwargs["tags"] = list(dict.fromkeys(tag.strip() for tag in tags if tag.strip()))
 
     if not kwargs:
         return JSONResponse({"error": "nothing to update"}, status_code=400)
