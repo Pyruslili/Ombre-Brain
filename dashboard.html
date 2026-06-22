@@ -349,6 +349,12 @@ body::before {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.bucket-row .bucket-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--mute);
+  margin-left: 0.5em;
+}
 .bucket-row .domain {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.62rem;
@@ -2316,14 +2322,21 @@ function renderBuckets(buckets) {
   if (currentFilter === 'all' || !currentFilter) {
     buckets = buckets.filter(b => !b.digested && !b.resolved);
   }
+  // 除了pinned，全部按时间顺序排列；pinned固定排在最前面
+  buckets = [...buckets].sort((a, b) => {
+    const ap = !!a.pinned, bp = !!b.pinned;
+    if (ap !== bp) return ap ? -1 : 1;
+    return new Date(b.created || 0) - new Date(a.created || 0);
+  });
   if (!buckets.length) { list.innerHTML = '<div class="loading">没有记忆桶</div>'; return; }
   list.innerHTML = buckets.map(b => {
     const vPos = Math.round(b.valence * 100);
     const modelV = b.model_valence != null ? ' → V' + b.model_valence.toFixed(1) : '';
     const timeAgo = formatTimeAgo(b.last_active || b.created);
+    const idTag = b.type === 'feel' ? `<span class="bucket-id">${esc(b.id)}</span>` : '';
     return `<div class="bucket-row" onclick="showDetail('${b.id}')">
       <span class="icon">${bucketIcon(b)}</span>
-      <span class="name" title="${esc(b.name)}">${esc(b.name)}</span>
+      <span class="name" title="${esc(b.name)}">${esc(b.name)}${idTag}</span>
       <span class="domain">${(b.domain || []).join(' · ')}</span>
       <span class="emotion"><span class="v-bar"><span class="v-dot" style="left:${vPos}%"></span></span>${modelV}</span>
       <span class="score">${b.score.toFixed(2)}</span>
