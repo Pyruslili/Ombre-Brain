@@ -2403,6 +2403,7 @@ async def api_network(request):
                 "name": meta.get("name", bid),
                 "type": meta.get("type", "dynamic"),
                 "domain": meta.get("domain", []),
+                "tags": meta.get("tags", []),
                 "valence": meta.get("valence", 0.5),
                 "arousal": meta.get("arousal", 0.3),
                 "score": decay_engine.calculate_score(meta),

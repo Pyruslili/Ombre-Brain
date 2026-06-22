@@ -539,32 +539,32 @@ label {
   min-height: 460px;
   overflow: hidden;
   isolation: isolate;
-  background:
-    radial-gradient(circle at 15% 22%, rgba(120,166,209,.10), transparent 27%),
-    radial-gradient(circle at 82% 74%, rgba(196,122,56,.12), transparent 31%),
-    linear-gradient(145deg, rgba(37,26,23,.58), rgba(7,5,5,.88));
+  background: rgba(10,7,5,.86);
 }
 .dream-card::before {
   content: "";
   position: absolute;
-  inset: -18%;
+  inset: 0;
   z-index: -1;
   background:
-    radial-gradient(circle at 22% 30%, rgba(239,224,196,.24) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 68% 18%, rgba(146,178,210,.22) 0 1px, transparent 1.7px),
-    radial-gradient(circle at 78% 72%, rgba(232,149,79,.20) 0 1.2px, transparent 2px),
-    radial-gradient(ellipse at center, rgba(104,76,63,.10), transparent 56%);
-  background-size: 97px 113px, 149px 131px, 181px 163px, auto;
-  filter: blur(.2px);
-  animation: dreamDrift 18s ease-in-out infinite alternate;
+    repeating-linear-gradient(96deg, transparent 0 8.4%, rgba(214,190,156,.026) 8.5%, transparent 8.62%),
+    repeating-linear-gradient(84deg, transparent 0 13.6%, rgba(120,166,209,.018) 13.7%, transparent 13.82%);
+  opacity: .78;
+  transform-origin: center top;
+  animation: dreamVeil 24s ease-in-out infinite alternate;
 }
 .dream-card::after {
   content: "";
   position: absolute;
-  inset: 0;
+  top: 5.4rem;
+  right: clamp(1.5rem,4vw,3rem);
+  width: 58px;
+  height: 58px;
   z-index: -1;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(3,2,1,.12), transparent 22%, transparent 72%, rgba(3,2,1,.45));
+  border: 1px solid rgba(214,190,156,.13);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 12px rgba(10,7,5,.82), inset 0 0 0 13px rgba(120,166,209,.08);
 }
 .dream-card .reverie-head, .dream-card .dream-body { position: relative; z-index: 1; }
 .mood-card { grid-area: weather; height: 100%; }
@@ -602,16 +602,16 @@ label {
 .mood-tooltip.show, .spark-tooltip.show { display: block; }
 .dream-body {
   max-width: 54rem;
-  margin: clamp(1.2rem,4vh,3.5rem) auto 0;
-  padding: clamp(1.4rem,3vw,2.5rem) clamp(1.15rem,3.5vw,3rem);
+  margin: clamp(1rem,3vh,2.5rem) auto 0;
+  padding: clamp(1.35rem,3vw,2.4rem) clamp(1.2rem,3.5vw,3rem);
   color: var(--ink-soft);
   font: 300 .94rem/2.05 var(--font-body);
-  border-block: 1px solid rgba(225,164,97,.11);
-  background: linear-gradient(90deg, transparent, rgba(255,224,186,.025) 18%, rgba(120,166,209,.025) 76%, transparent);
-  text-shadow: 0 1px 18px rgba(0,0,0,.55);
+  border-left: 1px solid rgba(225,164,97,.18);
+  border-bottom: 1px solid rgba(120,166,209,.10);
+  background: rgba(8,5,3,.18);
 }
 .dream-text { white-space: pre-wrap; text-wrap: pretty; }
-.dream-text::first-letter { color: var(--accent-deep); font: 300 2.2rem/.8 var(--font-display); }
+.dream-text::first-letter { color: var(--ink); font: 300 2.1rem/.8 var(--font-display); }
 .dream-empty { color: var(--mute); }
 .spark-wrap { position: relative; min-height: 54px; }
 .spark-wrap svg { width: 100%; height: 52px; overflow: visible; }
@@ -622,7 +622,23 @@ label {
   color: var(--mute); font: 300 var(--fs-micro) var(--font-mono); text-transform: uppercase; letter-spacing: .1em;
 }
 .legend-item { display: flex; align-items: center; gap: .4rem; }
-#network-canvas { display: block; width: 100%; height: min(70vh,720px); background: radial-gradient(circle at center, rgba(196,122,56,.045), transparent 52%); }
+.legend-orb { width: 7px; height: 7px; border-radius: 50%; color: var(--ink-soft); background: currentColor; box-shadow: 0 0 8px currentColor; }
+.legend-orb.feel { color: var(--cool); }
+.legend-orb.pinned { color: var(--accent-deep); }
+.legend-orb.archived { color: var(--mute); opacity: .48; }
+.network-stage { position: relative; min-height: min(72vh,760px); overflow: hidden; border-bottom: 1px solid var(--line-soft); }
+#network-canvas { display: block; width: 100%; height: min(72vh,760px); cursor: grab; }
+#network-canvas:active { cursor: grabbing; }
+.network-tooltip {
+  position: absolute; z-index: 4; display: none; pointer-events: none;
+  max-width: 260px; padding: .7rem .8rem;
+  border: 1px solid var(--line); background: rgba(8,5,3,.96); color: var(--ink-soft);
+  box-shadow: 0 16px 44px rgba(0,0,0,.38); font: 300 .76rem/1.55 var(--font-body);
+}
+.network-tooltip.show { display: block; }
+.network-tooltip strong { display: block; margin-bottom: .28rem; color: var(--ink); font: 300 1rem/1.2 var(--font-display); }
+.network-tooltip small { color: var(--mute); font: 300 .58rem/1.5 var(--font-mono); letter-spacing: .06em; }
+.network-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mute); font: 300 .68rem var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 
 #desire-view > .drift-shell { max-width: 980px; margin: 0 auto; }
 .drift-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.4rem; }
@@ -657,7 +673,7 @@ label {
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
 @keyframes driftSpin { to { transform: rotate(360deg); } }
-@keyframes dreamDrift { from { opacity: .58; transform: translate3d(-1%,1%,0) scale(.99); } to { opacity: 1; transform: translate3d(1%,-1%,0) scale(1.035); } }
+@keyframes dreamVeil { from { opacity: .45; transform: skewX(-.4deg) translateX(-.4%); } to { opacity: .82; transform: skewX(.5deg) translateX(.5%); } }
 
 .config-section { margin-bottom: 1rem; }
 .config-section h3 { display: flex; align-items: center; gap: .7rem; margin-bottom: .45rem; }
@@ -761,14 +777,15 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 .detail-meta .numeric { color: var(--accent-deep); font: 400 1.28rem/1.2 var(--font-number); }
 .detail-content { white-space: pre-wrap; color: var(--ink-soft); font-size: .88rem; line-height: 1.85; }
 .detail-body-label { display: block; margin-bottom: .65rem; }
-.detail-edit textarea { min-height: 280px; padding: .85rem; border: 1px solid var(--line); font-size: .9rem; line-height: 1.8; resize: vertical; }
+.detail-content.detail-edit { white-space: normal; }
+.detail-edit textarea { display: block; width: 100%; min-height: 180px; max-height: 360px; padding: .72rem .8rem; border: 1px solid var(--line); font-size: .88rem; line-height: 1.72; resize: vertical; overflow-y: auto; }
 .detail-actions { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line-soft); }
 .detail-actions button:last-child { opacity: .32; }
 .detail-actions button:last-child:hover { opacity: .8; }
-.tag-editor { margin-top: 1.2rem; }
+.tag-editor { margin-top: .8rem; }
 .tag-editor label { display: block; margin-bottom: .35rem; }
-.tag-editor input { padding: .68rem .75rem; border: 1px solid var(--line); font-size: .86rem; }
-.tag-editor-hint { margin-top: .4rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .05em; }
+.tag-editor textarea { min-height: 84px; max-height: none; padding: .62rem .75rem; border: 1px solid var(--line); font-size: .84rem; line-height: 1.65; resize: vertical; overflow: hidden; }
+.tag-editor-hint { margin-top: .3rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .05em; }
 
 #auth-overlay {
   position: fixed; inset: 0; z-index: 200;
@@ -916,8 +933,8 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
   <div class="tab active" data-index="01" data-tab="list">Traces</div>
   <div class="tab" data-index="02" data-tab="breath">Breath</div>
   <div class="tab" data-index="03" data-tab="reverie">Reverie</div>
-  <div class="tab" data-index="04" data-tab="network">Constellations</div>
-  <div class="tab" data-index="05" data-tab="desire">Drift</div>
+  <div class="tab" data-index="04" data-tab="desire">Drift</div>
+  <div class="tab" data-index="05" data-tab="network">Constellations</div>
   <div class="tab" data-index="06" data-tab="import">Fragments</div>
   <div class="tab" data-index="07" data-tab="config">Axis</div>
   <div class="tab secondary-tab" data-tab="settings">Private settings</div>
@@ -1021,25 +1038,17 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 
 <div class="content" id="network-view" style="display:none">
   <div class="network-legend">
-    <div class="legend-item">
-      <svg id="legend-memory-svg" width="14" height="14" viewBox="0 0 14 14" style="display:inline-block;vertical-align:middle"></svg>
-      memory
-    </div>
-    <div class="legend-item">
-      <svg id="legend-feel-svg" width="14" height="14" viewBox="0 0 14 14" style="display:inline-block;vertical-align:middle"></svg>
-      feel
-    </div>
-    <div class="legend-item">
-      <svg id="legend-pinned-svg" width="14" height="14" viewBox="0 0 14 14" style="display:inline-block;vertical-align:middle"></svg>
-      pinned
-    </div>
-    <div class="legend-item">
-      <svg id="legend-archived-svg" width="14" height="14" viewBox="0 0 14 14" style="display:inline-block;vertical-align:middle"></svg>
-      archived
-    </div>
-    <div class="legend-item" style="margin-left:auto;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.16em;font-size:0.62rem;">What remains, finds its orbit.</div>
+    <div class="legend-item"><span class="legend-orb"></span>memory</div>
+    <div class="legend-item"><span class="legend-orb feel"></span>feel</div>
+    <div class="legend-item"><span class="legend-orb pinned"></span>pinned</div>
+    <div class="legend-item"><span class="legend-orb archived"></span>settled</div>
+    <div class="legend-item" style="margin-left:auto;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.16em;font-size:0.62rem;">Shared meaning becomes gravity.</div>
   </div>
-  <canvas id="network-canvas"></canvas>
+  <div class="network-stage" id="network-stage">
+    <canvas id="network-canvas"></canvas>
+    <div class="network-tooltip" id="network-tooltip"></div>
+    <div class="network-empty" id="network-empty" style="display:none">No relations in orbit yet</div>
+  </div>
 </div>
 
 <div class="content" id="desire-view" style="display:none">
@@ -1313,7 +1322,7 @@ function applyTheme(theme) {
       if (legArchSvg) legArchSvg.innerHTML = sakuraSVG('#f0e2e7');
     }
   }
-  if (window.networkData) {
+  if (window.networkData && document.getElementById('network-view')?.style.display !== 'none') {
     setTimeout(() => loadNetwork(), 50);
   }
 }
@@ -1727,15 +1736,28 @@ function startEdit() {
   body.innerHTML = `<textarea id="edit-ta" aria-label="正文"></textarea>
     <div class="tag-editor">
       <label for="edit-tags">标签</label>
-      <input id="edit-tags" type="text" placeholder="用逗号分隔标签">
+      <textarea id="edit-tags" rows="3" placeholder="用逗号分隔标签"></textarea>
       <div class="tag-editor-hint">直接修改或删除原有标签 · 逗号分隔</div>
     </div>
-    <div style="display:flex;gap:0.5rem;margin-top:1rem">
+    <div style="display:flex;gap:0.5rem;margin-top:.7rem">
       <button class="btn-primary" onclick="saveBucket('${id}')">保存</button>
       <button onclick="showDetail('${id}')">取消</button>
     </div>`;
-  document.getElementById('edit-ta').value = currentContent;
-  document.getElementById('edit-tags').value = currentTags.join(', ');
+  const contentField = document.getElementById('edit-ta');
+  const tagField = document.getElementById('edit-tags');
+  contentField.value = currentContent;
+  tagField.value = currentTags.join(', ');
+  autoSizeEditField(contentField, 180, 360);
+  autoSizeEditField(tagField, 84);
+  contentField.addEventListener('input', () => autoSizeEditField(contentField, 180, 360));
+  tagField.addEventListener('input', () => autoSizeEditField(tagField, 84));
+}
+
+function autoSizeEditField(field, minHeight, maxHeight = Infinity) {
+  field.style.height = 'auto';
+  const height = Math.max(minHeight, Math.min(field.scrollHeight + 2, maxHeight));
+  field.style.height = height + 'px';
+  field.style.overflowY = field.scrollHeight > maxHeight ? 'auto' : 'hidden';
 }
 
 async function saveBucket(id) {
@@ -1809,7 +1831,7 @@ function closeDetail() {
 /* ============================================================
    Network View
    ============================================================ */
-async function loadNetwork() {
+async function loadLegacyNetwork() {
   const canvas2 = document.getElementById('network-canvas');
   canvas2.width = canvas2.offsetWidth * window.devicePixelRatio;
   canvas2.height = canvas2.offsetHeight * window.devicePixelRatio;
@@ -2085,6 +2107,277 @@ function drawNetworkNote(ctx, x, y, size, color, type, opacity) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/* Spherical memory relationship map. Embedding edges are preferred;
+   shared tags/domains supply sparse fallback gravity when embeddings are absent. */
+let sphereNetworkAnimId = 0;
+let sphereNetworkState = null;
+
+async function loadNetwork() {
+  const canvas = document.getElementById('network-canvas');
+  const empty = document.getElementById('network-empty');
+  if (!canvas) return;
+  cancelAnimationFrame(sphereNetworkAnimId);
+  empty.style.display = 'none';
+
+  try {
+    const res = await fetch(BASE + '/api/network');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    window.networkData = data;
+    startSphereNetwork(canvas, data);
+  } catch (error) {
+    empty.textContent = 'Constellation out of reach · ' + error.message;
+    empty.style.display = 'grid';
+  }
+}
+
+function startSphereNetwork(canvas, data) {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const sourceNodes = Array.isArray(data.nodes) ? [...data.nodes] : [];
+  const selected = sourceNodes
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || finiteNumber(b.score) - finiteNumber(a.score))
+    .slice(0, 220);
+  const selectedIds = new Set(selected.map(node => node.id));
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const nodes = selected.map((node, index) => {
+    const y = selected.length === 1 ? 0 : 1 - (index / (selected.length - 1)) * 2;
+    const ring = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = index * goldenAngle;
+    return {
+      data: node,
+      base: { x: Math.cos(theta) * ring, y, z: Math.sin(theta) * ring },
+      screen: { x: 0, y: 0, z: 0, scale: 1, radius: 2 },
+      facets: new Set([...normalizeTags(node.domain), ...normalizeTags(node.tags)].map(value => value.toLowerCase()))
+    };
+  });
+  const byId = new Map(nodes.map(node => [node.data.id, node]));
+  const edgeKeys = new Set();
+  let edges = (Array.isArray(data.edges) ? data.edges : [])
+    .filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target))
+    .sort((a, b) => finiteNumber(b.similarity) - finiteNumber(a.similarity))
+    .slice(0, 480)
+    .map(edge => {
+      const key = [edge.source, edge.target].sort().join('|');
+      edgeKeys.add(key);
+      return { ...edge, sourceNode: byId.get(edge.source), targetNode: byId.get(edge.target), kind: 'semantic' };
+    });
+
+  const fallback = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const key = [a.data.id, b.data.id].sort().join('|');
+      if (edgeKeys.has(key)) continue;
+      let shared = 0;
+      for (const facet of a.facets) if (b.facets.has(facet)) shared++;
+      if (!shared) continue;
+      fallback.push({
+        source: a.data.id, target: b.data.id,
+        sourceNode: a, targetNode: b,
+        similarity: .42 + Math.min(.24, shared * .08), kind: 'facet', shared
+      });
+    }
+  }
+  const degree = new Map();
+  fallback.sort((a, b) => b.shared - a.shared || finiteNumber(b.sourceNode.data.score) - finiteNumber(a.sourceNode.data.score));
+  for (const edge of fallback) {
+    if (edges.length >= 560) break;
+    const sourceDegree = degree.get(edge.source) || 0;
+    const targetDegree = degree.get(edge.target) || 0;
+    if (sourceDegree >= 4 || targetDegree >= 4) continue;
+    edges.push(edge);
+    degree.set(edge.source, sourceDegree + 1);
+    degree.set(edge.target, targetDegree + 1);
+  }
+
+  sphereNetworkState = {
+    canvas, ctx: canvas.getContext('2d'), nodes, edges, reduced,
+    angleY: 0, angleX: -.14, pointerX: -9999, pointerY: -9999,
+    hover: null, dragging: false, dragX: 0, dragY: 0, lastTime: 0
+  };
+
+  const resize = () => resizeSphereCanvas(sphereNetworkState);
+  if (canvas.__networkResize) removeEventListener('resize', canvas.__networkResize);
+  canvas.__networkResize = resize;
+  addEventListener('resize', resize, { passive: true });
+  resize();
+
+  canvas.onpointerdown = event => {
+    sphereNetworkState.dragging = true;
+    sphereNetworkState.dragX = event.clientX;
+    sphereNetworkState.dragY = event.clientY;
+    canvas.setPointerCapture?.(event.pointerId);
+  };
+  canvas.onpointermove = event => {
+    const state = sphereNetworkState;
+    const rect = canvas.getBoundingClientRect();
+    state.pointerX = event.clientX - rect.left;
+    state.pointerY = event.clientY - rect.top;
+    if (state.dragging) {
+      state.angleY += (event.clientX - state.dragX) * .006;
+      state.angleX = Math.max(-.75, Math.min(.75, state.angleX + (event.clientY - state.dragY) * .004));
+      state.dragX = event.clientX;
+      state.dragY = event.clientY;
+    }
+  };
+  canvas.onpointerup = event => {
+    sphereNetworkState.dragging = false;
+    canvas.releasePointerCapture?.(event.pointerId);
+  };
+  canvas.onpointerleave = () => {
+    sphereNetworkState.dragging = false;
+    sphereNetworkState.pointerX = -9999;
+    sphereNetworkState.pointerY = -9999;
+    hideNetworkTooltip();
+  };
+  canvas.onclick = () => {
+    if (sphereNetworkState.hover) showDetail(sphereNetworkState.hover.data.id);
+  };
+
+  if (!nodes.length) {
+    const empty = document.getElementById('network-empty');
+    empty.textContent = 'No memories in orbit yet';
+    empty.style.display = 'grid';
+    drawSphereNetwork(0);
+    return;
+  }
+  sphereNetworkAnimId = requestAnimationFrame(drawSphereNetwork);
+}
+
+function resizeSphereCanvas(state) {
+  if (!state?.canvas) return;
+  const dpr = Math.min(devicePixelRatio || 1, 1.6);
+  const width = state.canvas.offsetWidth;
+  const height = state.canvas.offsetHeight;
+  state.canvas.width = Math.round(width * dpr);
+  state.canvas.height = Math.round(height * dpr);
+  state.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  state.width = width;
+  state.height = height;
+}
+
+function drawSphereNetwork(time) {
+  const state = sphereNetworkState;
+  if (!state) return;
+  const { ctx, width: W, height: H } = state;
+  const dt = Math.min(40, Math.max(0, time - (state.lastTime || time)));
+  state.lastTime = time;
+  if (!state.reduced && !state.dragging) state.angleY += dt * .000045;
+
+  ctx.clearRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const radius = Math.max(120, Math.min(W * .39, H * .43));
+  const cosY = Math.cos(state.angleY), sinY = Math.sin(state.angleY);
+  const cosX = Math.cos(state.angleX), sinX = Math.sin(state.angleX);
+
+  ctx.save();
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--line-soft').trim();
+  ctx.globalAlpha = .62;
+  ctx.lineWidth = .6;
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+  ctx.globalAlpha = .28;
+  ctx.beginPath(); ctx.ellipse(cx, cy, radius, radius * .28, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(cx, cy, radius * .29, radius, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+
+  for (const node of state.nodes) {
+    const point = node.base;
+    const x1 = point.x * cosY - point.z * sinY;
+    const z1 = point.x * sinY + point.z * cosY;
+    const y2 = point.y * cosX - z1 * sinX;
+    const z2 = point.y * sinX + z1 * cosX;
+    const perspective = .76 + (z2 + 1) * .22;
+    const importance = Math.max(0, Math.min(10, finiteNumber(node.data.score, 5)));
+    node.screen = {
+      x: cx + x1 * radius * perspective,
+      y: cy + y2 * radius * perspective,
+      z: z2,
+      scale: perspective,
+      radius: (2.1 + importance * .16 + (node.data.pinned ? 1.45 : 0)) * perspective
+    };
+  }
+
+  let hover = null;
+  let hoverDistance = Infinity;
+  for (const node of state.nodes) {
+    const dx = node.screen.x - state.pointerX;
+    const dy = node.screen.y - state.pointerY;
+    const distance = Math.hypot(dx, dy);
+    if (distance < Math.max(14, node.screen.radius + 7) && distance < hoverDistance) {
+      hover = node;
+      hoverDistance = distance;
+    }
+  }
+  state.hover = hover;
+  state.canvas.style.cursor = hover ? 'pointer' : (state.dragging ? 'grabbing' : 'grab');
+
+  const hoverId = hover?.data.id;
+  for (const edge of state.edges) {
+    const a = edge.sourceNode.screen, b = edge.targetNode.screen;
+    const connected = hoverId && (edge.source === hoverId || edge.target === hoverId);
+    const depth = Math.max(.12, ((a.z + b.z) / 2 + 1) / 2);
+    const similarity = Math.max(.35, finiteNumber(edge.similarity, .5));
+    ctx.strokeStyle = connected ? 'rgba(232,149,79,.72)' : (edge.kind === 'semantic' ? 'rgba(146,178,210,.46)' : 'rgba(214,190,156,.32)');
+    ctx.globalAlpha = connected ? .95 : (hoverId ? .10 : (.24 + depth * .38) * similarity);
+    ctx.lineWidth = connected ? 1 : .42 + similarity * .42;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  const dark = document.documentElement.dataset.theme === 'nocturne';
+  const ordered = [...state.nodes].sort((a, b) => a.screen.z - b.screen.z);
+  for (const node of ordered) {
+    const { data, screen } = node;
+    const settled = data.digested || data.resolved || data.type === 'archived';
+    const color = data.pinned ? (dark ? '#e8954f' : '#b56b35')
+      : data.type === 'feel' ? (dark ? '#8eb5d8' : '#5f86aa')
+      : settled ? (dark ? '#79675a' : '#bba89b')
+      : (dark ? '#ead8ba' : '#78645a');
+    const active = hoverId === data.id;
+    ctx.globalAlpha = active ? 1 : Math.max(.24, .42 + (screen.z + 1) * .27) * (settled ? .58 : 1);
+    if (data.pinned || active) {
+      ctx.beginPath();
+      ctx.fillStyle = data.pinned ? 'rgba(232,149,79,.09)' : 'rgba(146,178,210,.10)';
+      ctx.arc(screen.x, screen.y, screen.radius * 3.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.arc(screen.x, screen.y, screen.radius * (active ? 1.45 : 1), 0, Math.PI * 2);
+    ctx.fill();
+    if (active || (data.pinned && screen.z > -.25)) {
+      const name = String(data.name || data.id);
+      ctx.globalAlpha = active ? 1 : .62;
+      ctx.fillStyle = dark ? '#e7d7bd' : '#57464b';
+      ctx.font = active ? '12px Inter, "PingFang SC", sans-serif' : '10px Inter, "PingFang SC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(name.length > 18 ? name.slice(0, 18) + '…' : name, screen.x, screen.y + screen.radius + 16);
+    }
+  }
+  ctx.globalAlpha = 1;
+  updateNetworkTooltip(state);
+  if (!state.reduced) sphereNetworkAnimId = requestAnimationFrame(drawSphereNetwork);
+}
+
+function updateNetworkTooltip(state) {
+  const tooltip = document.getElementById('network-tooltip');
+  const node = state.hover;
+  if (!tooltip || !node) return hideNetworkTooltip();
+  const data = node.data;
+  const facets = [...normalizeTags(data.domain), ...normalizeTags(data.tags)].slice(0, 8);
+  tooltip.innerHTML = `<strong>${esc(String(data.name || data.id))}</strong><small>${esc(String(data.type || 'memory'))} · gravity ${finiteNumber(data.score).toFixed(2)}${facets.length ? '<br>' + esc(facets.join(' · ')) : ''}</small>`;
+  tooltip.classList.add('show');
+  const stage = document.getElementById('network-stage');
+  const maxLeft = Math.max(8, stage.clientWidth - tooltip.offsetWidth - 8);
+  const maxTop = Math.max(8, stage.clientHeight - tooltip.offsetHeight - 8);
+  tooltip.style.left = Math.max(8, Math.min(node.screen.x + 14, maxLeft)) + 'px';
+  tooltip.style.top = Math.max(8, Math.min(node.screen.y - tooltip.offsetHeight / 2, maxTop)) + 'px';
+}
+
+function hideNetworkTooltip() {
+  document.getElementById('network-tooltip')?.classList.remove('show');
 }
 
 /* ============================================================
@@ -2470,6 +2763,10 @@ function initEvents() {
 
 function switchChapter(target) {
   const visibleTarget = target === 'settings' ? 'config' : target;
+  if (target !== 'network') {
+    cancelAnimationFrame(sphereNetworkAnimId);
+    hideNetworkTooltip();
+  }
   document.querySelectorAll('.tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === visibleTarget);
   });
@@ -2502,6 +2799,7 @@ function initArchiveStars() {
   let stars = [];
   let dpr = 1;
   let raf = 0;
+  let lastStarFrame = 0;
 
   function makeStars() {
     const count = Math.max(220, Math.min(480, Math.round(innerWidth * innerHeight / 3800)));
@@ -2522,6 +2820,8 @@ function initArchiveStars() {
         phase2: Math.random() * Math.PI * 2,
         speed: .00012 + Math.random() * .00028,
         drift: (.35 + Math.random() * 1.8) * depth,
+        vx: (Math.random() - .5) * (.004 + depth * .008),
+        vy: (Math.random() - .56) * (.003 + depth * .006),
         halo: bright ? 6 + Math.random() * 11 : (Math.random() > .82 ? 2.8 + Math.random() * 3.5 : 0),
         color
       };
@@ -2540,9 +2840,15 @@ function initArchiveStars() {
   }
 
   function drawStars(time, loop = true) {
+    const dt = reduced ? 0 : Math.min(40, Math.max(0, time - (lastStarFrame || time)));
+    lastStarFrame = time;
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     ctx.globalCompositeOperation = 'lighter';
     for (const star of stars) {
+      if (!reduced) {
+        star.x = (star.x + star.vx * dt + innerWidth) % innerWidth;
+        star.y = (star.y + star.vy * dt + innerHeight) % innerHeight;
+      }
       const breathe = reduced ? .82 : .72
         + Math.sin(time * star.speed + star.phase) * .28
         + Math.sin(time * star.speed * .37 + star.phase2) * .12;
