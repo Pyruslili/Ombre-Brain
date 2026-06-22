@@ -14,8 +14,8 @@
 :root {
   --bg: #030201;
   --bg-deep: #080503;
-  --surface: rgba(44, 29, 18, .24);
-  --surface-soft: rgba(255, 224, 186, .028);
+  --surface: rgba(48, 31, 20, .34);
+  --surface-soft: rgba(255, 224, 186, .045);
   --line: rgba(225, 164, 97, .12);
   --line-soft: rgba(239, 224, 196, .075);
   --ink: rgba(239, 224, 196, .94);
@@ -28,6 +28,7 @@
   --warning: #c99862;
   --negative: #a86c61;
   --font-display: "Cormorant Infant", "Cormorant Garamond", Georgia, serif;
+  --font-number: "Cormorant Garamond", Georgia, serif;
   --font-body: Inter, "PingFang SC", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
   --fs-micro: .62rem;
@@ -57,8 +58,9 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   background:
-    radial-gradient(ellipse at 76% 18%, rgba(89, 48, 24, .20), transparent 27%),
-    radial-gradient(ellipse at 12% 72%, rgba(47, 27, 15, .16), transparent 32%),
+    radial-gradient(ellipse at 76% 18%, rgba(112, 64, 34, .24), transparent 30%),
+    radial-gradient(ellipse at 12% 72%, rgba(61, 35, 20, .18), transparent 34%),
+    linear-gradient(145deg, rgba(14,8,4,.22), transparent 56%),
     var(--bg);
   color: var(--ink);
   font: 300 16px/1.65 var(--font-body);
@@ -74,10 +76,30 @@ body::before {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.17'/%3E%3C/svg%3E");
   mix-blend-mode: soft-light;
 }
+#archive-stars {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: .72;
+  mix-blend-mode: screen;
+}
 ::selection { background: rgba(196,122,56,.32); color: var(--ink); }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
 a { color: var(--accent-deep); }
+.numeric,
+.tri-num,
+.score-final,
+.score-row .rank,
+.flow-num,
+.bucket-index,
+.bucket-tail,
+.tt-meta,
+#import-progress b,
+input[type="number"] { font-family: var(--font-number); font-variant-numeric: oldstyle-nums proportional-nums; }
 
 /* ============================================================
    Hero / gate
@@ -208,9 +230,10 @@ a { color: var(--accent-deep); }
   grid-template-columns: repeat(7, minmax(0,1fr));
   gap: 0;
   padding: 0 var(--page-pad);
-  background: rgba(3,2,1,.76);
+  background: rgba(10,6,3,.76);
   border-bottom: 1px solid var(--line-soft);
-  backdrop-filter: blur(18px);
+  box-shadow: 0 18px 54px rgba(0,0,0,.16);
+  backdrop-filter: blur(22px) saturate(112%);
 }
 .tab-group { display: contents; }
 .tab-group::before { display: none; }
@@ -231,6 +254,7 @@ a { color: var(--accent-deep); }
   content: attr(data-index);
   color: rgba(198,170,135,.23);
   font-size: var(--fs-micro);
+  font-family: var(--font-number);
   transition: color .35s ease;
 }
 .tab::after {
@@ -279,6 +303,7 @@ button {
   min-height: 34px;
   padding: .55rem .9rem;
   border: 1px solid var(--line);
+  border-radius: 999px;
   background: transparent;
   color: var(--ink-soft);
   font: 400 .64rem/1 var(--font-mono);
@@ -332,7 +357,7 @@ label {
   min-height: auto; padding: .2rem 0;
   border: 0; background: none;
   color: var(--mute);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-meta);
 }
 .filter-btn svg { width: 10px; height: 10px; margin-right: .3rem; vertical-align: -1px; }
 .filter-btn:hover, .filter-btn.active { color: var(--ink); background: none; }
@@ -351,6 +376,8 @@ label {
   cursor: pointer;
   overflow: hidden;
   transition: padding .55s cubic-bezier(.16,1,.3,1), background .45s ease;
+  animation: archiveRowIn .62s both;
+  animation-delay: calc(var(--row-order, 0) * 38ms);
 }
 .bucket-row::after {
   content: "";
@@ -365,7 +392,7 @@ label {
 .bucket-row:hover::after, .bucket-row.selected::after { opacity: 1; }
 .bucket-index {
   color: rgba(239,224,196,.28);
-  font: 300 .62rem/1 var(--font-mono);
+  font: 300 .82rem/1 var(--font-number);
   letter-spacing: .12em;
   transition: color .4s, transform .5s cubic-bezier(.16,1,.3,1);
 }
@@ -379,7 +406,7 @@ label {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--ink);
-  font: 300 clamp(1.05rem,1.35vw,1.32rem)/1.2 var(--font-display);
+  font: 300 clamp(.98rem,1.18vw,1.16rem)/1.25 var(--font-display);
   letter-spacing: -.01em;
 }
 .bucket-row .name svg { width: 13px; height: 13px; flex: 0 0 13px; color: var(--accent); margin-right: .55rem; }
@@ -399,6 +426,7 @@ label {
   text-transform: uppercase;
 }
 .bucket-tail { display: flex; flex-direction: column; align-items: flex-end; gap: .35rem; }
+.bucket-row .time, .bucket-row .score { font-family: var(--font-number); font-size: .78rem; letter-spacing: .04em; }
 .bucket-row .score { color: var(--ink-soft); opacity: 0; transform: translateY(3px); transition: opacity .3s, transform .3s; }
 .bucket-row:hover .score, .bucket-row.selected .score { opacity: .72; transform: none; }
 
@@ -408,21 +436,47 @@ label {
 .breath-flow {
   display: grid;
   grid-template-columns: repeat(5,1fr);
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(64,40,24,.30), rgba(20,12,7,.44)),
+    var(--surface-soft);
+  box-shadow: inset 0 1px rgba(255,224,186,.035), 0 22px 70px rgba(0,0,0,.12);
 }
-.flow-step { padding: 1.25rem 1rem 1.25rem 0; color: var(--mute); border-right: 1px solid var(--line-soft); }
+.flow-step {
+  position: relative;
+  min-width: 0;
+  padding: 1.35rem 1.2rem 1.45rem;
+  color: var(--mute);
+  border-right: 1px solid var(--line-soft);
+  transition: color .35s, background .35s, box-shadow .35s;
+  animation: quietStepIn .65s both;
+}
+.flow-step:nth-child(2) { animation-delay: .05s; }
+.flow-step:nth-child(3) { animation-delay: .10s; }
+.flow-step:nth-child(4) { animation-delay: .15s; }
+.flow-step:nth-child(5) { animation-delay: .20s; }
 .flow-step:last-child { border-right: 0; }
-.flow-step strong { display: block; margin-bottom: .2rem; color: var(--ink-soft); font: 300 clamp(.88rem,1vw,1rem)/1.25 var(--font-display); }
-.flow-step small { font: 300 var(--fs-micro)/1.55 var(--font-mono); letter-spacing: .12em; }
-.flow-step.active { color: var(--accent-deep); }
+.flow-head { display: flex; align-items: baseline; gap: .72rem; min-width: 0; }
+.flow-num { flex: 0 0 auto; color: var(--accent-deep); font: 300 1.45rem/1 var(--font-number); }
+.flow-title { overflow: hidden; color: var(--ink-soft); font: 400 var(--fs-label)/1.2 var(--font-body); letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; }
+.flow-step small { display: block; margin: .55rem 0 0 2.15rem; color: var(--mute); font: 300 var(--fs-micro)/1.55 var(--font-mono); letter-spacing: .08em; }
+.flow-step::after { content: ""; position: absolute; left: 1.2rem; right: 1.2rem; bottom: 0; height: 1px; background: var(--accent-deep); opacity: 0; transform: scaleX(.15); transform-origin: left; transition: opacity .35s, transform .5s cubic-bezier(.16,1,.3,1); }
+.flow-step:hover { color: var(--ink-soft); background: rgba(196,122,56,.035); }
+.flow-step.active { color: var(--accent-deep); background: rgba(196,122,56,.055); box-shadow: inset 0 0 44px rgba(196,122,56,.035); }
+.flow-step.active::after { opacity: .72; transform: scaleX(1); }
 .breath-controls {
   width: min(100%, 840px);
-  margin: 3.5rem 0 2.5rem;
+  margin: 2rem 0 2.5rem;
   display: grid;
   grid-template-columns: auto minmax(140px,260px) auto 72px auto 72px auto;
   gap: .7rem 1rem;
   align-items: end;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: rgba(35,22,14,.24);
 }
 .breath-controls label { font-size: var(--fs-micro); letter-spacing: .12em; }
 .breath-controls input { padding: .52rem 0; font-size: var(--fs-body-sm); }
@@ -431,7 +485,7 @@ label {
 .breath-result { padding: 1.5rem 0; border-bottom: 1px solid var(--line-soft); }
 .breath-result .br-name { font: 300 1.6rem/1 var(--font-display); }
 .score-row { display: grid; grid-template-columns: 40px minmax(180px,240px) 1fr 70px; gap: 1rem; padding: .85rem 0; align-items: center; border-bottom: 1px solid var(--line-soft); }
-.score-row .rank { color: var(--mute); font: 300 .72rem/1 var(--font-mono); }
+.score-row .rank { color: var(--mute); font: 300 .88rem/1 var(--font-number); }
 .score-row .name { display: flex; align-items: center; gap: .5rem; min-width: 0; color: var(--ink-soft); font: 300 .82rem/1.35 var(--font-body); }
 .score-row .name svg { width: 13px; height: 13px; flex: 0 0 13px; color: var(--accent-deep); }
 .score-bars { display: flex; flex-direction: column; gap: .25rem; margin: 0; }
@@ -439,21 +493,23 @@ label {
 .score-bar-label { display: flex; justify-content: space-between; color: var(--mute); font: 300 var(--fs-micro)/1 var(--font-mono); letter-spacing: .05em; }
 .score-bar-track, .tri-bar { height: 1px; background: var(--line); }
 .score-bar-fill, .tri-bar-fill { height: 100%; background: var(--accent); }
-.score-final { text-align: right; color: var(--ink-soft); font: 300 1rem/1 var(--font-display); }
+.score-final { text-align: right; color: var(--ink-soft); font: 300 1.08rem/1 var(--font-number); }
 .score-final small { margin-left: .25rem; color: var(--mute); font: var(--fs-micro) var(--font-mono); }
 
-.reverie-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 1px; background: var(--line); }
+.reverie-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 1rem; background: transparent; }
 .reverie-card, .config-section {
-  background: rgba(8,5,3,.84);
+  background: linear-gradient(145deg, rgba(52,33,21,.38), rgba(12,7,4,.72));
   padding: clamp(1.5rem, 3vw, 3rem);
-  border: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 20px;
+  box-shadow: inset 0 1px rgba(255,224,186,.025), 0 24px 70px rgba(0,0,0,.10);
 }
 .density-card { grid-column: 1 / -1; }
 .reverie-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
 .reverie-title, .config-section h3 { font: 300 var(--fs-section)/1.1 var(--font-display); color: var(--ink); }
 .reverie-sub, .tri-label, .tri-desc, .axis-lbl { color: var(--mute); font: 300 var(--fs-micro)/1.45 var(--font-mono); letter-spacing: .12em; }
 .mood-tri { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
-.tri-num { margin: .7rem 0; font: 300 clamp(1.25rem,1.8vw,1.65rem)/1 var(--font-display); }
+.tri-num { margin: .7rem 0; font: 300 clamp(1.25rem,1.8vw,1.65rem)/1 var(--font-number); }
 .tri-num.accent { color: var(--accent-deep); }
 .mood-word-row { margin: 2rem 0; padding: 1rem 0; display: flex; gap: 1rem; align-items: center; border-block: 1px solid var(--line-soft); }
 .mood-word-lbl { color: var(--mute); font: var(--fs-micro) var(--font-mono); text-transform: uppercase; }
@@ -483,9 +539,15 @@ label {
 #network-canvas { display: block; width: 100%; height: min(70vh,720px); background: radial-gradient(circle at center, rgba(196,122,56,.045), transparent 52%); }
 
 #desire-view > div { max-width: 940px !important; padding: 0 !important; }
-#desire-view [style*="background:var(--card)"] { border-radius: 0 !important; border: 0 !important; border-top: 1px solid var(--line) !important; background: transparent !important; padding: 2rem 0 !important; }
+#desire-view [style*="background:var(--card)"] {
+  border: 1px solid var(--line-soft) !important;
+  border-radius: 18px !important;
+  background: linear-gradient(145deg, rgba(52,33,21,.34), rgba(12,7,4,.66)) !important;
+  padding: 1.5rem !important;
+  box-shadow: inset 0 1px rgba(255,224,186,.025), 0 22px 64px rgba(0,0,0,.09);
+}
 
-.config-section { margin-bottom: 1px; }
+.config-section { margin-bottom: 1rem; }
 .config-section h3 { display: flex; align-items: center; gap: .7rem; margin-bottom: .45rem; }
 .config-section h3::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .section-note { max-width: 36rem; margin: 0 0 1.7rem 1.2rem; color: var(--mute); font-size: .76rem; line-height: 1.75; }
@@ -508,7 +570,10 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
   place-items: center;
   margin-bottom: 1.5rem;
   border: 1px solid var(--line);
-  background: radial-gradient(circle at center, rgba(196,122,56,.06), transparent 45%);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at center, rgba(196,122,56,.075), transparent 45%),
+    linear-gradient(145deg, rgba(52,33,21,.24), rgba(12,7,4,.50));
   text-align: center;
   cursor: pointer;
   overflow: hidden;
@@ -586,6 +651,8 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 @keyframes titleIn { from { opacity: 0; transform: translateY(50px); filter: blur(16px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes cueLine { 0%,100% { transform: scaleX(.25); opacity: .35; } 50% { transform: scaleX(1); opacity: .9; } }
 @keyframes chapterIn { from { opacity: 0; transform: translateY(18px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes archiveRowIn { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes quietStepIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes intakePulse { 0% { box-shadow: inset 0 0 0 rgba(196,122,56,0); } 45% { box-shadow: inset 0 0 80px rgba(196,122,56,.11); } 100% { box-shadow: inset 0 0 0 rgba(196,122,56,0); } }
 
 @media (max-width: 1180px) {
@@ -633,6 +700,8 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 </style>
 </head>
 <body>
+
+<canvas id="archive-stars" aria-hidden="true"></canvas>
 
 <!-- ============================================================
      Header
@@ -715,11 +784,11 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 
 <div class="content" id="breath-view" style="display:none">
   <div class="breath-flow" id="breath-flow">
-    <div class="flow-step" id="fs-input"><strong>01 Signal</strong><small>query / valence / arousal</small></div>
-    <div class="flow-step" id="fs-candidates"><strong>02 Candidates</strong><small id="fs-cand-n">retrieved memory buckets</small></div>
-    <div class="flow-step" id="fs-scoring"><strong>03 Weights</strong><small>topic / emotion / time / importance</small></div>
-    <div class="flow-step" id="fs-threshold"><strong>04 Threshold</strong><small id="fs-thresh-n">kept above recall line</small></div>
-    <div class="flow-step" id="fs-sort"><strong>05 Return</strong><small>sorted traces</small></div>
+    <div class="flow-step" id="fs-input"><div class="flow-head"><span class="flow-num">01</span><span class="flow-title">Signal</span></div><small>query / valence / arousal</small></div>
+    <div class="flow-step" id="fs-candidates"><div class="flow-head"><span class="flow-num">02</span><span class="flow-title">Candidates</span></div><small id="fs-cand-n">retrieved memory buckets</small></div>
+    <div class="flow-step" id="fs-scoring"><div class="flow-head"><span class="flow-num">03</span><span class="flow-title">Weights</span></div><small>topic / emotion / time / importance</small></div>
+    <div class="flow-step" id="fs-threshold"><div class="flow-head"><span class="flow-num">04</span><span class="flow-title">Threshold</span></div><small id="fs-thresh-n">kept above recall line</small></div>
+    <div class="flow-step" id="fs-sort"><div class="flow-head"><span class="flow-num">05</span><span class="flow-title">Return</span></div><small>sorted traces</small></div>
   </div>
 
   <div class="breath-controls">
@@ -1207,7 +1276,7 @@ async function loadDesire() {
       return `<div style="margin-bottom:0.6rem">
         <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.2rem">
           <span style="color:${isHigh?'var(--accent)':'var(--ink-soft)'}">${DRIVE_LABELS[k]||k}</span>
-          <span style="color:var(--ink-soft)">${pct}%${lf>0.1?' (疲劳-'+Math.round(lf*100)+'%)':''}</span>
+          <span class="numeric" style="color:var(--ink-soft)">${pct}%${lf>0.1?' (疲劳-'+Math.round(lf*100)+'%)':''}</span>
         </div>
         <div style="height:4px;background:var(--border);border-radius:2px">
           <div style="height:4px;width:${pct}%;background:var(--border);border-radius:2px;position:relative">
@@ -1225,7 +1294,7 @@ async function loadDesire() {
         return `<div style="font-size:0.85rem;padding:0.4rem 0;border-bottom:1px solid var(--border);display:flex;gap:0.5rem;align-items:baseline">
           <span>${icon}</span>
           <span style="flex:1;color:var(--ink)">${t.text||'（无来源）'}</span>
-          <span style="color:var(--ink-soft);font-size:0.75rem">${t.drive} ${Math.round(t.strength*100)}%</span>
+          <span style="color:var(--ink-soft);font-size:0.75rem">${t.drive} <span class="numeric">${Math.round(t.strength*100)}%</span></span>
         </div>`;
       }).join('');
     } else {
@@ -1411,7 +1480,7 @@ function renderBuckets(buckets) {
     const score = Number.isFinite(b.score) ? b.score.toFixed(2) : '0.00';
     const signal = b.model_valence != null ? b.model_valence.toFixed(2) : valence.toFixed(2);
     const rowTitle = `ID ${b.id} · score ${score} · signal V${signal}`;
-    return `<div class="bucket-row" data-bucket-id="${esc(b.id)}" title="${esc(rowTitle)}" onclick="showDetail('${b.id}')">
+    return `<div class="bucket-row" style="--row-order:${Math.min(idx, 10)}" data-bucket-id="${esc(b.id)}" title="${esc(rowTitle)}" onclick="showDetail('${b.id}')">
       <span class="bucket-index">${String(idx + 1).padStart(2, '0')}</span>
       <span class="bucket-main">
         <span class="name">${bucketIcon(b)} ${esc(b.name)}</span>
@@ -1464,12 +1533,12 @@ async function showDetail(id) {
          <div class="field"><label>类型</label>${meta.type || 'dynamic'}</div>
          <div class="field"><label>域</label>${(meta.domain || []).join(', ') || '—'}</div>
          <div class="field"><label>标签</label>${(meta.tags || []).join(', ') || '—'}</div>
-         <div class="field"><label>事件效价</label>V${(meta.valence || 0.5).toFixed(2)}</div>
-         <div class="field"><label>唤醒度</label>A${(meta.arousal || 0.3).toFixed(2)}</div>
-         <div class="field"><label>模型视角</label>${meta.model_valence != null ? 'V' + meta.model_valence.toFixed(2) : '—'}</div>
-         <div class="field"><label>重要度</label>${meta.importance || 5}/10</div>
-         <div class="field"><label>权重分</label>${detailScore}</div>
-         <div class="field"><label>激活次数</label>${meta.activation_count || 1}</div>
+         <div class="field"><label>事件效价</label><span class="numeric">V${(meta.valence || 0.5).toFixed(2)}</span></div>
+         <div class="field"><label>唤醒度</label><span class="numeric">A${(meta.arousal || 0.3).toFixed(2)}</span></div>
+         <div class="field"><label>模型视角</label><span class="numeric">${meta.model_valence != null ? 'V' + meta.model_valence.toFixed(2) : '—'}</span></div>
+         <div class="field"><label>重要度</label><span class="numeric">${meta.importance || 5}/10</span></div>
+         <div class="field"><label>权重分</label><span class="numeric">${detailScore}</span></div>
+         <div class="field"><label>激活次数</label><span class="numeric">${meta.activation_count || 1}</span></div>
          <div class="field"><label>已解决</label>${meta.resolved ? '✓' : '—'}</div>
          <div class="field"><label>已消化</label>${meta.digested ? '✓' : '—'}</div>
          <div class="field"><label>钉选</label>${meta.pinned ? '✓' : '—'}</div>
@@ -1653,7 +1722,7 @@ function drawNetworkFrame(ctx, W, H, isDark, bgColor, labelColor) {
       drawTrebleClef(ctx, 30, topY, staffHeight, staffColor);
       // 拍号 4/4
       ctx.fillStyle = staffColor;
-      ctx.font = '300 18px Inter, sans-serif';
+      ctx.font = '300 20px "Cormorant Garamond", Georgia, serif';
       ctx.textAlign = 'left';
       ctx.fillText('4', 78, topY + staffSpacing * 2 + 2);
       ctx.fillText('4', 78, topY + staffSpacing * 4);
@@ -2166,6 +2235,102 @@ function switchChapter(target) {
   document.getElementById('chapter-index').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }
 
+function initArchiveStars() {
+  const canvas = document.getElementById('archive-stars');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d', { alpha: true });
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const palette = [
+    [239, 224, 196],
+    [214, 190, 156],
+    [126, 103, 91],
+    [232, 149, 79]
+  ];
+  const pointer = { x: -9999, y: -9999, active: false };
+  let stars = [];
+  let dpr = 1;
+  let raf = 0;
+
+  function makeStars() {
+    const count = Math.max(90, Math.min(230, Math.round(innerWidth * innerHeight / 8200)));
+    stars = Array.from({ length: count }, () => {
+      const roll = Math.random();
+      const color = roll < .70 ? palette[0] : roll < .92 ? palette[1] : roll < .98 ? palette[2] : palette[3];
+      return {
+        x: Math.random() * innerWidth,
+        y: Math.random() * innerHeight,
+        size: .35 + Math.pow(Math.random(), 2.1) * 1.35,
+        alpha: .045 + Math.random() * .14,
+        phase: Math.random() * Math.PI * 2,
+        speed: .00018 + Math.random() * .00032,
+        drift: .45 + Math.random() * 1.25,
+        color
+      };
+    });
+  }
+
+  function resizeStars() {
+    dpr = Math.min(devicePixelRatio || 1, 1.5);
+    canvas.width = Math.round(innerWidth * dpr);
+    canvas.height = Math.round(innerHeight * dpr);
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    makeStars();
+    if (reduced) drawStars(0, false);
+  }
+
+  function drawStars(time, loop = true) {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const star of stars) {
+      const breathe = reduced ? .72 : .64 + Math.sin(time * star.speed + star.phase) * .26;
+      const x = star.x + (reduced ? 0 : Math.sin(time * .00008 + star.phase) * star.drift);
+      const y = star.y + (reduced ? 0 : Math.cos(time * .000065 + star.phase) * star.drift);
+      const dx = x - pointer.x;
+      const dy = y - pointer.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const wake = pointer.active ? Math.pow(Math.max(0, 1 - distance / 180), 2) : 0;
+      const alpha = Math.min(.72, star.alpha * breathe + wake * .46);
+      const radius = star.size * (1 + wake * .9);
+      const [r, g, b] = star.color;
+
+      if (wake > .08) {
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(${r},${g},${b},${wake * .045})`;
+        ctx.arc(x, y, radius * 4.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+      ctx.arc(x, y, Math.max(.35, radius), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    if (loop && !reduced) raf = requestAnimationFrame(drawStars);
+  }
+
+  addEventListener('pointermove', (event) => {
+    if (event.pointerType === 'touch') return;
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+    pointer.active = true;
+    if (reduced) drawStars(performance.now(), false);
+  }, { passive: true });
+  document.documentElement.addEventListener('pointerleave', () => {
+    pointer.active = false;
+    if (reduced) drawStars(0, false);
+  });
+  addEventListener('resize', () => {
+    cancelAnimationFrame(raf);
+    resizeStars();
+    if (!reduced) raf = requestAnimationFrame(drawStars);
+  }, { passive: true });
+
+  resizeStars();
+  if (!reduced) raf = requestAnimationFrame(drawStars);
+}
+
 function initExperienceMotion() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const title = document.querySelector('.archive-title');
@@ -2405,6 +2570,7 @@ function loadReverie() {
    Init
    ============================================================ */
 initEvents();
+initArchiveStars();
 initExperienceMotion();
 applyTheme('nocturne');
 checkAuth().then(() => loadBuckets());
