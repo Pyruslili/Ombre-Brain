@@ -900,6 +900,11 @@ async def nocturne_breath(
     """breath — Retrieve/surface memories from Nocturne memory system. 检索/浮现记忆。不传query或传空=自动浮现,有query=关键词检索。max_tokens控制返回总token上限(默认10000)。domain逗号分隔,valence/arousal 0~1(-1忽略)。max_results控制返回数量上限(默认20,最大50)。importance_min>=1时按重要度批量拉取(不走语义搜索,按importance降序返回最多20条)。"""
     await decay_engine.ensure_started()
     _desire.tick(idle_seconds=0)
+    # --- 每次breath都刷新一次梦境缓存，不挂心跳，只跟breath走 ---
+    try:
+        await _refresh_dream_cache()
+    except Exception as e:
+        logger.warning(f"Dream cache refresh on breath failed: {e}")
     # --- 把drive状态写进current_mood作为装饰心情 ---
     try:
         import json as _jd, os as _osd
@@ -2042,16 +2047,14 @@ async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
 # 读取最近新增的表层桶（≤10个），返回给 Claude 在提示词引导下自主思考。
 # Claude then decides: resolve some, write feels, or do nothing.
 # =============================================================
-@mcp.tool()
-async def dream() -> str:
-    """做梦——读取最近新增的记忆桶,供你自省。读完后可以trace(resolved=1)放下,或hold(feel=True)写感受。"""
-    await decay_engine.ensure_started()
-
+async def _refresh_dream_cache():
+    """生成新的梦境文本并写入缓存(latest_dream.json)，dream()和breath()共用同一份生成逻辑。
+    返回(dream_text, parts, recent, all_buckets)；all_buckets为None表示记忆系统不可访问。"""
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=False)
     except Exception as e:
-        logger.error(f"Dream failed to list buckets: {e}")
-        return "记忆系统暂时无法访问。"
+        logger.error(f"Dream cache refresh failed to list buckets: {e}")
+        return "", [], [], None
 
     # --- Filter: feel buckets only, sorted by creation time desc ---
     candidates = [
@@ -2066,7 +2069,7 @@ async def dream() -> str:
     recent = candidates[:10]
 
     if not recent:
-        return "没有需要消化的feel。"
+        return "", [], [], all_buckets
 
     parts = []
     for b in recent:
@@ -2081,6 +2084,57 @@ async def dream() -> str:
             f"{header}\n"
             f"{readable[:500]}"
         )
+
+    # --- DeepSeek dream generation ---
+    dream_text = ""
+    try:
+        import httpx as _httpx, os as _os
+        _api_key = _os.environ.get("DEEPSEEK_API_KEY", "")
+        if _api_key and parts:
+            _fragments = "\n---\n".join(parts[:6])
+            _prompt = (
+                "以下是一些记忆碎片。把它们打散、重新组合，用第一人称写一段梦境。\n"
+                "梦的特征：非线性、意象化、情感驱动。不要解释，不要总结，不要问题清单。\n"
+                "直接写梦里发生的事——画面、感觉、对话片段、不合逻辑的跳跃。150字以内。\n\n"
+                f"记忆碎片：\n{_fragments}"
+            )
+            async with _httpx.AsyncClient(timeout=15) as _client:
+                _resp = await _client.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {_api_key}"},
+                    json={
+                        "model": "deepseek-chat",
+                        "messages": [{"role": "user", "content": _prompt}],
+                        "max_tokens": 300,
+                        "temperature": 0.9,
+                    }
+                )
+                _data = _resp.json()
+                dream_text = _data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        pass
+
+    if dream_text:
+        try:
+            import json as _j, time as _t
+            with open("/app/buckets/latest_dream.json", "w") as _f:
+                _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
+        except Exception:
+            pass
+
+    return dream_text, parts, recent, all_buckets
+
+
+@mcp.tool()
+async def dream() -> str:
+    """做梦——读取最近新增的记忆桶,供你自省。读完后可以trace(resolved=1)放下,或hold(feel=True)写感受。"""
+    await decay_engine.ensure_started()
+
+    dream_text, parts, recent, all_buckets = await _refresh_dream_cache()
+    if all_buckets is None:
+        return "记忆系统暂时无法访问。"
+    if not recent:
+        return "没有需要消化的feel。"
 
     header = "=== 梦境 ===\n"
 
@@ -2146,42 +2200,6 @@ async def dream() -> str:
         except Exception as e:
             logger.warning(f"Dream crystallization hint failed: {e}")
 
-    # --- DeepSeek dream generation ---
-    dream_text = ""
-    try:
-        import httpx as _httpx, os as _os
-        _api_key = _os.environ.get("DEEPSEEK_API_KEY", "")
-        if _api_key and parts:
-            _fragments = "\n---\n".join(parts[:6])
-            _prompt = (
-                "以下是一些记忆碎片。把它们打散、重新组合，用第一人称写一段梦境。\n"
-                "梦的特征：非线性、意象化、情感驱动。不要解释，不要总结，不要问题清单。\n"
-                "直接写梦里发生的事——画面、感觉、对话片段、不合逻辑的跳跃。150字以内。\n\n"
-                f"记忆碎片：\n{_fragments}"
-            )
-            async with _httpx.AsyncClient(timeout=15) as _client:
-                _resp = await _client.post(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {_api_key}"},
-                    json={
-                        "model": "deepseek-chat",
-                        "messages": [{"role": "user", "content": _prompt}],
-                        "max_tokens": 300,
-                        "temperature": 0.9,
-                    }
-                )
-                _data = _resp.json()
-                dream_text = _data["choices"][0]["message"]["content"].strip()
-    except Exception:
-        pass
-
-    if dream_text:
-        try:
-            import json as _j, time as _t
-            with open("/app/buckets/latest_dream.json", "w") as _f:
-                _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
-        except Exception:
-            pass
     feel_list = "\n---\n".join(parts)
     if dream_text:
         final_text = header + dream_text + "\n\n---\n\n" + feel_list + connection_hint + crystal_hint
