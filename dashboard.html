@@ -85,8 +85,8 @@ body::after {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 18% 28%, rgba(73, 112, 155, .08), transparent 22%),
-    radial-gradient(circle at 72% 68%, rgba(178, 100, 48, .07), transparent 25%);
+    radial-gradient(circle at 18% 28%, rgba(73, 112, 155, .13), transparent 24%),
+    radial-gradient(circle at 72% 68%, rgba(178, 100, 48, .11), transparent 27%);
   filter: blur(42px);
   transform-origin: 45% 50%;
   animation: cosmicBreath 16s ease-in-out infinite alternate;
@@ -98,7 +98,7 @@ body::after {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  opacity: .9;
+  opacity: 1;
   mix-blend-mode: screen;
 }
 ::selection { background: rgba(196,122,56,.32); color: var(--ink); }
@@ -374,13 +374,15 @@ label {
 .filters { display: flex; flex-wrap: wrap; gap: .45rem 1.2rem; padding: .45rem 0 1.1rem; border-bottom: 1px solid var(--line-soft); }
 .filter-btn {
   min-height: auto; padding: .2rem 0;
+  display: inline-flex; align-items: center; gap: .34rem;
   border: 0; background: none;
   color: var(--mute);
   font-size: var(--fs-meta);
 }
-.filter-btn svg { width: 10px; height: 10px; margin-right: .3rem; vertical-align: -1px; }
+.filter-btn svg { width: 11px; height: 11px; flex: 0 0 11px; }
+.filter-btn[data-filter="window"] svg { width: 9px; height: 9px; flex-basis: 9px; margin-inline: 1px; }
 .filter-btn:hover, .filter-btn.active { color: var(--ink); background: none; }
-.filter-btn.active::before { content: "●"; margin-right: .45rem; color: var(--accent-deep); font-size: .42rem; }
+.filter-btn.active::before { content: none; }
 
 .bucket-list { border-top: 1px solid var(--line); }
 .bucket-row {
@@ -531,7 +533,40 @@ label {
   border-radius: 20px;
   box-shadow: inset 0 1px rgba(255,224,186,.025), 0 24px 70px rgba(0,0,0,.10);
 }
-.dream-card { grid-area: dream; min-height: 460px; }
+.dream-card {
+  position: relative;
+  grid-area: dream;
+  min-height: 460px;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 15% 22%, rgba(120,166,209,.10), transparent 27%),
+    radial-gradient(circle at 82% 74%, rgba(196,122,56,.12), transparent 31%),
+    linear-gradient(145deg, rgba(37,26,23,.58), rgba(7,5,5,.88));
+}
+.dream-card::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  z-index: -1;
+  background:
+    radial-gradient(circle at 22% 30%, rgba(239,224,196,.24) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 68% 18%, rgba(146,178,210,.22) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 78% 72%, rgba(232,149,79,.20) 0 1.2px, transparent 2px),
+    radial-gradient(ellipse at center, rgba(104,76,63,.10), transparent 56%);
+  background-size: 97px 113px, 149px 131px, 181px 163px, auto;
+  filter: blur(.2px);
+  animation: dreamDrift 18s ease-in-out infinite alternate;
+}
+.dream-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(3,2,1,.12), transparent 22%, transparent 72%, rgba(3,2,1,.45));
+}
+.dream-card .reverie-head, .dream-card .dream-body { position: relative; z-index: 1; }
 .mood-card { grid-area: weather; height: 100%; }
 .density-card { grid-area: density; padding: 1rem 1.35rem; }
 .density-card .reverie-head { margin-bottom: .45rem; }
@@ -554,15 +589,29 @@ label {
 .axis-hline { left: 0; right: 0; top: 50%; height: 1px; }
 .axis-vline { top: 0; bottom: 0; left: 50%; width: 1px; }
 .axis-lbl { position: absolute; z-index: 2; }
-.axis-lbl.top { top: .5rem; left: .5rem; } .axis-lbl.bot { bottom: .5rem; left: .5rem; }
-.axis-lbl.left { bottom: .5rem; left: .5rem; } .axis-lbl.right { bottom: .5rem; right: .5rem; }
+.axis-lbl.top { top: .5rem; left: .5rem; }
+.axis-lbl.bot { bottom: .5rem; left: .5rem; }
+.axis-lbl.left { top: 50%; left: .5rem; transform: translateY(-50%); }
+.axis-lbl.right { top: 50%; right: .5rem; transform: translateY(-50%); }
 .mood-point { position: absolute; z-index: 3; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--accent-deep); box-shadow: 0 0 0 3px rgba(232,149,79,.08), 0 0 12px rgba(232,149,79,.28); transition: transform .25s, opacity .25s; }
 .mood-point:hover { z-index: 5; transform: scale(1.65); opacity: 1 !important; }
 .mood-point.current { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--cool); box-shadow: 0 0 0 4px rgba(120,166,209,.09), 0 0 16px rgba(120,166,209,.32); }
-.mood-tooltip, .spark-tooltip { position: absolute; display: none; z-index: 4; padding: .5rem; background: var(--bg-deep); border: 1px solid var(--line); font: var(--fs-micro) var(--font-mono); color: var(--ink-soft); }
+.mood-tooltip, .spark-tooltip { position: absolute; display: none; z-index: 4; padding: .65rem .72rem; background: rgba(8,5,3,.98); border: 1px solid var(--line); font: 300 .72rem/1.65 var(--font-body); color: var(--ink-soft); box-shadow: 0 14px 40px rgba(0,0,0,.42); }
+.mood-tooltip { width: min(290px, calc(100vw - 2rem)); min-width: min(220px, calc(100vw - 2rem)); overflow-wrap: break-word; }
+.mood-tooltip .tt-meta { margin-top: .5rem; font: 300 .62rem/1.5 var(--font-mono); }
 .mood-tooltip.show, .spark-tooltip.show { display: block; }
-.dream-body { color: var(--ink-soft); font: 300 .92rem/1.95 var(--font-body); }
-.dream-text { white-space: pre-wrap; }
+.dream-body {
+  max-width: 54rem;
+  margin: clamp(1.2rem,4vh,3.5rem) auto 0;
+  padding: clamp(1.4rem,3vw,2.5rem) clamp(1.15rem,3.5vw,3rem);
+  color: var(--ink-soft);
+  font: 300 .94rem/2.05 var(--font-body);
+  border-block: 1px solid rgba(225,164,97,.11);
+  background: linear-gradient(90deg, transparent, rgba(255,224,186,.025) 18%, rgba(120,166,209,.025) 76%, transparent);
+  text-shadow: 0 1px 18px rgba(0,0,0,.55);
+}
+.dream-text { white-space: pre-wrap; text-wrap: pretty; }
+.dream-text::first-letter { color: var(--accent-deep); font: 300 2.2rem/.8 var(--font-display); }
 .dream-empty { color: var(--mute); }
 .spark-wrap { position: relative; min-height: 54px; }
 .spark-wrap svg { width: 100%; height: 52px; overflow: visible; }
@@ -578,6 +627,7 @@ label {
 #desire-view > .drift-shell { max-width: 980px; margin: 0 auto; }
 .drift-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.4rem; }
 .drift-header h2 { margin: 0; font: 300 var(--fs-section)/1.1 var(--font-display); }
+.drift-refresh { flex: 0 0 auto; width: auto; height: 34px; min-height: 34px; max-height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: .5rem .85rem; white-space: nowrap; }
 .drift-refresh.loading svg { animation: driftSpin .8s linear infinite; }
 .drift-card {
   margin-bottom: 1rem;
@@ -607,6 +657,7 @@ label {
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
 @keyframes driftSpin { to { transform: rotate(360deg); } }
+@keyframes dreamDrift { from { opacity: .58; transform: translate3d(-1%,1%,0) scale(.99); } to { opacity: 1; transform: translate3d(1%,-1%,0) scale(1.035); } }
 
 .config-section { margin-bottom: 1rem; }
 .config-section h3 { display: flex; align-items: center; gap: .7rem; margin-bottom: .45rem; }
@@ -1209,6 +1260,7 @@ let currentFilter = 'all';
 let searchTimer;
 let importPollTimer;
 let currentTheme;
+let activeDetail = null;
 const mouse = { x: -1000, y: -1000 };
 
 const ICONS = {
@@ -1351,24 +1403,25 @@ async function loadDesire(button) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
 
-    // intent
-    const intentEl = document.getElementById('desire-intent-text');
-    const reasonEl = document.getElementById('desire-intent-reason');
-    if (d.intent) {
-      intentEl.textContent = d.intent.want_action;
-      reasonEl.textContent = d.intent.reason || '';
-    } else {
-      intentEl.textContent = 'No visible pull.';
-      reasonEl.textContent = '';
-    }
-
-    // drives
     const DRIVE_LABELS = {
       attachment:'想嘉嘉', curiosity:'好奇', reflection:'沉淀',
       duty:'记挂', social:'社交', fatigue:'疲劳', libido:'亲密', stress:'压力'
     };
+    const driveEntries = Object.entries(d.drives || {});
+    const topDrive = [...driveEntries].sort((a, b) => finiteNumber(b[1]) - finiteNumber(a[1]))[0] || ['—', 0];
+    const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
+    const latestTrace = thoughts.find(t => String(t.text || '').trim())?.text || d.mood_trace || d.pulse_weather?.mood_trace || 'No recent thought.';
+
+    // Current pull is always the highest raw drive; it should not disappear
+    // merely because intent selection is below its action threshold.
+    const intentEl = document.getElementById('desire-intent-text');
+    const reasonEl = document.getElementById('desire-intent-reason');
+    intentEl.textContent = (DRIVE_LABELS[topDrive[0]] || topDrive[0]) + ' · ' + topDrive[0] + ' ' + finiteNumber(topDrive[1]).toFixed(2);
+    reasonEl.textContent = 'Mood Trace · ' + latestTrace;
+
+    // drives
     const drivesEl = document.getElementById('desire-drives');
-    drivesEl.innerHTML = Object.entries(d.drives || {}).map(([k, v]) => {
+    drivesEl.innerHTML = driveEntries.map(([k, v]) => {
       const lf = d.local_fatigue?.[k] || 0;
       const eff = Math.max(0, v * (1 - lf));
       const pct = Math.round(v * 100);
@@ -1383,8 +1436,7 @@ async function loadDesire(button) {
 
     // thoughts
     const thoughtsEl = document.getElementById('desire-thoughts');
-    if (d.thoughts && d.thoughts.length > 0) {
-      const thoughts = [...d.thoughts].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
+    if (thoughts.length > 0) {
       thoughtsEl.innerHTML = thoughts.map(t => {
         return `<div class="thought-row">
           <span class="thought-icon">${thoughtPoolIcon(t.kind)}</span>
@@ -1520,14 +1572,14 @@ function buildFilters() {
   const types = [
     { key: 'all', label: '全部', icon: ICONS.all },
     { key: 'pinned', label: '钉选', icon: ICONS.pinned },
-    { key: 'feel', label: 'Feel', icon: ICONS.feel },
-    { key: 'window', label: 'Window', icon: ICONS.window },
     { key: 'dynamic', label: 'Memory', icon: ICONS.dynamic },
-    { key: 'inner', label: 'Inner', icon: ICONS.inner },
+    { key: 'feel', label: 'Feel', icon: ICONS.feel },
     { key: 'unresolved', label: '未解决', icon: ICONS.unresolved },
     { key: 'digested', label: '已沉底', icon: ICONS.digested },
+    { key: 'inner', label: 'Inner', icon: ICONS.inner },
     { key: 'letter', label: 'Letter', icon: ICONS.letter },
     { key: 'writing', label: 'Writing', icon: ICONS.writing },
+    { key: 'window', label: 'Window', icon: ICONS.window },
     { key: 'archived', label: '归档', icon: ICONS.archived },
   ];
   filters.innerHTML = types.map(t =>
@@ -1631,6 +1683,7 @@ async function showDetail(id) {
     const valence = finiteNumber(meta.valence, .5);
     const arousal = finiteNumber(meta.arousal, .3);
     const modelValence = meta.model_valence == null ? null : finiteNumber(meta.model_valence, null);
+    activeDetail = { id, content: String(b.content || ''), tags: [...detailTags] };
     content.innerHTML =
       `<h2>${esc(meta.name || id)}</h2>
        <label class="detail-body-label">正文</label>
@@ -1666,9 +1719,8 @@ function startEdit() {
   const body = document.getElementById('detail-body');
   if (!body || body.classList.contains('detail-edit')) return;
   const id = body.dataset.bucketId;
-  const currentContent = body.textContent;
-  let currentTags = [];
-  try { currentTags = normalizeTags(JSON.parse(body.dataset.tags || '[]')); } catch (e) {}
+  const currentContent = activeDetail?.id === id ? activeDetail.content : body.textContent;
+  const currentTags = activeDetail?.id === id ? [...activeDetail.tags] : [];
   const actions = document.querySelector('#detail-content > .detail-actions');
   if (actions) actions.style.display = 'none';
   body.classList.add('detail-edit');
@@ -1751,6 +1803,7 @@ async function deleteBucket(id) {
 
 function closeDetail() {
   document.getElementById('detail-panel').classList.remove('open');
+  activeDetail = null;
 }
 
 /* ============================================================
@@ -2451,25 +2504,25 @@ function initArchiveStars() {
   let raf = 0;
 
   function makeStars() {
-    const count = Math.max(150, Math.min(360, Math.round(innerWidth * innerHeight / 5200)));
+    const count = Math.max(220, Math.min(480, Math.round(innerWidth * innerHeight / 3800)));
     stars = Array.from({ length: count }, () => {
       const roll = Math.random();
       const depthRoll = Math.random();
       const depth = depthRoll < .58 ? .38 + Math.random() * .2 : depthRoll < .9 ? .62 + Math.random() * .2 : .9 + Math.random() * .3;
-      const bright = Math.random() > .94;
+      const bright = Math.random() > .91;
       const color = roll < .62 ? palette[0] : roll < .82 ? palette[1] : roll < .91 ? palette[2] : roll < .97 ? palette[3] : palette[4];
       return {
         x: Math.random() * innerWidth,
         y: Math.random() * innerHeight,
         depth,
         bright,
-        size: (.28 + Math.pow(Math.random(), 2.35) * 1.3) * depth * (bright ? 1.45 : 1),
-        alpha: (.055 + Math.random() * .18) * (.55 + depth * .5),
+        size: (.32 + Math.pow(Math.random(), 2.2) * 1.55) * depth * (bright ? 1.55 : 1),
+        alpha: (.075 + Math.random() * .24) * (.58 + depth * .5),
         phase: Math.random() * Math.PI * 2,
         phase2: Math.random() * Math.PI * 2,
         speed: .00012 + Math.random() * .00028,
         drift: (.35 + Math.random() * 1.8) * depth,
-        halo: bright ? 5 + Math.random() * 9 : (Math.random() > .86 ? 2.5 + Math.random() * 3 : 0),
+        halo: bright ? 6 + Math.random() * 11 : (Math.random() > .82 ? 2.8 + Math.random() * 3.5 : 0),
         color
       };
     });
@@ -2490,24 +2543,24 @@ function initArchiveStars() {
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     ctx.globalCompositeOperation = 'lighter';
     for (const star of stars) {
-      const breathe = reduced ? .78 : .68
-        + Math.sin(time * star.speed + star.phase) * .22
-        + Math.sin(time * star.speed * .37 + star.phase2) * .10;
+      const breathe = reduced ? .82 : .72
+        + Math.sin(time * star.speed + star.phase) * .28
+        + Math.sin(time * star.speed * .37 + star.phase2) * .12;
       const x = star.x + (reduced ? 0 : Math.sin(time * .000055 * star.depth + star.phase) * star.drift);
       const y = star.y + (reduced ? 0 : Math.cos(time * .000041 * star.depth + star.phase2) * star.drift);
       const dx = x - pointer.x;
       const dy = y - pointer.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
       const wake = pointer.active ? Math.pow(Math.max(0, 1 - distance / 180), 2) : 0;
-      const alpha = Math.min(.82, star.alpha * Math.max(.2, breathe) + wake * .42);
-      const radius = star.size * (1 + wake * .75 + Math.max(0, breathe - .72) * .16);
+      const alpha = Math.min(.92, star.alpha * Math.max(.18, breathe) + wake * .46);
+      const radius = star.size * (1 + wake * .75 + Math.max(0, breathe - .7) * .28);
       const [r, g, b] = star.color;
 
       if (star.halo || wake > .08) {
         const haloRadius = Math.max(radius * (star.halo || 4), radius * 4.2);
         const halo = ctx.createRadialGradient(x, y, 0, x, y, haloRadius);
-        halo.addColorStop(0, `rgba(${r},${g},${b},${Math.min(.24, alpha * .46 + wake * .08)})`);
-        halo.addColorStop(.22, `rgba(${r},${g},${b},${Math.min(.09, alpha * .16)})`);
+        halo.addColorStop(0, `rgba(${r},${g},${b},${Math.min(.32, alpha * .58 + wake * .09)})`);
+        halo.addColorStop(.24, `rgba(${r},${g},${b},${Math.min(.13, alpha * .22)})`);
         halo.addColorStop(1, `rgba(${r},${g},${b},0)`);
         ctx.beginPath();
         ctx.fillStyle = halo;
@@ -2608,16 +2661,16 @@ function placeMoodPoint(pa, na, importance, content, ts, isCurrent, idx) {
       const fieldRect = field.getBoundingClientRect();
       const absX = fieldRect.left - wrap.left + (x / 100) * fieldRect.width;
       const absY = fieldRect.top - wrap.top + (y / 100) * fieldRect.height;
-      if (x > 50) {
-        tooltip.style.right = 'auto';
-        tooltip.style.left = (absX - 12) + 'px';
-        tooltip.style.transform = 'translate(-100%, -50%)';
-      } else {
-        tooltip.style.left = (absX + 12) + 'px';
-        tooltip.style.transform = 'translateY(-50%)';
-      }
-      tooltip.style.top = absY + 'px';
       tooltip.classList.add('show');
+      tooltip.style.transform = 'none';
+      tooltip.style.right = 'auto';
+      const tooltipWidth = tooltip.offsetWidth;
+      const tooltipHeight = tooltip.offsetHeight;
+      const preferredLeft = x > 58 ? absX - tooltipWidth - 12 : absX + 12;
+      const left = Math.max(8, Math.min(preferredLeft, wrap.width - tooltipWidth - 8));
+      const top = Math.max(8, Math.min(absY - tooltipHeight / 2, wrap.height - tooltipHeight - 8));
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
     });
     dot.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
   }

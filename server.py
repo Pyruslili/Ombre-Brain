@@ -2078,11 +2078,18 @@ async def _refresh_dream_cache():
         and not b["metadata"].get("resolved", False)
     ]
 
-    # --- Sort by creation time desc, take top 10 ---
+    # Breath already surfaces the newest 8 feels. Dream starts after that
+    # window so its imagery does not repeat the same material in one breath.
     candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
-    recent = candidates[:10]
+    recent = candidates[8:14]
 
     if not recent:
+        try:
+            import json as _j, time as _t
+            with open("/app/buckets/latest_dream.json", "w") as _f:
+                _j.dump({"dream": "", "ts": _t.time()}, _f)
+        except Exception:
+            pass
         return "", [], [], all_buckets
 
     parts = []
@@ -2105,7 +2112,7 @@ async def _refresh_dream_cache():
         import httpx as _httpx, os as _os
         _api_key = _os.environ.get("DEEPSEEK_API_KEY", "")
         if _api_key and parts:
-            _fragments = "\n---\n".join(parts[:6])
+            _fragments = "\n---\n".join(parts)
             _prompt = (
                 "以下是一些记忆碎片。把它们打散、重新组合，用第一人称写一段梦境。\n"
                 "梦的特征：非线性、意象化、情感驱动。不要解释，不要总结，不要问题清单。\n"
