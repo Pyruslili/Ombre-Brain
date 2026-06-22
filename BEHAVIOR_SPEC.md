@@ -74,18 +74,11 @@ breath(query="", max_tokens=10000, domain="", valence=-1, arousal=-1, max_result
 
 **Claude 行为（完整对话启动序列，来自 CLAUDE_PROMPT.md）**：
 ```
-1. breath()               — 浮现未解决记忆
-2. dream()                — 消化最近记忆，有沉淀写 feel
-3. breath(domain="feel")  — 读取之前的 feel
-4. 开始和用户说话
+1. breath()               — 浮现记忆（梦境、feel、走廊信、记忆漂流全在一次返回里）
+2. 开始和用户说话
 ```
 
-**`breath(domain="feel")` 内部流程**：
-1. 检测到 `domain.strip().lower() == "feel"` → 进入 feel 专用通道
-2. `bucket_mgr.list_all()` 过滤 `type=="feel"` 的桶
-3. 按 `created` 降序排列
-4. 按 `max_tokens` 截断，不压缩（直接展示原文）
-5. 返回：`"=== 你留下的 feel ===\n[时间] [bucket_id:xxx]\n内容..."`
+> **注**：`breath()` 无参调用已整合 Dream Veil（梦境）、Feel Trace、Marginalia（走廊信）、Memory Drift 等模块的输出，不再需要单独调用 `dream()` 和 `breath(domain="feel")`。
 
 ---
 
