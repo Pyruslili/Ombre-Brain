@@ -1507,6 +1507,7 @@ class DesireEngine:
                     "kind": t.kind,
                     "strength": round(t.strength, 2),
                     "source": getattr(t, "source", "manual"),
+                    "born_at": round(t.born_at, 3),
                 }
                 for t in thoughts
             ],

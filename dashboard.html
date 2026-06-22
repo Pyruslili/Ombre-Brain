@@ -515,7 +515,14 @@ label {
 .score-final { text-align: right; color: var(--ink-soft); font: 300 1.08rem/1 var(--font-number); }
 .score-final small { margin-left: .25rem; color: var(--mute); font: var(--fs-micro) var(--font-mono); }
 
-.reverie-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 1rem; background: transparent; }
+.reverie-grid {
+  display: grid;
+  grid-template-columns: minmax(0,1.45fr) minmax(350px,.85fr);
+  grid-template-areas: "dream weather" "dream density";
+  gap: 1rem;
+  align-items: start;
+  background: transparent;
+}
 .reverie-card, .config-section {
   background: linear-gradient(145deg, rgba(52,33,21,.38), rgba(12,7,4,.72));
   padding: clamp(1.5rem, 3vw, 3rem);
@@ -523,31 +530,40 @@ label {
   border-radius: 20px;
   box-shadow: inset 0 1px rgba(255,224,186,.025), 0 24px 70px rgba(0,0,0,.10);
 }
-.density-card { grid-column: 1 / -1; }
+.dream-card { grid-area: dream; min-height: 580px; }
+.mood-card { grid-area: weather; }
+.density-card { grid-area: density; padding-top: 1.45rem; padding-bottom: 1.45rem; }
 .reverie-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
 .reverie-title, .config-section h3 { font: 300 var(--fs-section)/1.1 var(--font-display); color: var(--ink); }
 .reverie-sub, .tri-label, .tri-desc, .axis-lbl { color: var(--mute); font: 300 var(--fs-micro)/1.45 var(--font-mono); letter-spacing: .12em; }
-.mood-tri { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
-.tri-num { margin: .7rem 0; font: 300 clamp(1.25rem,1.8vw,1.65rem)/1 var(--font-number); }
-.tri-num.accent { color: var(--accent-deep); }
-.mood-word-row { margin: 2rem 0; padding: 1rem 0; display: flex; gap: 1rem; align-items: center; border-block: 1px solid var(--line-soft); }
-.mood-word-lbl { color: var(--mute); font: var(--fs-micro) var(--font-mono); text-transform: uppercase; }
-.mood-word-val { font: 300 1.3rem var(--font-display); }
+.weather-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border-top: 1px solid var(--line-soft); }
+.weather-item { padding: .85rem .65rem .9rem 0; border-bottom: 1px solid var(--line-soft); }
+.weather-item:nth-child(even) { padding-left: .8rem; border-left: 1px solid var(--line-soft); }
+.weather-item.full { grid-column: 1 / -1; padding-left: 0; border-left: 0; }
+.weather-label { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.weather-value { color: var(--ink); font: 300 1.08rem/1.35 var(--font-display); }
+.weather-value.numeric { color: var(--accent-deep); font-size: 1.25rem; }
+.weather-trace { color: var(--ink-soft); font: 300 .82rem/1.75 var(--font-body); }
 .refresh-btn { margin-left: auto; min-height: 28px; border: 0; padding: .3rem; }
 .refresh-btn svg { width: 13px; }
-.mood-field-wrap { position: relative; }
-.mood-field { position: relative; min-height: 230px; border: 1px solid var(--line-soft); }
+.mood-field-wrap { position: relative; margin-top: 1.4rem; }
+.mood-field { position: relative; min-height: 215px; border: 1px solid var(--line-soft); background: radial-gradient(circle at 65% 35%, rgba(120,166,209,.045), transparent 34%); }
 .axis-hline, .axis-vline { position: absolute; background: var(--line-soft); }
 .axis-hline { left: 0; right: 0; top: 50%; height: 1px; }
 .axis-vline { top: 0; bottom: 0; left: 50%; width: 1px; }
 .axis-lbl { position: absolute; z-index: 2; }
 .axis-lbl.top { top: .5rem; left: .5rem; } .axis-lbl.bot { bottom: .5rem; left: .5rem; }
 .axis-lbl.left { bottom: .5rem; left: .5rem; } .axis-lbl.right { bottom: .5rem; right: .5rem; }
-.mood-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.mood-point { position: absolute; z-index: 3; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--accent-deep); box-shadow: 0 0 0 3px rgba(232,149,79,.08), 0 0 12px rgba(232,149,79,.28); transition: transform .25s, opacity .25s; }
+.mood-point:hover { z-index: 5; transform: scale(1.65); opacity: 1 !important; }
+.mood-point.current { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--cool); box-shadow: 0 0 0 4px rgba(120,166,209,.09), 0 0 16px rgba(120,166,209,.32); }
 .mood-tooltip, .spark-tooltip { position: absolute; display: none; z-index: 4; padding: .5rem; background: var(--bg-deep); border: 1px solid var(--line); font: var(--fs-micro) var(--font-mono); color: var(--ink-soft); }
-.dream-body { max-height: 420px; overflow: auto; color: var(--ink-soft); font: 300 var(--fs-body)/1.85 var(--font-body); }
+.mood-tooltip.show, .spark-tooltip.show { display: block; }
+.dream-body { color: var(--ink-soft); font: 300 .92rem/1.95 var(--font-body); }
+.dream-text { white-space: pre-wrap; }
 .dream-empty { color: var(--mute); }
-.spark-wrap { position: relative; min-height: 160px; }
+.spark-wrap { position: relative; min-height: 108px; }
+.spark-wrap svg { width: 100%; height: 90px; overflow: visible; }
 
 .network-legend {
   display: flex; gap: 2rem; align-items: center;
@@ -557,14 +573,38 @@ label {
 .legend-item { display: flex; align-items: center; gap: .4rem; }
 #network-canvas { display: block; width: 100%; height: min(70vh,720px); background: radial-gradient(circle at center, rgba(196,122,56,.045), transparent 52%); }
 
-#desire-view > div { max-width: 940px !important; padding: 0 !important; }
-#desire-view [style*="background:var(--card)"] {
-  border: 1px solid var(--line-soft) !important;
-  border-radius: 18px !important;
-  background: linear-gradient(145deg, rgba(52,33,21,.34), rgba(12,7,4,.66)) !important;
-  padding: 1.5rem !important;
+#desire-view > .drift-shell { max-width: 980px; margin: 0 auto; }
+.drift-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.4rem; }
+.drift-header h2 { margin: 0; font: 300 var(--fs-section)/1.1 var(--font-display); }
+.drift-refresh.loading svg { animation: driftSpin .8s linear infinite; }
+.drift-card {
+  margin-bottom: 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(52,33,21,.34), rgba(12,7,4,.66));
+  padding: 1.5rem;
   box-shadow: inset 0 1px rgba(255,224,186,.025), 0 22px 64px rgba(0,0,0,.09);
 }
+.drift-card-label { margin-bottom: .9rem; color: var(--mute); font: 300 var(--fs-micro)/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
+.drift-intent-text { color: var(--ink); font: 300 1.18rem/1.4 var(--font-display); }
+.drift-intent-reason { margin-top: .35rem; color: var(--mute); font-size: .74rem; }
+.drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
+.drive-row:first-child { border-top: 0; }
+.drive-name { min-width: 0; color: var(--ink-soft); font-size: .8rem; }
+.drive-name small { display: block; margin-top: .08rem; color: var(--mute); font: 300 .58rem/1.3 var(--font-mono); letter-spacing: .06em; }
+.drive-track { position: relative; height: 3px; background: var(--line); }
+.drive-fill { position: absolute; inset: 0 auto 0 0; background: var(--ink-soft); }
+.drive-row.high .drive-name, .drive-row.high .drive-value { color: var(--accent-deep); }
+.drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 10px rgba(232,149,79,.2); }
+.drive-value { text-align: right; color: var(--ink); font: 300 1.3rem/1 var(--font-number); }
+.drive-value small { display: block; margin-top: .24rem; color: var(--mute); font: 300 .54rem/1.2 var(--font-mono); }
+.thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: .75rem; align-items: start; padding: .72rem 0; border-top: 1px solid var(--line-soft); }
+.thought-row:first-child { border-top: 0; }
+.thought-icon { width: 18px; height: 18px; margin-top: .12rem; color: var(--accent); }
+.thought-icon svg { display: block; width: 100%; height: 100%; }
+.thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
+.thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
+@keyframes driftSpin { to { transform: rotate(360deg); } }
 
 .config-section { margin-bottom: 1rem; }
 .config-section h3 { display: flex; align-items: center; gap: .7rem; margin-bottom: .45rem; }
@@ -624,9 +664,19 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 .import-card-tags { margin-bottom: .65rem; color: var(--mute); font: 300 .7rem/1.6 var(--font-mono); }
 .import-card-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
 .import-card-actions .danger { margin-left: auto; color: var(--negative); border-color: rgba(168,108,97,.42); }
-.import-editor { padding-top: .35rem; }
-.import-editor label { display: block; margin-top: .85rem; }
-.import-editor textarea { min-height: 210px; font-size: .9rem; line-height: 1.8; resize: vertical; }
+.import-card.editing { padding-top: 1.2rem; padding-bottom: 1.35rem; background: linear-gradient(90deg, rgba(196,122,56,.045), transparent 78%); }
+.import-editor { padding-top: .2rem; }
+.import-editor label { display: block; margin: .95rem 0 .35rem; }
+.import-editor textarea {
+  min-height: 260px;
+  padding: .85rem 0;
+  border-block: 1px solid var(--line-soft);
+  font-size: .88rem;
+  line-height: 1.8;
+  resize: vertical;
+  overflow-y: hidden;
+}
+.import-editor input { padding: .65rem 0; font-size: .82rem; }
 .import-editor-actions { display: flex; gap: .5rem; margin-top: 1rem; }
 
 /* ============================================================
@@ -651,18 +701,24 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 }
 .detail-panel.open { clip-path: inset(0); transform: translateX(0); opacity: 1; filter: blur(0); }
 .close-btn { position: absolute; top: 1.5rem; right: 1.5rem; width: 36px; min-height: 36px; padding: 0; border-radius: 50%; }
-.detail-panel h2 { max-width: 30rem; margin-bottom: 2rem; padding-right: 2.5rem; font: 300 clamp(1.75rem,3vw,2.5rem)/1.05 var(--font-display); letter-spacing: -.025em; }
+.detail-panel h2 { max-width: 30rem; margin-bottom: 1.25rem; padding-right: 2.5rem; font: 300 clamp(1.25rem,2vw,1.7rem)/1.16 var(--font-display); letter-spacing: -.015em; }
 .detail-meta { display: grid; grid-template-columns: repeat(2,1fr); gap: 0; margin-top: 2rem; border-top: 1px solid var(--line); }
-.detail-meta .field { padding: .95rem 0; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .76rem/1.6 var(--font-mono); }
-.detail-meta label { display: block; margin-bottom: .3rem; color: var(--mute); }
-.detail-meta .numeric { color: rgba(136,177,214,.86); }
-.detail-content { white-space: pre-wrap; color: var(--ink-soft); font-size: 1rem; line-height: 1.9; }
+.detail-meta .field { padding: 1rem .8rem 1rem 0; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .84rem/1.65 var(--font-body); }
+.detail-meta label { display: block; margin-bottom: .28rem; color: var(--mute); font-size: .68rem; }
+.detail-meta .numeric { color: var(--accent-deep); font: 400 1.02rem/1.3 var(--font-number); }
+.detail-content { white-space: pre-wrap; color: var(--ink-soft); font-size: .88rem; line-height: 1.85; }
 .detail-body-label { display: block; margin-bottom: .65rem; }
-.detail-edit textarea { min-height: 260px; padding: .85rem; border: 1px solid var(--line); font-size: 1rem; line-height: 1.8; resize: vertical; }
-.detail-edit input { font-size: .88rem; }
+.detail-edit textarea { min-height: 280px; padding: .85rem; border: 1px solid var(--line); font-size: .9rem; line-height: 1.8; resize: vertical; }
 .detail-actions { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line-soft); }
 .detail-actions button:last-child { opacity: .32; }
 .detail-actions button:last-child:hover { opacity: .8; }
+.tag-editor { margin-top: 1.2rem; }
+.tag-editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .55rem; }
+.tag-editor-list { display: grid; gap: .45rem; }
+.tag-editor-row { display: grid; grid-template-columns: minmax(0,1fr) 32px; gap: .5rem; align-items: center; }
+.tag-editor-row input { padding: .55rem .65rem; border: 1px solid var(--line); font-size: .84rem; }
+.tag-editor-remove { width: 32px; min-height: 32px; padding: 0; border-radius: 50%; color: var(--mute); }
+.tag-editor-add { min-height: 28px; padding: .35rem .7rem; }
 
 #auth-overlay {
   position: fixed; inset: 0; z-index: 200;
@@ -720,8 +776,8 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
   .breath-controls { grid-template-columns: 1fr 1fr; }
   .score-row { grid-template-columns: 34px minmax(150px,1fr) 60px; }
   .score-row .score-bars { display: none; }
-  .reverie-grid { grid-template-columns: 1fr; }
-  .density-card { grid-column: auto; }
+  .reverie-grid { grid-template-columns: 1fr; grid-template-areas: "dream" "weather" "density"; }
+  .dream-card { min-height: 0; }
 }
 @media (max-width: 620px) {
   .topbar { padding-top: 1rem; }
@@ -739,6 +795,10 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
   .network-legend { flex-wrap: wrap; gap: .8rem 1.2rem; }
   .network-legend .legend-item:last-child { width: 100%; margin-left: 0 !important; }
   .config-row { grid-template-columns: 1fr; gap: 0; }
+  .drive-row { grid-template-columns: 92px minmax(90px,1fr) 56px; gap: .6rem; }
+  .drive-value { font-size: 1.08rem; }
+  .thought-row { grid-template-columns: 18px minmax(0,1fr); }
+  .thought-meta { grid-column: 2; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -857,61 +917,6 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 
 <div class="content" id="reverie-view" style="display:none">
   <div class="reverie-grid">
-    <!-- 心情卡 -->
-    <div class="reverie-card mood-card">
-      <div class="reverie-head">
-        <span class="reverie-title">Mood Trace</span>
-        <span class="reverie-sub" id="rev-updated">current affect</span>
-      </div>
-
-      <div class="mood-tri">
-        <div class="tri-col">
-          <div class="tri-label">affection</div>
-          <div class="tri-num accent" id="rev-aff-num">—</div>
-          <div class="tri-bar"><div class="tri-bar-fill aff-fill" id="rev-aff-bar" style="width:0%"></div></div>
-          <div class="tri-desc" id="rev-aff-desc">Reading affect</div>
-        </div>
-        <div class="tri-col">
-          <div class="tri-label">PA · positive</div>
-          <div class="tri-num" id="rev-pa-num">—</div>
-          <div class="tri-bar"><div class="tri-bar-fill pa-fill" id="rev-pa-bar" style="width:0%"></div></div>
-          <div class="tri-desc">Warmth</div>
-        </div>
-        <div class="tri-col">
-          <div class="tri-label">NA · negative</div>
-          <div class="tri-num warn" id="rev-na-num">—</div>
-          <div class="tri-bar"><div class="tri-bar-fill na-fill" id="rev-na-bar" style="width:0%"></div></div>
-          <div class="tri-desc">Shadow</div>
-        </div>
-      </div>
-
-      <div class="mood-word-row">
-        <span class="mood-word-lbl">Last signal</span>
-        <span class="mood-word-val" id="rev-word">—</span>
-        <button class="refresh-btn" onclick="loadReverieMood()" title="Revisit mood trace">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 12a9 9 0 0 1 15.7-6L21 8"/>
-            <path d="M21 3v5h-5"/>
-            <path d="M21 12a9 9 0 0 1-15.7 6L3 16"/>
-            <path d="M3 21v-5h5"/>
-          </svg>
-        </button>
-      </div>
-
-      <div class="mood-field-wrap">
-        <div class="mood-field" id="rev-moodField">
-          <span class="axis-lbl axis-lbl-y top">imp 10</span>
-          <span class="axis-lbl axis-lbl-y bot">imp 1</span>
-          <span class="axis-lbl axis-lbl-x left">NA −1</span>
-          <span class="axis-lbl axis-lbl-x right">PA +1</span>
-          <div class="axis-hline"></div>
-          <div class="axis-vline"></div>
-        </div>
-        <div class="mood-tooltip" id="rev-moodTooltip"></div>
-      </div>
-    </div>
-
-    <!-- 梦境卡 -->
     <div class="reverie-card dream-card">
       <div class="reverie-head">
         <span class="reverie-title">Dream Veil</span>
@@ -922,7 +927,36 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
       </div>
     </div>
 
-    <!-- 密度卡 -->
+    <div class="reverie-card mood-card">
+      <div class="reverie-head">
+        <span class="reverie-title">Pulse Weather</span>
+        <button class="refresh-btn" onclick="loadReverieWeather()" title="Revisit pulse weather" aria-label="刷新 Pulse Weather">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M3 21v-5h5"/></svg>
+        </button>
+      </div>
+
+      <div class="weather-list">
+        <div class="weather-item full"><span class="weather-label">Undertow</span><span class="weather-value" id="rev-undertow">—</span></div>
+        <div class="weather-item"><span class="weather-label">Warmth</span><span class="weather-value numeric" id="rev-warmth">—</span></div>
+        <div class="weather-item"><span class="weather-label">Shadow</span><span class="weather-value numeric" id="rev-shadow">—</span></div>
+        <div class="weather-item"><span class="weather-label">Longing</span><span class="weather-value numeric" id="rev-longing">—</span></div>
+        <div class="weather-item"><span class="weather-label">Nox Now</span><span class="weather-value" id="rev-now">—</span></div>
+        <div class="weather-item full"><span class="weather-label">Mood Trace</span><div class="weather-trace" id="rev-trace">Reading the latest thought.</div></div>
+      </div>
+
+      <div class="mood-field-wrap">
+        <div class="mood-field" id="rev-moodField">
+          <span class="axis-lbl axis-lbl-y top">imp 10</span>
+          <span class="axis-lbl axis-lbl-y bot">imp 1</span>
+          <span class="axis-lbl axis-lbl-x left">shadow</span>
+          <span class="axis-lbl axis-lbl-x right">warmth</span>
+          <div class="axis-hline"></div>
+          <div class="axis-vline"></div>
+        </div>
+        <div class="mood-tooltip" id="rev-moodTooltip"></div>
+      </div>
+    </div>
+
     <div class="reverie-card density-card">
       <div class="reverie-head">
         <span class="reverie-title">Pulse Density</span>
@@ -959,22 +993,25 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 </div>
 
 <div class="content" id="desire-view" style="display:none">
-  <div style="padding:1.5rem;max-width:700px;margin:0 auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
-      <h2 style="margin:0;font-size:1.1rem">Inner Weather</h2>
-      <button onclick="loadDesire()" style="font-size:var(--fs-micro);padding:0.3rem 0.7rem;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--ink-soft)">Revisit</button>
+  <div class="drift-shell">
+    <div class="drift-header">
+      <h2>Inner Weather</h2>
+      <button class="drift-refresh" id="drift-refresh" onclick="loadDesire(this)">
+        <svg style="width:11px;height:11px;vertical-align:-2px;margin-right:.35rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M3 21v-5h5"/></svg>
+        Revisit
+      </button>
     </div>
-    <div id="desire-intent" style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
-      <div style="font-size:0.62rem;color:var(--ink-soft);margin-bottom:0.4rem">Current Pull</div>
-      <div id="desire-intent-text" style="font-size:1rem">Reading the drift…</div>
-      <div id="desire-intent-reason" style="font-size:0.75rem;color:var(--ink-soft);margin-top:0.3rem"></div>
+    <div class="drift-card" id="desire-intent">
+      <div class="drift-card-label">Current Pull</div>
+      <div class="drift-intent-text" id="desire-intent-text">Reading the drift…</div>
+      <div class="drift-intent-reason" id="desire-intent-reason"></div>
     </div>
-    <div style="background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid var(--border)">
-      <div style="font-size:0.62rem;color:var(--ink-soft);margin-bottom:0.8rem">Drives</div>
+    <div class="drift-card">
+      <div class="drift-card-label">Drives</div>
       <div id="desire-drives"></div>
     </div>
-    <div style="background:var(--card);border-radius:10px;padding:1.2rem;border:1px solid var(--border)">
-      <div style="font-size:0.62rem;color:var(--ink-soft);margin-bottom:0.8rem">Thought Pool</div>
+    <div class="drift-card">
+      <div class="drift-card-label">Thought Pool</div>
       <div id="desire-thoughts"><span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span></div>
     </div>
   </div>
@@ -1183,6 +1220,8 @@ const ICONS = {
   dynamic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
   unresolved: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
   archived: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
+  window: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 3v18M3 12h18"/></svg>',
+  inner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m12 3 2.2 5.3L20 9l-4.3 3.8 1.3 5.7-5-3-5 3 1.3-5.7L4 9l5.8-.7L12 3Z"/><circle cx="12" cy="12" r="2"/></svg>',
   all: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
 };
 
@@ -1293,9 +1332,22 @@ async function doLogin() {
   else { const d = await resp.json(); showAuthError(d.detail || '密码错误'); }
 }
    
-async function loadDesire() {
+function thoughtPoolIcon(kind) {
+  const icons = {
+    fixation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    unsourced: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 16a4 4 0 0 1 1-7.9A6 6 0 0 1 18.5 10 3 3 0 0 1 18 16H6Z"/><path d="M8 20h8"/></svg>',
+    rumination: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 9A7 7 0 0 1 18 6l2 1M4 17l2 1a7 7 0 0 0 11.9-3"/></svg>',
+    flit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="3"/></svg>'
+  };
+  return icons[kind] || icons.flit;
+}
+
+async function loadDesire(button) {
+  const refresh = button || document.getElementById('drift-refresh');
+  if (refresh) { refresh.disabled = true; refresh.classList.add('loading'); }
   try {
     const r = await fetch('/api/desire/state', { credentials: 'include' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
 
     // intent
@@ -1315,34 +1367,28 @@ async function loadDesire() {
       duty:'记挂', social:'社交', fatigue:'疲劳', libido:'亲密', stress:'压力'
     };
     const drivesEl = document.getElementById('desire-drives');
-    drivesEl.innerHTML = Object.entries(d.drives).map(([k, v]) => {
-      const lf = d.local_fatigue[k] || 0;
+    drivesEl.innerHTML = Object.entries(d.drives || {}).map(([k, v]) => {
+      const lf = d.local_fatigue?.[k] || 0;
       const eff = Math.max(0, v * (1 - lf));
       const pct = Math.round(v * 100);
       const effPct = Math.round(eff * 100);
       const isHigh = eff >= 0.55;
-      return `<div style="margin-bottom:0.6rem">
-        <div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:0.2rem">
-          <span style="color:${isHigh?'var(--accent)':'var(--ink-soft)'}">${DRIVE_LABELS[k]||k}</span>
-          <span class="numeric" style="color:var(--ink-soft)">${pct}%${lf>0.1?' (疲劳-'+Math.round(lf*100)+'%)':''}</span>
-        </div>
-        <div style="height:4px;background:var(--border);border-radius:2px">
-          <div style="height:4px;width:${pct}%;background:var(--border);border-radius:2px;position:relative">
-            <div style="position:absolute;left:0;top:0;height:4px;width:${effPct}%;background:${isHigh?'var(--accent)':'var(--ink-soft)'};border-radius:2px"></div>
-          </div>
-        </div>
+      return `<div class="drive-row${isHigh ? ' high' : ''}">
+        <div class="drive-name">${esc(DRIVE_LABELS[k] || k)}<small>${esc(k)}</small></div>
+        <div class="drive-track"><div class="drive-fill" style="width:${Math.min(100, effPct)}%"></div></div>
+        <div class="drive-value">${pct}%${lf > .1 ? '<small>fatigue −' + Math.round(lf * 100) + '%</small>' : ''}</div>
       </div>`;
     }).join('');
 
     // thoughts
     const thoughtsEl = document.getElementById('desire-thoughts');
     if (d.thoughts && d.thoughts.length > 0) {
-      thoughtsEl.innerHTML = d.thoughts.map(t => {
-        const icon = t.kind==='fixation'?'🔒':t.kind==='unsourced'?'🌫️':'💭';
-        return `<div style="font-size:0.85rem;padding:0.4rem 0;border-bottom:1px solid var(--border);display:flex;gap:0.5rem;align-items:baseline">
-          <span>${icon}</span>
-          <span style="flex:1;color:var(--ink)">${t.text||'（无来源）'}</span>
-          <span style="color:var(--ink-soft);font-size:0.75rem">${t.drive} <span class="numeric">${Math.round(t.strength*100)}%</span></span>
+      const thoughts = [...d.thoughts].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
+      thoughtsEl.innerHTML = thoughts.map(t => {
+        return `<div class="thought-row">
+          <span class="thought-icon">${thoughtPoolIcon(t.kind)}</span>
+          <span class="thought-text">${esc(t.text || '（无来源）')}</span>
+          <span class="thought-meta">${esc(t.drive || '—')} · ${Math.round(finiteNumber(t.strength) * 100)}%</span>
         </div>`;
       }).join('');
     } else {
@@ -1350,6 +1396,8 @@ async function loadDesire() {
     }
   } catch(e) {
     document.getElementById('desire-intent-text').textContent = 'The drift is out of reach.';
+  } finally {
+    if (refresh) { refresh.disabled = false; refresh.classList.remove('loading'); }
   }
 }   
 
@@ -1467,21 +1515,17 @@ function updateStats() {
 }
 
 function buildFilters() {
-  const domains = new Set();
-  allBuckets.forEach(b => (b.domain || []).forEach(d => domains.add(d)));
   const filters = document.getElementById('filters');
   const types = [
     { key: 'all', label: '全部', icon: ICONS.all },
-    { key: 'pinned', label: '钉选', icon: ICONS.pinned },
-    { key: 'feel', label: 'Feel', icon: ICONS.feel },
-    { key: 'unresolved', label: '未解决', icon: ICONS.unresolved },
-    { key: 'digested', label: '已沉底', icon: ICONS.digested },
-    { key: 'archived', label: '归档', icon: ICONS.archived },
+    { key: 'window', label: 'Window', icon: ICONS.window },
+    { key: 'dynamic', label: '普通记忆', icon: ICONS.dynamic },
+    { key: 'inner', label: 'Inner', icon: ICONS.inner },
+    { key: 'unresolved', label: 'Unresolved', icon: ICONS.unresolved },
+    { key: 'digested', label: '已消化', icon: ICONS.digested },
   ];
   filters.innerHTML = types.map(t =>
     `<button class="filter-btn ${t.key === currentFilter ? 'active' : ''}" data-filter="${t.key}">${t.icon}${t.label}</button>`
-  ).join('') + Array.from(domains).slice(0, 10).map(d =>
-    `<button class="filter-btn ${currentFilter === 'domain:'+d ? 'active' : ''}" data-filter="domain:${d}">${d}</button>`
   ).join('');
 
   filters.onclick = (e) => {
@@ -1496,15 +1540,11 @@ function buildFilters() {
 
 function filterBuckets(buckets) {
   if (currentFilter === 'all') return buckets;
-  if (currentFilter === 'pinned') return buckets.filter(b => b.pinned);
-  if (currentFilter === 'feel') return buckets.filter(b => b.type === 'feel');
+  if (currentFilter === 'window') return buckets.filter(b => bucketFacets(b).includes('window'));
+  if (currentFilter === 'inner') return buckets.filter(b => bucketFacets(b).includes('inner'));
+  if (currentFilter === 'dynamic') return buckets.filter(b => b.type === 'dynamic' && !b.resolved && !b.digested && !bucketFacets(b).some(d => d === 'window' || d === 'inner'));
   if (currentFilter === 'unresolved') return buckets.filter(b => !b.resolved && b.type !== 'permanent' && !b.pinned);
   if (currentFilter === 'digested') return buckets.filter(b => b.digested || b.resolved);
-  if (currentFilter === 'archived') return buckets.filter(b => b.type === 'archived' || b.score < 0.3);
-  if (currentFilter.startsWith('domain:')) {
-    const d = currentFilter.slice(7);
-    return buckets.filter(b => (b.domain || []).includes(d));
-  }
   return buckets;
 }
 
@@ -1546,8 +1586,8 @@ async function searchBuckets(query) {
   const localResults = allBuckets.filter(b => {
     if ((b.name || '').toLowerCase().includes(q)) return true;
     if ((b.content_preview || '').toLowerCase().includes(q)) return true;
-    if ((b.tags || []).some(t => t.toLowerCase().includes(q))) return true;
-    if ((b.domain || []).some(d => d.toLowerCase().includes(q))) return true;
+    if (normalizeTags(b.tags).some(t => t.toLowerCase().includes(q))) return true;
+    if (normalizeTags(b.domain).some(d => d.toLowerCase().includes(q))) return true;
     return false;
   });
   renderBuckets(localResults);
@@ -1571,10 +1611,15 @@ async function showDetail(id) {
   panel.classList.add('open');
   try {
     const res = await fetch(BASE + '/api/bucket/' + id);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const b = await res.json();
     const meta = b.metadata || {};
-    const detailScore = Number.isFinite(b.score) ? b.score.toFixed(4) : '0.0000';
+    const detailScore = finiteNumber(b.score, 0).toFixed(4);
     const detailTags = normalizeTags(meta.tags);
+    const detailDomains = normalizeTags(meta.domain);
+    const valence = finiteNumber(meta.valence, .5);
+    const arousal = finiteNumber(meta.arousal, .3);
+    const modelValence = meta.model_valence == null ? null : finiteNumber(meta.model_valence, null);
     content.innerHTML =
       `<h2>${esc(meta.name || id)}</h2>
        <label class="detail-body-label">正文</label>
@@ -1586,21 +1631,21 @@ async function showDetail(id) {
          <button onclick="deleteBucket('${id}')" style="color:var(--negative);border-color:rgba(199,121,112,.35);margin-left:auto;">删除</button>
        </div>
        <div class="detail-meta">
-         <div class="field"><label>ID</label>${id}</div>
-         <div class="field"><label>类型</label>${meta.type || 'dynamic'}</div>
-         <div class="field"><label>域</label>${(meta.domain || []).join(', ') || '—'}</div>
-         <div class="field"><label>标签</label>${detailTags.join(', ') || '—'}</div>
-         <div class="field"><label>事件效价</label><span class="numeric">V${(meta.valence || 0.5).toFixed(2)}</span></div>
-         <div class="field"><label>唤醒度</label><span class="numeric">A${(meta.arousal || 0.3).toFixed(2)}</span></div>
-         <div class="field"><label>模型视角</label><span class="numeric">${meta.model_valence != null ? 'V' + meta.model_valence.toFixed(2) : '—'}</span></div>
-         <div class="field"><label>重要度</label><span class="numeric">${meta.importance || 5}/10</span></div>
+         <div class="field"><label>ID</label>${esc(id)}</div>
+         <div class="field"><label>类型</label>${esc(meta.type || 'dynamic')}</div>
+         <div class="field"><label>域</label>${detailDomains.map(esc).join(', ') || '—'}</div>
+         <div class="field"><label>标签</label>${detailTags.map(esc).join(', ') || '—'}</div>
+         <div class="field"><label>事件效价</label><span class="numeric">V${valence.toFixed(2)}</span></div>
+         <div class="field"><label>唤醒度</label><span class="numeric">A${arousal.toFixed(2)}</span></div>
+         <div class="field"><label>模型视角</label><span class="numeric">${modelValence != null ? 'V' + modelValence.toFixed(2) : '—'}</span></div>
+         <div class="field"><label>重要度</label><span class="numeric">${finiteNumber(meta.importance, 5)}/10</span></div>
          <div class="field"><label>权重分</label><span class="numeric">${detailScore}</span></div>
-         <div class="field"><label>激活次数</label><span class="numeric">${meta.activation_count || 1}</span></div>
+         <div class="field"><label>激活次数</label><span class="numeric">${finiteNumber(meta.activation_count, 1)}</span></div>
          <div class="field"><label>已解决</label>${meta.resolved ? '✓' : '—'}</div>
          <div class="field"><label>已消化</label>${meta.digested ? '✓' : '—'}</div>
          <div class="field"><label>钉选</label>${meta.pinned ? '✓' : '—'}</div>
-         <div class="field"><label>创建</label>${meta.created || '—'}</div>
-         <div class="field"><label>最后活跃</label>${meta.last_active || '—'}</div>
+         <div class="field"><label>创建</label>${esc(meta.created || '—')}</div>
+         <div class="field"><label>最后活跃</label>${esc(meta.last_active || '—')}</div>
        </div>`;
   } catch (e) {
     content.innerHTML = '<div class="loading">This trace is out of reach · ' + e.message + '</div>';
@@ -1608,30 +1653,65 @@ async function showDetail(id) {
 }
 function startEdit() {
   const body = document.getElementById('detail-body');
+  if (!body || body.classList.contains('detail-edit')) return;
   const id = body.dataset.bucketId;
   const currentContent = body.textContent;
-  const currentTags = JSON.parse(body.dataset.tags || '[]').join(', ');
+  let currentTags = [];
+  try { currentTags = normalizeTags(JSON.parse(body.dataset.tags || '[]')); } catch (e) {}
+  const actions = document.querySelector('#detail-content > .detail-actions');
+  if (actions) actions.style.display = 'none';
   body.classList.add('detail-edit');
   body.innerHTML = `<textarea id="edit-ta" aria-label="正文"></textarea>
-    <label for="edit-tags" style="display:block;margin-top:1rem">标签</label>
-    <input id="edit-tags" type="text" placeholder="用逗号分隔标签">
+    <div class="tag-editor">
+      <div class="tag-editor-head"><label>标签</label><button class="tag-editor-add" type="button" onclick="addTagEditorRow()">添加标签</button></div>
+      <div class="tag-editor-list" id="edit-tags-list"></div>
+    </div>
     <div style="display:flex;gap:0.5rem;margin-top:1rem">
       <button class="btn-primary" onclick="saveBucket('${id}')">保存</button>
       <button onclick="showDetail('${id}')">取消</button>
     </div>`;
   document.getElementById('edit-ta').value = currentContent;
-  document.getElementById('edit-tags').value = currentTags;
+  currentTags.forEach(tag => addTagEditorRow(tag));
+  if (!currentTags.length) addTagEditorRow('');
+}
+
+function addTagEditorRow(value = '') {
+  const list = document.getElementById('edit-tags-list');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'tag-editor-row';
+  const input = document.createElement('input');
+  input.className = 'edit-tag-value';
+  input.type = 'text';
+  input.value = value;
+  input.placeholder = '标签';
+  const remove = document.createElement('button');
+  remove.className = 'tag-editor-remove';
+  remove.type = 'button';
+  remove.setAttribute('aria-label', '删除标签');
+  remove.textContent = '×';
+  remove.onclick = () => row.remove();
+  row.append(input, remove);
+  list.appendChild(row);
+  if (!value) input.focus();
+}
+
+function collectEditedTags(root = document) {
+  return [...new Set(Array.from(root.querySelectorAll('.edit-tag-value')).map(input => input.value.trim()).filter(Boolean))];
 }
 
 async function saveBucket(id) {
   const text = document.getElementById('edit-ta').value;
-  const tags = parseTags(document.getElementById('edit-tags').value);
+  const tags = collectEditedTags(document.getElementById('detail-body'));
   const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({content: text, tags})
   });
-  if (!res.ok) return alert('保存失败');
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    return alert('保存失败：' + (error.error || res.status));
+  }
   await loadBuckets();
   showDetail(id);
 }
@@ -1643,6 +1723,15 @@ function parseTags(value) {
 function normalizeTags(value) {
   if (Array.isArray(value)) return value.map(tag => String(tag).trim()).filter(Boolean);
   return typeof value === 'string' ? parseTags(value) : [];
+}
+
+function bucketFacets(bucket) {
+  return [...normalizeTags(bucket.domain), ...normalizeTags(bucket.tags)].map(value => value.toLowerCase());
+}
+
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 async function toggleResolved(id, current) {
@@ -2168,7 +2257,7 @@ async function loadImportResults() {
       <article class="import-card" id="ir-${esc(b.id)}">
         <div class="import-card-head">
           <b class="import-card-title">${esc(b.name || b.id)}</b>
-          <span class="import-card-meta">${esc(b.type)} · ${esc((b.domain || []).join(','))} · imp ${Number(b.importance) || 5}</span>
+          <span class="import-card-meta">${esc(b.type)} · ${normalizeTags(b.domain).map(esc).join(',')} · imp ${finiteNumber(b.importance, 5)}</span>
         </div>
         <p class="import-card-content">${esc(b.content)}</p>
         <div class="import-card-tags">${normalizeTags(b.tags).map(t => '#' + esc(t)).join(' ') || '—'}</div>
@@ -2187,15 +2276,21 @@ async function loadImportResults() {
 async function startImportEdit(id) {
   const card = document.getElementById('ir-' + id);
   if (!card) return;
-  card.innerHTML = '<div class="loading">Opening fragment</div>';
+  card.classList.add('editing');
   try {
     const res = await fetch(BASE + '/api/bucket/' + id);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const bucket = await res.json();
-    const tags = normalizeTags(bucket.metadata?.tags);
-    card.innerHTML = `<div class="import-editor">
+    const meta = bucket.metadata || {};
+    const tags = normalizeTags(meta.tags);
+    const domains = normalizeTags(meta.domain);
+    card.innerHTML = `<div class="import-card-head">
+      <b class="import-card-title">${esc(meta.name || id)}</b>
+      <span class="import-card-meta">${esc(meta.type || 'dynamic')} · ${domains.map(esc).join(',')} · imp ${finiteNumber(meta.importance, 5)}</span>
+    </div>
+    <div class="import-editor">
       <label for="ir-content-${id}">正文</label>
-      <textarea id="ir-content-${id}"></textarea>
+      <textarea id="ir-content-${id}" oninput="autoGrowTextarea(this)"></textarea>
       <label for="ir-tags-${id}">标签</label>
       <input id="ir-tags-${id}" type="text" placeholder="用逗号分隔标签">
       <div class="import-editor-actions">
@@ -2203,11 +2298,20 @@ async function startImportEdit(id) {
         <button onclick="loadImportResults()">取消</button>
       </div>
     </div>`;
-    document.getElementById('ir-content-' + id).value = bucket.content || '';
+    const textarea = document.getElementById('ir-content-' + id);
+    textarea.value = bucket.content || '';
+    autoGrowTextarea(textarea);
     document.getElementById('ir-tags-' + id).value = tags.join(', ');
   } catch (e) {
+    card.classList.remove('editing');
     card.innerHTML = '<p style="color:var(--negative)">打开失败: ' + esc(e.message) + '</p>';
   }
+}
+
+function autoGrowTextarea(textarea) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.max(260, textarea.scrollHeight + 2) + 'px';
 }
 
 async function saveImportEdit(id) {
@@ -2218,7 +2322,10 @@ async function saveImportEdit(id) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({content, tags})
   });
-  if (!res.ok) return alert('保存失败');
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    return alert('保存失败：' + (error.error || res.status));
+  }
   await Promise.all([loadImportResults(), loadBuckets()]);
 }
 
@@ -2491,6 +2598,9 @@ function placeMoodPoint(pa, na, importance, content, ts, isCurrent, idx) {
   const field = document.getElementById('rev-moodField');
   if (!field) return;
   const tooltip = document.getElementById('rev-moodTooltip');
+  pa = finiteNumber(pa, .5);
+  na = Math.abs(finiteNumber(na, 0));
+  content = String(content || '');
   // X: PA - NA, 范围-1~1，映射10%~90%
   const balance = pa - na;
   const x = 50 + balance * 42;
@@ -2507,7 +2617,7 @@ function placeMoodPoint(pa, na, importance, content, ts, isCurrent, idx) {
   if (content) {
     dot.addEventListener('mouseenter', () => {
       tooltip.innerHTML = escHtml(content.slice(0, 100)) + (content.length > 100 ? '…' : '') +
-        `<div class="tt-meta">PA ${pa.toFixed(2)} · NA ${(-na).toFixed(2)} · imp ${imp}${ts ? ' · ' + ts : ''}</div>`;
+        `<div class="tt-meta">warmth ${pa.toFixed(2)} · shadow ${na.toFixed(2)} · imp ${imp}${ts ? ' · ' + escHtml(String(ts).slice(0, 10)) : ''}</div>`;
       const wrap = document.querySelector('.mood-field-wrap').getBoundingClientRect();
       const fieldRect = field.getBoundingClientRect();
       const absX = fieldRect.left - wrap.left + (x / 100) * fieldRect.width;
@@ -2537,39 +2647,35 @@ function escHtml(s) {
   return String(s || '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
-async function loadReverieMood() {
+async function loadReverieWeather() {
   try {
-    const r = await fetch(BASE + '/mood');
+    const r = await fetch(BASE + '/api/desire/state', { credentials: 'include' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    const aff = d.affection?.level ?? 0.5;
-    const pa = d.mood?.PA ?? 0.5;
-    const na = Math.abs(d.mood?.NA ?? 0.25);
-    const word = d.mood?.matched_word ?? '—';
-
-    document.getElementById('rev-aff-num').textContent = (aff * 100).toFixed(1) + '%';
-    document.getElementById('rev-aff-bar').style.width = (aff * 100) + '%';
-    document.getElementById('rev-aff-desc').textContent = descAff(aff);
-    document.getElementById('rev-pa-num').textContent = pa.toFixed(2);
-    document.getElementById('rev-pa-bar').style.width = (pa * 100) + '%';
-    document.getElementById('rev-na-num').textContent = (-na).toFixed(2);
-    document.getElementById('rev-na-bar').style.width = Math.min(100, na * 150) + '%';
-    document.getElementById('rev-word').textContent = word;
-    document.getElementById('rev-updated').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
+    const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.mood_trace || '—';
+    const weather = d.pulse_weather || {};
+    const undertow = weather.undertow || d.intent?.drive_key || Object.entries(d.drives || {}).filter(([key]) => key !== 'fatigue').sort((a,b) => b[1] - a[1])[0]?.[0] || '—';
+    const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? 0;
+    document.getElementById('rev-undertow').textContent = undertow + ' ' + finiteNumber(undertowValue).toFixed(2);
+    document.getElementById('rev-warmth').textContent = finiteNumber(weather.warmth ?? d.pa_na?.PA).toFixed(2);
+    document.getElementById('rev-shadow').textContent = Math.abs(finiteNumber(weather.shadow ?? d.pa_na?.NA)).toFixed(2);
+    document.getElementById('rev-longing').textContent = finiteNumber(weather.longing ?? d.longing).toFixed(2);
+    document.getElementById('rev-now').textContent = weather.nox_now || d.mood_word || d.rhythm?.label || '—';
+    document.getElementById('rev-trace').textContent = latestThought;
 
     clearMoodPoints();
-    // 当前点用importance=10放在最上面（最重要的当下）
-    placeMoodPoint(pa, na, 10, '当前心情', '', true, 0);
     try {
       const rh = await fetch(BASE + '/recent_moods');
       if (rh.ok) {
         const hist = await rh.json();
-        (hist.items || hist || []).slice(0, 20).forEach((item, i) => {
+        (hist.items || hist || []).slice(0, 10).forEach((item, i) => {
           placeMoodPoint(
             item.PA ?? item.pa ?? 0.5,
             Math.abs(item.NA ?? item.na ?? 0),
             item.importance ?? item.imp ?? 5,
             item.content || item.title || '',
-            item.ts || '',
+            item.created || item.ts || '',
             false,
             i
           );
@@ -2577,7 +2683,7 @@ async function loadReverieMood() {
       }
     } catch (e) {}
   } catch (e) {
-    document.getElementById('rev-aff-desc').textContent = '—';
+    document.getElementById('rev-trace').textContent = 'Pulse Weather is out of reach.';
   }
 }
 
@@ -2689,11 +2795,11 @@ async function loadReverieDensity() {
 
 let reverieMoodTimer = null;
 function loadReverie() {
-  loadReverieMood();
+  loadReverieWeather();
   loadReverieDream();
   loadReverieDensity();
   if (reverieMoodTimer) clearInterval(reverieMoodTimer);
-  reverieMoodTimer = setInterval(loadReverieMood, 30000);
+  reverieMoodTimer = setInterval(loadReverieWeather, 30000);
 }
 
 /* ============================================================

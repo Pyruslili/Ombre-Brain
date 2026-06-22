@@ -550,26 +550,30 @@ async def dream_latest_endpoint(request):
 async def recent_moods_endpoint(request):
     from starlette.responses import JSONResponse
     try:
+        def _float(value, fallback):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return fallback
+
         all_buckets = await bucket_mgr.list_all(include_archive=False)
-        normal = [b for b in all_buckets 
-                  if b["metadata"].get("type") not in ("feel", "permanent")
-                  and not b["metadata"].get("pinned")]
-        normal.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
-        recent = normal[:10]
+        feels = [b for b in all_buckets if b["metadata"].get("type") == "feel"]
+        feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
+        recent = feels[:10]
         result = []
         for b in recent:
-            v = float(b["metadata"].get("valence", 0.5))
-            a = float(b["metadata"].get("arousal", 0.3))
+            meta = b["metadata"]
+            v = _float(meta.get("valence", 0.5), 0.5)
+            a = _float(meta.get("arousal", 0.3), 0.3)
             result.append({
                 "id": b["id"],
-                "content": b["content"][:80],
+                "content": b["content"],
                 "valence": v,
                 "arousal": a,
-                "PA": round(v, 2),
-                "NA": round(-(1 - v) * 0.5, 2),
-                "affection": 0.5,
-                "created": b["metadata"].get("created", ""),
-                "importance": b["metadata"].get("importance", 5),
+                "PA": round(_float(meta.get("PA", v), v), 2),
+                "NA": round(_float(meta.get("NA", -(1 - v) * 0.5), -(1 - v) * 0.5), 2),
+                "created": meta.get("created", ""),
+                "importance": meta.get("importance", 5),
             })
         return JSONResponse(result, headers={"Access-Control-Allow-Origin": "*"})
     except Exception as e:
@@ -2296,6 +2300,8 @@ async def api_bucket_update(request):
 
     kwargs = {}
     if "content" in body:
+        if not isinstance(body["content"], str):
+            return JSONResponse({"error": "content must be a string"}, status_code=400)
         kwargs["content"] = body["content"]
     if "resolved" in body:
         kwargs["resolved"] = bool(body["resolved"])
@@ -2317,7 +2323,9 @@ async def api_bucket_update(request):
         return JSONResponse({"error": "nothing to update"}, status_code=400)
 
     try:
-        await bucket_mgr.update(bucket_id, **kwargs)
+        updated = await bucket_mgr.update(bucket_id, **kwargs)
+        if not updated:
+            return JSONResponse({"error": "bucket could not be updated"}, status_code=500)
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -2909,6 +2917,7 @@ async def api_desire_state(request):
     state = _desire.state()
     try:
         from mood_pool import get_daily_mood
+        from panas_scorer import score
         import json as _j, os as _o
         mood_path = "/app/buckets/current_mood.json"
         live = {}
@@ -2916,11 +2925,44 @@ async def api_desire_state(request):
             with open(mood_path) as _f:
                 live = _j.load(_f)
         bs = live.get("brain_signals", {})
-        thought_dicts = [{"text": t.get("text",""), "drive": t.get("drive",""), "strength": t.get("strength",0)}
-                         for t in state.get("thoughts", [])]
+        thoughts = sorted(
+            state.get("thoughts", []),
+            key=lambda t: float(t.get("born_at", 0) or 0),
+            reverse=True,
+        )
+        state["thoughts"] = thoughts
+        thought_dicts = [{"text": t.get("text", ""), "drive": t.get("drive", ""), "strength": t.get("strength", 0)}
+                         for t in thoughts]
         mood_entry = get_daily_mood(branch=bs.get("二级分支") or None, thoughts=thought_dicts)
-        state["mood_trace"] = mood_entry[0]
+        base_score = score(mood_entry[0])
+        def _weather_float(value, fallback):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return float(fallback)
+        warmth = _weather_float(live.get("PA", base_score["PA"]), base_score["PA"])
+        shadow = abs(_weather_float(live.get("NA", base_score["NA"]), base_score["NA"]))
+        latest_thought = next(
+            (t.get("text", "").strip() for t in thoughts if t.get("text", "").strip()),
+            mood_entry[0],
+        )
+        intent = state.get("intent") or {}
+        top_drive = intent.get("drive_key")
+        if not top_drive:
+            candidates = {k: v for k, v in state.get("drives", {}).items() if k != "fatigue"}
+            top_drive = max(candidates, key=candidates.get, default="")
+        undertow_value = float(state.get("drives", {}).get(top_drive, 0)) if top_drive else 0.0
+        state["mood_trace"] = latest_thought
         state["mood_word"] = mood_entry[1]
+        state["pulse_weather"] = {
+            "undertow": top_drive,
+            "undertow_value": round(undertow_value, 3),
+            "warmth": round(warmth, 3),
+            "shadow": round(shadow, 3),
+            "longing": round(float(state.get("longing", 0)), 3),
+            "nox_now": mood_entry[1],
+            "mood_trace": latest_thought,
+        }
     except Exception:
         pass
     return JSONResponse(state,
