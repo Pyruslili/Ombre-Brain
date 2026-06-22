@@ -518,9 +518,10 @@ label {
 .reverie-grid {
   display: grid;
   grid-template-columns: minmax(0,1.45fr) minmax(350px,.85fr);
-  grid-template-areas: "dream weather" "dream density";
+  grid-template-rows: minmax(0,1fr) auto;
+  grid-template-areas: "dream weather" "density weather";
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
   background: transparent;
 }
 .reverie-card, .config-section {
@@ -530,9 +531,10 @@ label {
   border-radius: 20px;
   box-shadow: inset 0 1px rgba(255,224,186,.025), 0 24px 70px rgba(0,0,0,.10);
 }
-.dream-card { grid-area: dream; min-height: 580px; }
-.mood-card { grid-area: weather; }
-.density-card { grid-area: density; padding-top: 1.45rem; padding-bottom: 1.45rem; }
+.dream-card { grid-area: dream; min-height: 460px; }
+.mood-card { grid-area: weather; height: 100%; }
+.density-card { grid-area: density; padding: 1rem 1.35rem; }
+.density-card .reverie-head { margin-bottom: .45rem; }
 .reverie-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
 .reverie-title, .config-section h3 { font: 300 var(--fs-section)/1.1 var(--font-display); color: var(--ink); }
 .reverie-sub, .tri-label, .tri-desc, .axis-lbl { color: var(--mute); font: 300 var(--fs-micro)/1.45 var(--font-mono); letter-spacing: .12em; }
@@ -562,8 +564,8 @@ label {
 .dream-body { color: var(--ink-soft); font: 300 .92rem/1.95 var(--font-body); }
 .dream-text { white-space: pre-wrap; }
 .dream-empty { color: var(--mute); }
-.spark-wrap { position: relative; min-height: 108px; }
-.spark-wrap svg { width: 100%; height: 90px; overflow: visible; }
+.spark-wrap { position: relative; min-height: 54px; }
+.spark-wrap svg { width: 100%; height: 52px; overflow: visible; }
 
 .network-legend {
   display: flex; gap: 2rem; align-items: center;
@@ -705,7 +707,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 .detail-meta { display: grid; grid-template-columns: repeat(2,1fr); gap: 0; margin-top: 2rem; border-top: 1px solid var(--line); }
 .detail-meta .field { padding: 1rem .8rem 1rem 0; border-bottom: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .84rem/1.65 var(--font-body); }
 .detail-meta label { display: block; margin-bottom: .28rem; color: var(--mute); font-size: .68rem; }
-.detail-meta .numeric { color: var(--accent-deep); font: 400 1.02rem/1.3 var(--font-number); }
+.detail-meta .numeric { color: var(--accent-deep); font: 400 1.28rem/1.2 var(--font-number); }
 .detail-content { white-space: pre-wrap; color: var(--ink-soft); font-size: .88rem; line-height: 1.85; }
 .detail-body-label { display: block; margin-bottom: .65rem; }
 .detail-edit textarea { min-height: 280px; padding: .85rem; border: 1px solid var(--line); font-size: .9rem; line-height: 1.8; resize: vertical; }
@@ -713,12 +715,9 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 .detail-actions button:last-child { opacity: .32; }
 .detail-actions button:last-child:hover { opacity: .8; }
 .tag-editor { margin-top: 1.2rem; }
-.tag-editor-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .55rem; }
-.tag-editor-list { display: grid; gap: .45rem; }
-.tag-editor-row { display: grid; grid-template-columns: minmax(0,1fr) 32px; gap: .5rem; align-items: center; }
-.tag-editor-row input { padding: .55rem .65rem; border: 1px solid var(--line); font-size: .84rem; }
-.tag-editor-remove { width: 32px; min-height: 32px; padding: 0; border-radius: 50%; color: var(--mute); }
-.tag-editor-add { min-height: 28px; padding: .35rem .7rem; }
+.tag-editor label { display: block; margin-bottom: .35rem; }
+.tag-editor input { padding: .68rem .75rem; border: 1px solid var(--line); font-size: .86rem; }
+.tag-editor-hint { margin-top: .4rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .05em; }
 
 #auth-overlay {
   position: fixed; inset: 0; z-index: 200;
@@ -776,7 +775,7 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
   .breath-controls { grid-template-columns: 1fr 1fr; }
   .score-row { grid-template-columns: 34px minmax(150px,1fr) 60px; }
   .score-row .score-bars { display: none; }
-  .reverie-grid { grid-template-columns: 1fr; grid-template-areas: "dream" "weather" "density"; }
+  .reverie-grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "dream" "density" "weather"; }
   .dream-card { min-height: 0; }
 }
 @media (max-width: 620px) {
@@ -1222,6 +1221,8 @@ const ICONS = {
   archived: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
   window: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 3v18M3 12h18"/></svg>',
   inner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m12 3 2.2 5.3L20 9l-4.3 3.8 1.3 5.7-5-3-5 3 1.3-5.7L4 9l5.8-.7L12 3Z"/><circle cx="12" cy="12" r="2"/></svg>',
+  letter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
+  writing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16 4 20Z"/><path d="m14.8 6.4 2.8 2.8"/></svg>',
   all: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
 };
 
@@ -1518,11 +1519,16 @@ function buildFilters() {
   const filters = document.getElementById('filters');
   const types = [
     { key: 'all', label: '全部', icon: ICONS.all },
+    { key: 'pinned', label: '钉选', icon: ICONS.pinned },
+    { key: 'feel', label: 'Feel', icon: ICONS.feel },
     { key: 'window', label: 'Window', icon: ICONS.window },
-    { key: 'dynamic', label: '普通记忆', icon: ICONS.dynamic },
+    { key: 'dynamic', label: 'Memory', icon: ICONS.dynamic },
     { key: 'inner', label: 'Inner', icon: ICONS.inner },
-    { key: 'unresolved', label: 'Unresolved', icon: ICONS.unresolved },
-    { key: 'digested', label: '已消化', icon: ICONS.digested },
+    { key: 'unresolved', label: '未解决', icon: ICONS.unresolved },
+    { key: 'digested', label: '已沉底', icon: ICONS.digested },
+    { key: 'letter', label: 'Letter', icon: ICONS.letter },
+    { key: 'writing', label: 'Writing', icon: ICONS.writing },
+    { key: 'archived', label: '归档', icon: ICONS.archived },
   ];
   filters.innerHTML = types.map(t =>
     `<button class="filter-btn ${t.key === currentFilter ? 'active' : ''}" data-filter="${t.key}">${t.icon}${t.label}</button>`
@@ -1540,11 +1546,16 @@ function buildFilters() {
 
 function filterBuckets(buckets) {
   if (currentFilter === 'all') return buckets;
+  if (currentFilter === 'pinned') return buckets.filter(b => b.pinned);
+  if (currentFilter === 'feel') return buckets.filter(b => b.type === 'feel');
   if (currentFilter === 'window') return buckets.filter(b => bucketFacets(b).includes('window'));
   if (currentFilter === 'inner') return buckets.filter(b => bucketFacets(b).includes('inner'));
-  if (currentFilter === 'dynamic') return buckets.filter(b => b.type === 'dynamic' && !b.resolved && !b.digested && !bucketFacets(b).some(d => d === 'window' || d === 'inner'));
+  if (currentFilter === 'dynamic') return buckets.filter(b => b.type === 'dynamic' && !b.resolved && !b.digested && !bucketFacets(b).some(d => ['window','inner','letter','letter_jiajia','writing','private'].includes(d)));
   if (currentFilter === 'unresolved') return buckets.filter(b => !b.resolved && b.type !== 'permanent' && !b.pinned);
   if (currentFilter === 'digested') return buckets.filter(b => b.digested || b.resolved);
+  if (currentFilter === 'letter') return buckets.filter(b => bucketFacets(b).some(d => d === 'letter' || d === 'letter_jiajia'));
+  if (currentFilter === 'writing') return buckets.filter(b => bucketFacets(b).includes('writing'));
+  if (currentFilter === 'archived') return buckets.filter(b => b.type === 'archived' || finiteNumber(b.score) < .3);
   return buckets;
 }
 
@@ -1663,46 +1674,21 @@ function startEdit() {
   body.classList.add('detail-edit');
   body.innerHTML = `<textarea id="edit-ta" aria-label="正文"></textarea>
     <div class="tag-editor">
-      <div class="tag-editor-head"><label>标签</label><button class="tag-editor-add" type="button" onclick="addTagEditorRow()">添加标签</button></div>
-      <div class="tag-editor-list" id="edit-tags-list"></div>
+      <label for="edit-tags">标签</label>
+      <input id="edit-tags" type="text" placeholder="用逗号分隔标签">
+      <div class="tag-editor-hint">直接修改或删除原有标签 · 逗号分隔</div>
     </div>
     <div style="display:flex;gap:0.5rem;margin-top:1rem">
       <button class="btn-primary" onclick="saveBucket('${id}')">保存</button>
       <button onclick="showDetail('${id}')">取消</button>
     </div>`;
   document.getElementById('edit-ta').value = currentContent;
-  currentTags.forEach(tag => addTagEditorRow(tag));
-  if (!currentTags.length) addTagEditorRow('');
-}
-
-function addTagEditorRow(value = '') {
-  const list = document.getElementById('edit-tags-list');
-  if (!list) return;
-  const row = document.createElement('div');
-  row.className = 'tag-editor-row';
-  const input = document.createElement('input');
-  input.className = 'edit-tag-value';
-  input.type = 'text';
-  input.value = value;
-  input.placeholder = '标签';
-  const remove = document.createElement('button');
-  remove.className = 'tag-editor-remove';
-  remove.type = 'button';
-  remove.setAttribute('aria-label', '删除标签');
-  remove.textContent = '×';
-  remove.onclick = () => row.remove();
-  row.append(input, remove);
-  list.appendChild(row);
-  if (!value) input.focus();
-}
-
-function collectEditedTags(root = document) {
-  return [...new Set(Array.from(root.querySelectorAll('.edit-tag-value')).map(input => input.value.trim()).filter(Boolean))];
+  document.getElementById('edit-tags').value = currentTags.join(', ');
 }
 
 async function saveBucket(id) {
   const text = document.getElementById('edit-ta').value;
-  const tags = collectEditedTags(document.getElementById('detail-body'));
+  const tags = parseTags(document.getElementById('edit-tags').value);
   const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json'},
