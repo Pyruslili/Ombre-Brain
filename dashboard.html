@@ -353,7 +353,7 @@ body::before {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.62rem;
   color: var(--mute);
-  margin-left: 0.5em;
+  margin-right: 0.5em;
 }
 .bucket-row .domain {
   font-family: 'JetBrains Mono', monospace;
@@ -2336,7 +2336,7 @@ function renderBuckets(buckets) {
     const idTag = b.type === 'feel' ? `<span class="bucket-id">${esc(b.id)}</span>` : '';
     return `<div class="bucket-row" onclick="showDetail('${b.id}')">
       <span class="icon">${bucketIcon(b)}</span>
-      <span class="name" title="${esc(b.name)}">${esc(b.name)}${idTag}</span>
+      <span class="name" title="${esc(b.name)}">${idTag}${esc(b.name)}</span>
       <span class="domain">${(b.domain || []).join(' · ')}</span>
       <span class="emotion"><span class="v-bar"><span class="v-dot" style="left:${vPos}%"></span></span>${modelV}</span>
       <span class="score">${b.score.toFixed(2)}</span>
