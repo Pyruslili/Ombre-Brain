@@ -83,6 +83,7 @@ html[data-theme="sakura-milk"] {
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: var(--bg); color-scheme: dark; scroll-behavior: smooth; }
+html.no-scroll-anim { scroll-behavior: auto !important; }
 body {
   min-height: 100vh;
   overflow-x: hidden;
@@ -644,7 +645,7 @@ label {
   display: grid;
   grid-template-columns: minmax(0,1.35fr) minmax(380px,.95fr);
   grid-template-rows: auto auto;
-  grid-template-areas: "dream weather" "density .";
+  grid-template-areas: "dream weather" ". density";
   gap: 1rem;
   align-items: start;
   background: transparent;
@@ -659,6 +660,7 @@ label {
 .dream-card {
   position: relative;
   grid-area: dream;
+  height: 400px;
   min-height: 400px;
   overflow: hidden;
   isolation: isolate;
@@ -672,9 +674,8 @@ label {
   background:
     radial-gradient(circle at 22% 30%, rgba(239,224,196,.24) 0 1px, transparent 1.8px),
     radial-gradient(circle at 68% 18%, rgba(146,178,210,.22) 0 1px, transparent 1.7px),
-    radial-gradient(circle at 78% 72%, rgba(232,149,79,.20) 0 1.2px, transparent 2px),
-    repeating-linear-gradient(98deg, transparent 0 9%, rgba(214,190,156,.018) 9.1%, transparent 9.22%);
-  background-size: 97px 113px, 149px 131px, 181px 163px, auto;
+    radial-gradient(circle at 78% 72%, rgba(232,149,79,.20) 0 1.2px, transparent 2px);
+  background-size: 97px 113px, 149px 131px, 181px 163px;
   filter: blur(.2px);
   animation: dreamDrift 22s ease-in-out infinite alternate;
 }
@@ -704,7 +705,7 @@ label {
 .refresh-btn { margin-left: auto; min-height: 28px; border: 0; padding: .3rem; }
 .refresh-btn svg { width: 13px; }
 .mood-field-wrap { position: relative; margin-top: 1.4rem; }
-.mood-card .mood-field-wrap { flex: 0 0 auto; margin-top: 0; height: clamp(260px, 34vh, 380px); min-height: 0; }
+.mood-card .mood-field-wrap { flex: 0 0 auto; margin-top: 0; height: clamp(340px, 48vh, 560px); min-height: 0; }
 .mood-field { position: relative; min-height: 0; height: 100%; border: 1px solid var(--line-soft); background: radial-gradient(circle at 65% 35%, rgba(120,166,209,.045), transparent 34%); }
 .axis-hline, .axis-vline { position: absolute; background: var(--line-soft); }
 .axis-hline { left: 0; right: 0; top: 50%; height: 1px; }
@@ -728,6 +729,8 @@ label {
   max-width: 54rem;
   margin: clamp(1.2rem,4vh,3.5rem) auto 0;
   padding: clamp(1.4rem,3vw,2.5rem) clamp(1.15rem,3.5vw,3rem);
+  max-height: calc(100% - 5.6rem);
+  overflow-y: auto;
   color: var(--ink-soft);
   font: 300 .94rem/2.05 var(--font-body);
   border-block: 1px solid rgba(225,164,97,.11);
@@ -782,20 +785,20 @@ label {
 .drift-intent-text.is-high { color: var(--accent-deep); }
 .drift-intent-reason { margin-top: .35rem; color: var(--mute); font-size: .74rem; }
 .drift-weather-card { padding-bottom: 1.65rem; }
-.drift-weather-main { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(220px,.8fr); gap: 1.2rem; align-items: end; }
+.drift-weather-main { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(220px,.95fr); gap: 1.2rem; align-items: end; }
 .drift-weather-kicker { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .11em; text-transform: uppercase; }
-.drift-undertow { color: var(--accent-deep); font: 300 clamp(2rem,4vw,3.6rem)/.9 var(--font-display); letter-spacing: -.035em; }
+.drift-undertow { color: var(--accent-deep); font: 300 clamp(1.55rem,3vw,2.65rem)/.95 var(--font-display); letter-spacing: -.03em; }
 .drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .65rem; }
 .drift-weather-mini { border-top: 1px solid var(--line-soft); padding-top: .62rem; }
 .drift-weather-mini span { display: block; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .drift-weather-mini strong { display: block; margin-top: .16rem; color: var(--ink); font: 300 1.24rem/1.05 var(--font-number); font-variant-numeric: oldstyle-nums proportional-nums; }
-.drift-weather-line { margin-top: 1.2rem; padding-top: .95rem; border-top: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .88rem/1.55 var(--font-body); }
+.drift-weather-line { margin-top: 1.05rem; padding-top: .85rem; border-top: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .82rem/1.5 var(--font-body); }
 .drift-weather-line span,
 .drift-weather-trace span { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
-.drift-weather-line strong { color: var(--ink); font: 300 1.05rem/1.25 var(--font-display); }
+.drift-weather-line strong { color: var(--ink); font: 300 .92rem/1.25 var(--font-display); }
 .drift-weather-trace { margin-top: .8rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
-.drift-weather-trace div { color: var(--ink); font: 300 1.05rem/1.55 var(--font-display); }
-.drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1.1rem; }
+.drift-weather-trace div { color: var(--ink); font: 300 .92rem/1.62 var(--font-display); }
+.drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1rem; }
 .drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
 .drive-row:first-child { border-top: 0; }
 .drive-name { min-width: 0; color: var(--ink-soft); font-size: .8rem; }
@@ -806,20 +809,20 @@ label {
 .drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 10px rgba(232,149,79,.2); }
 .drive-value { text-align: right; color: var(--ink); font: 300 1.3rem/1 var(--font-number); }
 .drive-value small { display: block; margin-top: .24rem; color: var(--mute); font: 300 .54rem/1.2 var(--font-mono); }
-.thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: .72rem .8rem; align-items: start; padding: .9rem 0; border-top: 1px solid var(--line-soft); }
+.thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: .36rem .65rem; align-items: start; padding: .82rem 0; border-top: 1px solid var(--line-soft); }
 .thought-row:first-child { border-top: 0; }
 .thought-icon { width: 18px; height: 18px; margin-top: .12rem; color: var(--accent); }
 .thought-icon svg { display: block; width: 100%; height: 100%; }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
-.thought-side { grid-column: 2; display: flex; align-items: center; justify-content: space-between; gap: .7rem; margin-top: .18rem; }
-.thought-actions { display: flex; gap: .35rem; }
+.thought-side { grid-column: 2; display: flex; align-items: center; justify-content: flex-start; gap: .65rem; margin-top: 0; }
+.thought-actions { display: flex; gap: .42rem; }
 .thought-actions button {
-  min-height: 27px;
-  padding: .34rem .58rem;
+  min-height: 30px;
+  padding: .4rem .72rem;
   border-color: var(--line-soft);
   color: var(--mute);
-  font-size: .52rem;
+  font-size: .58rem;
 }
 .thought-actions button:hover { color: var(--accent-deep); }
 .thought-actions .danger:hover { color: var(--negative); border-color: rgba(199,121,112,.36); }
@@ -833,7 +836,7 @@ label {
   line-height: 1.65;
   resize: vertical;
 }
-.thought-editor-grid { display: grid; grid-template-columns: minmax(160px,1fr) minmax(150px,.55fr) auto; gap: .65rem; align-items: end; }
+.thought-editor-grid { display: grid; grid-template-columns: minmax(116px,148px) minmax(180px,1fr) 58px auto; gap: .65rem; align-items: end; }
 .thought-editor label { display: grid; gap: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .thought-editor select,
 .thought-editor input { height: 34px; padding: 0 .65rem; border: 1px solid var(--line); font: 300 .72rem/1 var(--font-body); }
@@ -878,7 +881,7 @@ label {
   background: var(--bg-deep);
   box-shadow: 0 0 0 4px rgba(232,149,79,.08);
 }
-.thought-strength-readout { color: var(--accent-deep); font: 300 1rem/1 var(--font-number); }
+.thought-strength-readout { display: inline-flex; align-items: center; height: 34px; color: var(--accent-deep); font: 300 1.06rem/1 var(--font-number); }
 .thought-editor-buttons { display: flex; gap: .45rem; justify-content: flex-end; }
 .thought-editor-buttons button { min-height: 34px; }
 .echoes-shell { max-width: 1040px; margin: 0 auto; }
@@ -1454,7 +1457,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .score-row { grid-template-columns: 34px minmax(150px,1fr) 60px; }
   .score-row .score-bars { display: none; }
   .reverie-grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "dream" "weather" "density"; }
-  .dream-card { min-height: 0; }
+  .dream-card { height: auto; min-height: 0; }
+  .dream-body { max-height: none; overflow: visible; }
 }
 @media (max-width: 620px) {
   .topbar { padding-top: 1rem; }
@@ -2053,29 +2057,38 @@ function showOpeningIfNeeded() {
   document.body.appendChild(openingGate);
 }
 
+function forceScrollTop(lockMs = 80) {
+  const root = document.documentElement;
+  root.classList.add('no-scroll-anim');
+  root.scrollTop = 0;
+  document.body.scrollTop = 0;
+  window.scrollTo(0, 0);
+  setTimeout(() => root.classList.remove('no-scroll-anim'), lockMs);
+}
+
 function closeOpening(tab = '') {
   try { sessionStorage.setItem(OPENING_SEEN_KEY, '1'); } catch(e) {}
   const gate = openingGate || document.getElementById('opening-gate');
   openingGate = null;
-  window.scrollTo({ top: 0, behavior: 'auto' });
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (tab) switchChapter(tab, { scroll: false });
+  forceScrollTop(gate ? 630 : 90);
   if (gate) {
     gate.classList.add('closing');
     setTimeout(() => gate.remove(), 620);
   }
   if (tab) {
-    setTimeout(() => enterFromOpening(tab), gate ? 640 : 80);
+    const delay = gate ? 660 : 40;
+    setTimeout(() => {
+      forceScrollTop(40);
+      setTimeout(() => {
+        document.documentElement.classList.remove('no-scroll-anim');
+        document.getElementById('chapter-index')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' });
+      }, reduced ? 0 : 55);
+    }, delay);
   } else {
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    forceScrollTop(120);
   }
-}
-
-function enterFromOpening(tab) {
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  window.scrollTo({ top: 0, behavior: 'auto' });
-  switchChapter(tab, { scroll: false });
-  setTimeout(() => {
-    document.getElementById('chapter-index')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' });
-  }, reduced ? 0 : 420);
 }
 
 window.addEventListener('message', (event) => {
@@ -2239,15 +2252,15 @@ function renderThoughtRow(t) {
       <div class="thought-editor">
         <textarea id="thought-text-${esc(tid)}" aria-label="念头正文">${esc(text)}</textarea>
         <div class="thought-editor-grid">
-          <label>Drive
+          <label class="thought-drive-editor">Drive
             <select id="thought-drive-${esc(tid)}">
               ${DRIVE_KEYS.map(k => `<option value="${esc(k)}"${k === drive ? ' selected' : ''}>${esc(DRIVE_LABELS[k])} · ${esc(k)}</option>`).join('')}
             </select>
           </label>
-          <label>Strength
+          <label class="thought-strength-editor">Strength
             <input id="thought-strength-${esc(tid)}" type="range" min="0" max="1" step="0.01" value="${strength.toFixed(2)}" style="--range-pct:${Math.round(strength * 100)}%" oninput="updateThoughtStrengthReadout('${esc(tid)}')">
-            <span class="thought-strength-readout" id="thought-strength-readout-${esc(tid)}">${Math.round(strength * 100)}%</span>
           </label>
+          <span class="thought-strength-readout" id="thought-strength-readout-${esc(tid)}">${Math.round(strength * 100)}%</span>
           <div class="thought-editor-buttons">
             <button class="btn-primary" onclick="saveThought('${esc(tid)}')">保存</button>
             <button onclick="cancelThoughtEdit()">取消</button>
