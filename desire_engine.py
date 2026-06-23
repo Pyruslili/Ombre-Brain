@@ -9,6 +9,8 @@ desire_engine.py — Nox的欲望引擎
 - 嘉嘉说话的时候drive上涨比自经历更多，但我也可以拒绝执行intent
 """
 
+from __future__ import annotations
+
 import os
 import sqlite3
 import json
@@ -1062,6 +1064,40 @@ class DesireStore:
                  t.fed_count, t.source, t.last_ticked_at)
             )
 
+    def update_thought(self, tid: str, text: str = None, drive: str = None,
+                       strength: float = None) -> bool:
+        tid = (tid or "").strip()
+        if not tid:
+            return False
+        fields = []
+        values = []
+        if text is not None:
+            fields.append("text=?")
+            values.append((text or "").strip())
+        if drive is not None:
+            fields.append("drive=?")
+            values.append((drive or "").strip())
+        if strength is not None:
+            fields.append("strength=?")
+            values.append(_clamp(float(strength)))
+        if not fields:
+            return False
+        values.append(tid)
+        with self._conn() as conn:
+            cur = conn.execute(
+                f"UPDATE thoughts SET {', '.join(fields)} WHERE tid=?",
+                tuple(values)
+            )
+            return cur.rowcount > 0
+
+    def delete_thought(self, tid: str) -> bool:
+        tid = (tid or "").strip()
+        if not tid:
+            return False
+        with self._conn() as conn:
+            cur = conn.execute("DELETE FROM thoughts WHERE tid=?", (tid,))
+            return cur.rowcount > 0
+
     # ─── 回声池 ──────────────────────────────────────────────────────────
     def add_echo(self, text: str, drive: str):
         """CLI分析feel提炼出的念头，同时存档进回声池，供autofeed日后抽取。"""
@@ -1439,6 +1475,15 @@ class DesireEngine:
         """从记忆/对话/感受中提取念头入池（flit）"""
         self.store.add_thought(text, drive, strength, kind="flit", source=source)
 
+    def update_thought(self, tid: str, text: str = None, drive: str = None,
+                       strength: float = None) -> dict:
+        ok = self.store.update_thought(tid, text=text, drive=drive, strength=strength)
+        return {"ok": ok, "tid": tid}
+
+    def delete_thought(self, tid: str) -> dict:
+        ok = self.store.delete_thought(tid)
+        return {"ok": ok, "tid": tid}
+
     def add_unsourced(self, drive: str, text: str = ""):
         """
         捕捉无来源的念头——停顿、有什么动了、说不清楚的那种。
@@ -1502,6 +1547,7 @@ class DesireEngine:
             "intent": intent,
             "thoughts": [
                 {
+                    "tid": t.tid,
                     "text": (t.text if t.text else "（无来源）"),
                     "drive": t.drive,
                     "kind": t.kind,

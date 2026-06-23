@@ -642,7 +642,7 @@ label {
 
 .reverie-grid {
   display: grid;
-  grid-template-columns: minmax(0,1.45fr) minmax(350px,.85fr);
+  grid-template-columns: minmax(0,1.35fr) minmax(380px,.95fr);
   grid-template-rows: minmax(0,1fr) auto;
   grid-template-areas: "dream weather" "density weather";
   gap: 1rem;
@@ -687,7 +687,7 @@ label {
   background: linear-gradient(180deg, rgba(3,2,1,.12), transparent 22%, transparent 72%, rgba(3,2,1,.45));
 }
 .dream-card .reverie-head, .dream-card .dream-body { position: relative; z-index: 1; }
-.mood-card { grid-area: weather; height: 100%; }
+.mood-card { grid-area: weather; height: 100%; display: flex; flex-direction: column; }
 .density-card { grid-area: density; padding: 1rem 1.35rem; }
 .density-card .reverie-head { margin-bottom: .45rem; }
 .reverie-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
@@ -699,12 +699,13 @@ label {
 .weather-item.full { grid-column: 1 / -1; padding-left: 0; border-left: 0; }
 .weather-label { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .weather-value { color: var(--ink); font: 300 1.08rem/1.35 var(--font-display); }
-.weather-value.numeric { color: var(--accent-deep); font-size: 1.25rem; }
+.weather-value.numeric { color: var(--accent-deep); font: 300 1.25rem/1.2 var(--font-number); font-variant-numeric: oldstyle-nums proportional-nums; }
 .weather-trace { color: var(--ink-soft); font: 300 .82rem/1.75 var(--font-body); }
 .refresh-btn { margin-left: auto; min-height: 28px; border: 0; padding: .3rem; }
 .refresh-btn svg { width: 13px; }
 .mood-field-wrap { position: relative; margin-top: 1.4rem; }
-.mood-field { position: relative; min-height: 215px; border: 1px solid var(--line-soft); background: radial-gradient(circle at 65% 35%, rgba(120,166,209,.045), transparent 34%); }
+.mood-card .mood-field-wrap { flex: 1 1 auto; margin-top: 0; min-height: min(64vh, 640px); }
+.mood-field { position: relative; min-height: 215px; height: 100%; border: 1px solid var(--line-soft); background: radial-gradient(circle at 65% 35%, rgba(120,166,209,.045), transparent 34%); }
 .axis-hline, .axis-vline { position: absolute; background: var(--line-soft); }
 .axis-hline { left: 0; right: 0; top: 50%; height: 1px; }
 .axis-vline { top: 0; bottom: 0; left: 50%; width: 1px; }
@@ -718,7 +719,10 @@ label {
 .mood-point.current { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: var(--cool); box-shadow: 0 0 0 4px rgba(120,166,209,.09), 0 0 16px rgba(120,166,209,.32); }
 .mood-tooltip, .spark-tooltip { position: absolute; display: none; z-index: 4; padding: .65rem .72rem; background: rgba(8,5,3,.98); border: 1px solid var(--line); font: 300 .72rem/1.65 var(--font-body); color: var(--ink-soft); box-shadow: 0 14px 40px rgba(0,0,0,.42); }
 .mood-tooltip { width: min(290px, calc(100vw - 2rem)); min-width: min(220px, calc(100vw - 2rem)); overflow-wrap: break-word; }
-.mood-tooltip .tt-meta { margin-top: .5rem; font: 300 .62rem/1.5 var(--font-mono); }
+.mood-tooltip .tt-meta,
+.spark-tooltip,
+#rev-densitySub { font-family: var(--font-number); font-variant-numeric: oldstyle-nums proportional-nums; }
+.mood-tooltip .tt-meta { margin-top: .5rem; font-size: .72rem; line-height: 1.45; }
 .mood-tooltip.show, .spark-tooltip.show { display: block; }
 .dream-body {
   max-width: 54rem;
@@ -777,6 +781,21 @@ label {
 .drift-intent-text { color: var(--ink); font: 300 1.18rem/1.4 var(--font-display); }
 .drift-intent-text.is-high { color: var(--accent-deep); }
 .drift-intent-reason { margin-top: .35rem; color: var(--mute); font-size: .74rem; }
+.drift-weather-card { padding-bottom: 1.65rem; }
+.drift-weather-main { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(220px,.8fr); gap: 1.2rem; align-items: end; }
+.drift-weather-kicker { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .11em; text-transform: uppercase; }
+.drift-undertow { color: var(--accent-deep); font: 300 clamp(2rem,4vw,3.6rem)/.9 var(--font-display); letter-spacing: -.035em; }
+.drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .65rem; }
+.drift-weather-mini { border-top: 1px solid var(--line-soft); padding-top: .62rem; }
+.drift-weather-mini span { display: block; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.drift-weather-mini strong { display: block; margin-top: .16rem; color: var(--ink); font: 300 1.24rem/1.05 var(--font-number); font-variant-numeric: oldstyle-nums proportional-nums; }
+.drift-weather-line { margin-top: 1.2rem; padding-top: .95rem; border-top: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .88rem/1.55 var(--font-body); }
+.drift-weather-line span,
+.drift-weather-trace span { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.drift-weather-line strong { color: var(--ink); font: 300 1.05rem/1.25 var(--font-display); }
+.drift-weather-trace { margin-top: .8rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
+.drift-weather-trace div { color: var(--ink); font: 300 1rem/1.82 var(--font-body); }
+.drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1.08rem; }
 .drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
 .drive-row:first-child { border-top: 0; }
 .drive-name { min-width: 0; color: var(--ink-soft); font-size: .8rem; }
@@ -793,6 +812,33 @@ label {
 .thought-icon svg { display: block; width: 100%; height: 100%; }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
+.thought-side { display: flex; flex-direction: column; align-items: flex-end; gap: .45rem; }
+.thought-actions { display: flex; gap: .35rem; }
+.thought-actions button {
+  min-height: 25px;
+  padding: .32rem .48rem;
+  border-color: var(--line-soft);
+  color: var(--mute);
+  font-size: .52rem;
+}
+.thought-actions button:hover { color: var(--accent-deep); }
+.thought-actions .danger:hover { color: var(--negative); border-color: rgba(199,121,112,.36); }
+.thought-editor { grid-column: 2 / -1; display: grid; gap: .7rem; padding: .1rem 0 .3rem; }
+.thought-editor textarea {
+  min-height: 76px;
+  padding: .72rem .8rem;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: .84rem;
+  line-height: 1.65;
+  resize: vertical;
+}
+.thought-editor-grid { display: grid; grid-template-columns: minmax(140px,1fr) 96px auto; gap: .65rem; align-items: end; }
+.thought-editor label { display: grid; gap: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.thought-editor select,
+.thought-editor input { height: 34px; padding: 0 .65rem; border: 1px solid var(--line); font: 300 .72rem/1 var(--font-body); }
+.thought-editor-buttons { display: flex; gap: .45rem; justify-content: flex-end; }
+.thought-editor-buttons button { min-height: 34px; }
 .echoes-shell { max-width: 1040px; margin: 0 auto; }
 .echoes-head {
   display: flex;
@@ -1065,6 +1111,9 @@ html[data-theme="sakura-milk"] .upload-zone.dragover {
 .detail-actions { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line-soft); }
 .detail-actions button:last-child { opacity: .32; }
 .detail-actions button:last-child:hover { opacity: .8; }
+.title-editor { margin-bottom: .85rem; }
+.title-editor label { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.title-editor input { padding: .62rem .75rem; border: 1px solid var(--line); font-size: .92rem; }
 .tag-editor { margin-top: .8rem; }
 .tag-editor label { display: block; margin-bottom: .35rem; }
 .tag-editor textarea { min-height: 84px; max-height: none; padding: .62rem .75rem; border: 1px solid var(--line); font-size: .84rem; line-height: 1.65; resize: vertical; overflow: hidden; }
@@ -1354,7 +1403,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .breath-controls { grid-template-columns: 1fr 1fr; }
   .score-row { grid-template-columns: 34px minmax(150px,1fr) 60px; }
   .score-row .score-bars { display: none; }
-  .reverie-grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "dream" "density" "weather"; }
+  .reverie-grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "dream" "weather" "density"; }
   .dream-card { min-height: 0; }
 }
 @media (max-width: 620px) {
@@ -1364,6 +1413,12 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .archive-subtitle { width: 66vw; }
   .archive-ledger { max-width: 62vw; }
   .scroll-cue { display: none; }
+  .drift-weather-main { grid-template-columns: 1fr; }
+  .thought-row { grid-template-columns: 22px minmax(0,1fr); }
+  .thought-side { grid-column: 2; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .thought-editor { grid-column: 2; }
+  .thought-editor-grid { grid-template-columns: 1fr; }
+  .thought-editor-buttons { justify-content: flex-start; }
   .content { padding-top: 5rem; }
   .content::before { margin-bottom: 3rem; }
   .bucket-row { grid-template-columns: 30px minmax(0,1fr); min-height: auto; padding: 1rem 0; }
@@ -1519,19 +1574,10 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 
     <div class="reverie-card mood-card">
       <div class="reverie-head">
-        <span class="reverie-title">Pulse Weather</span>
-        <button class="refresh-btn" onclick="loadReverieWeather()" title="Revisit pulse weather" aria-label="刷新 Pulse Weather">
+        <span class="reverie-title">Pulse Compass</span>
+        <button class="refresh-btn" onclick="loadReverieWeather()" title="Revisit pulse compass" aria-label="刷新 Pulse Compass">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M3 21v-5h5"/></svg>
         </button>
-      </div>
-
-      <div class="weather-list">
-        <div class="weather-item full"><span class="weather-label">Undertow</span><span class="weather-value" id="rev-undertow">—</span></div>
-        <div class="weather-item"><span class="weather-label">Warmth</span><span class="weather-value numeric" id="rev-warmth">—</span></div>
-        <div class="weather-item"><span class="weather-label">Shadow</span><span class="weather-value numeric" id="rev-shadow">—</span></div>
-        <div class="weather-item"><span class="weather-label">Longing</span><span class="weather-value numeric" id="rev-longing">—</span></div>
-        <div class="weather-item"><span class="weather-label">Nox Now</span><span class="weather-value" id="rev-now">—</span></div>
-        <div class="weather-item full"><span class="weather-label">Mood Trace</span><div class="weather-trace" id="rev-trace">Reading the latest thought.</div></div>
       </div>
 
       <div class="mood-field-wrap">
@@ -1583,10 +1629,22 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
         Revisit
       </button>
     </div>
-    <div class="drift-card" id="desire-intent">
-      <div class="drift-card-label">Current Pull</div>
-      <div class="drift-intent-text" id="desire-intent-text">Reading the drift…</div>
-      <div class="drift-intent-reason" id="desire-intent-reason"></div>
+    <div class="drift-card drift-weather-card" id="desire-intent">
+      <div class="drift-card-label">Pulse Weather</div>
+      <div class="drift-weather-main">
+        <div>
+          <span class="drift-weather-kicker">Undertow</span>
+          <div class="drift-undertow" id="desire-undertow">Reading…</div>
+        </div>
+        <div class="drift-weather-values">
+          <div class="drift-weather-mini"><span>Warmth</span><strong id="desire-warmth">—</strong></div>
+          <div class="drift-weather-mini"><span>Shadow</span><strong id="desire-shadow">—</strong></div>
+          <div class="drift-weather-mini"><span>Longing</span><strong id="desire-longing">—</strong></div>
+        </div>
+      </div>
+      <div class="drift-weather-line"><span>Nox Now</span><strong id="desire-now">—</strong></div>
+      <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
+      <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
     </div>
     <div class="drift-card">
       <div class="drift-card-label">Drives</div>
@@ -1823,6 +1881,8 @@ let echoesMode = 'recent';
 let currentEchoId = null;
 let echoProgressRaf = null;
 let openingGate = null;
+let desireThoughts = [];
+let editingThoughtId = null;
 const mouse = { x: -1000, y: -1000 };
 
 const ICONS = {
@@ -1839,6 +1899,19 @@ const ICONS = {
   writing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16 4 20Z"/><path d="m14.8 6.4 2.8 2.8"/></svg>',
   all: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
 };
+
+const DRIVE_LABELS = {
+  attachment: '想嘉嘉',
+  curiosity: '好奇',
+  reflection: '沉淀',
+  duty: '记挂',
+  social: '社交',
+  fatigue: '疲劳',
+  libido: '亲密',
+  stress: '压力',
+  disgust: '皱眉'
+};
+const DRIVE_KEYS = Object.keys(DRIVE_LABELS);
 
 /* ============================================================
    Theme System
@@ -2010,7 +2083,7 @@ async function doLogin() {
    
 function thoughtPoolIcon(kind) {
   const icons = {
-    fixation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    fixation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
     unsourced: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 16a4 4 0 0 1 1-7.9A6 6 0 0 1 18.5 10 3 3 0 0 1 18 16H6Z"/><path d="M8 20h8"/></svg>',
     rumination: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 9A7 7 0 0 1 18 6l2 1M4 17l2 1a7 7 0 0 0 11.9-3"/></svg>',
     flit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="3"/></svg>'
@@ -2022,26 +2095,29 @@ async function loadDesire(button) {
   const refresh = button || document.getElementById('drift-refresh');
   if (refresh) { refresh.disabled = true; refresh.classList.add('loading'); }
   try {
-    const r = await fetch('/api/desire/state', { credentials: 'include' });
+    const [r, soma] = await Promise.all([
+      fetch('/api/desire/state', { credentials: 'include' }),
+      fetchSomaState()
+    ]);
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
 
-    const DRIVE_LABELS = {
-      attachment:'想嘉嘉', curiosity:'好奇', reflection:'沉淀',
-      duty:'记挂', social:'社交', fatigue:'疲劳', libido:'亲密', stress:'压力'
-    };
     const driveEntries = Object.entries(d.drives || {});
     const topDrive = [...driveEntries].sort((a, b) => finiteNumber(b[1]) - finiteNumber(a[1]))[0] || ['—', 0];
     const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
     const latestTrace = thoughts.find(t => String(t.text || '').trim())?.text || d.mood_trace || d.pulse_weather?.mood_trace || 'No recent thought.';
+    desireThoughts = thoughts;
 
-    // Current pull is always the highest raw drive; it should not disappear
-    // merely because intent selection is below its action threshold.
-    const intentEl = document.getElementById('desire-intent-text');
-    const reasonEl = document.getElementById('desire-intent-reason');
-    intentEl.classList.add('is-high');
-    intentEl.textContent = (DRIVE_LABELS[topDrive[0]] || topDrive[0]) + ' · ' + topDrive[0] + ' ' + finiteNumber(topDrive[1]).toFixed(2);
-    reasonEl.textContent = 'Mood Trace · ' + latestTrace;
+    const weather = d.pulse_weather || {};
+    const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
+    const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
+    document.getElementById('desire-undertow').textContent = `${undertow} ${finiteNumber(undertowValue).toFixed(2)}`;
+    document.getElementById('desire-warmth').textContent = finiteNumber(weather.warmth ?? d.pa_na?.PA).toFixed(2);
+    document.getElementById('desire-shadow').textContent = Math.abs(finiteNumber(weather.shadow ?? d.pa_na?.NA)).toFixed(2);
+    document.getElementById('desire-longing').textContent = finiteNumber(weather.longing ?? d.longing).toFixed(2);
+    document.getElementById('desire-now').textContent = weather.nox_now || d.mood_word || d.rhythm?.label || '—';
+    document.getElementById('desire-mood-trace').textContent = latestTrace;
+    renderSomaTrace(soma);
 
     // drives
     const drivesEl = document.getElementById('desire-drives');
@@ -2058,26 +2134,128 @@ async function loadDesire(button) {
       </div>`;
     }).join('');
 
-    // thoughts
-    const thoughtsEl = document.getElementById('desire-thoughts');
-    if (thoughts.length > 0) {
-      thoughtsEl.innerHTML = thoughts.map(t => {
-        return `<div class="thought-row">
-          <span class="thought-icon">${thoughtPoolIcon(t.kind)}</span>
-          <span class="thought-text">${esc(t.text || '（无来源）')}</span>
-          <span class="thought-meta">${esc(t.drive || '—')} · ${Math.round(finiteNumber(t.strength) * 100)}%</span>
-        </div>`;
-      }).join('');
-    } else {
-      thoughtsEl.innerHTML = '<span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span>';
-    }
+    renderThoughtPool(thoughts);
   } catch(e) {
-    document.getElementById('desire-intent-text').textContent = 'The drift is out of reach.';
-    document.getElementById('desire-intent-text').classList.remove('is-high');
+    document.getElementById('desire-undertow').textContent = 'Out of reach';
+    document.getElementById('desire-mood-trace').textContent = 'The drift is out of reach.';
   } finally {
     if (refresh) { refresh.disabled = false; refresh.classList.remove('loading'); }
   }
 }   
+
+async function fetchSomaState() {
+  try {
+    const r = await fetch('/api/soma/state', { credentials: 'include' });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+function renderSomaTrace(soma) {
+  const wrap = document.getElementById('desire-soma-wrap');
+  const target = document.getElementById('desire-soma-trace');
+  if (!wrap || !target) return;
+  const line = String(soma?.line || '').trim();
+  if (!line) {
+    wrap.style.display = 'none';
+    target.textContent = '';
+    return;
+  }
+  const chord = String(soma?.chord || '').trim();
+  target.textContent = chord ? `${chord} · ${line}` : line;
+  wrap.style.display = '';
+}
+
+function renderThoughtPool(thoughts = desireThoughts) {
+  const thoughtsEl = document.getElementById('desire-thoughts');
+  if (!thoughtsEl) return;
+  if (!thoughts.length) {
+    thoughtsEl.innerHTML = '<span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span>';
+    return;
+  }
+  thoughtsEl.innerHTML = thoughts.map(t => renderThoughtRow(t)).join('');
+}
+
+function renderThoughtRow(t) {
+  const tid = String(t.tid || '');
+  const text = String(t.text || '（无来源）');
+  const drive = String(t.drive || '—');
+  const strength = finiteNumber(t.strength, 0);
+  if (tid && editingThoughtId === tid) {
+    return `<div class="thought-row editing" data-thought-id="${esc(tid)}">
+      <span class="thought-icon">${thoughtPoolIcon(t.kind)}</span>
+      <div class="thought-editor">
+        <textarea id="thought-text-${esc(tid)}" aria-label="念头正文">${esc(text)}</textarea>
+        <div class="thought-editor-grid">
+          <label>Drive
+            <select id="thought-drive-${esc(tid)}">
+              ${DRIVE_KEYS.map(k => `<option value="${esc(k)}"${k === drive ? ' selected' : ''}>${esc(DRIVE_LABELS[k])} · ${esc(k)}</option>`).join('')}
+            </select>
+          </label>
+          <label>Strength
+            <input id="thought-strength-${esc(tid)}" type="number" min="0" max="1" step="0.01" value="${strength.toFixed(2)}">
+          </label>
+          <div class="thought-editor-buttons">
+            <button class="btn-primary" onclick="saveThought('${esc(tid)}')">保存</button>
+            <button onclick="cancelThoughtEdit()">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+  return `<div class="thought-row" data-thought-id="${esc(tid)}">
+    <span class="thought-icon">${thoughtPoolIcon(t.kind)}</span>
+    <span class="thought-text">${esc(text)}</span>
+    <span class="thought-side">
+      <span class="thought-meta">${esc(drive)} · ${Math.round(strength * 100)}%</span>
+      ${tid ? `<span class="thought-actions"><button onclick="startThoughtEdit('${esc(tid)}')">编辑</button><button class="danger" onclick="deleteThought('${esc(tid)}')">删除</button></span>` : ''}
+    </span>
+  </div>`;
+}
+
+function startThoughtEdit(tid) {
+  editingThoughtId = tid;
+  renderThoughtPool();
+}
+
+function cancelThoughtEdit() {
+  editingThoughtId = null;
+  renderThoughtPool();
+}
+
+async function saveThought(tid) {
+  const text = document.getElementById('thought-text-' + tid)?.value || '';
+  const drive = document.getElementById('thought-drive-' + tid)?.value || '';
+  const strength = finiteNumber(document.getElementById('thought-strength-' + tid)?.value, 0);
+  const res = await fetch(BASE + '/api/desire/thought/' + encodeURIComponent(tid) + '/update', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ text, drive, strength })
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    return alert('保存失败：' + (error.error || res.status));
+  }
+  editingThoughtId = null;
+  await loadDesire();
+}
+
+async function deleteThought(tid) {
+  if (!confirm('删除这条念头？')) return;
+  const res = await fetch(BASE + '/api/desire/thought/' + encodeURIComponent(tid) + '/delete', {
+    method: 'POST',
+    credentials: 'include'
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    return alert('删除失败：' + (error.error || res.status));
+  }
+  editingThoughtId = null;
+  await loadDesire();
+}
 
 function echoUrl(path) {
   return echoesBase + path;
@@ -2578,7 +2756,7 @@ async function showDetail(id) {
     const valence = finiteNumber(meta.valence, .5);
     const arousal = finiteNumber(meta.arousal, .3);
     const modelValence = meta.model_valence == null ? null : finiteNumber(meta.model_valence, null);
-    activeDetail = { id, content: String(b.content || ''), tags: [...detailTags] };
+    activeDetail = { id, name: String(meta.name || id), content: String(b.content || ''), tags: [...detailTags] };
     content.innerHTML =
       `<h2>${esc(meta.name || id)}</h2>
        <label class="detail-body-label">正文</label>
@@ -2615,11 +2793,16 @@ function startEdit() {
   if (!body || body.classList.contains('detail-edit')) return;
   const id = body.dataset.bucketId;
   const currentContent = activeDetail?.id === id ? activeDetail.content : body.textContent;
+  const currentName = activeDetail?.id === id ? activeDetail.name : (document.querySelector('#detail-content > h2')?.textContent || id);
   const currentTags = activeDetail?.id === id ? [...activeDetail.tags] : [];
   const actions = document.querySelector('#detail-content > .detail-actions');
   if (actions) actions.style.display = 'none';
   body.classList.add('detail-edit');
-  body.innerHTML = `<textarea id="edit-ta" aria-label="正文"></textarea>
+  body.innerHTML = `<div class="title-editor">
+      <label for="edit-title">标题</label>
+      <input id="edit-title" type="text" aria-label="标题">
+    </div>
+    <textarea id="edit-ta" aria-label="正文"></textarea>
     <div class="tag-editor">
       <label for="edit-tags">标签</label>
       <textarea id="edit-tags" rows="3" placeholder="用逗号分隔标签"></textarea>
@@ -2630,7 +2813,9 @@ function startEdit() {
       <button onclick="showDetail('${id}')">取消</button>
     </div>`;
   const contentField = document.getElementById('edit-ta');
+  const titleField = document.getElementById('edit-title');
   const tagField = document.getElementById('edit-tags');
+  titleField.value = currentName;
   contentField.value = currentContent;
   tagField.value = currentTags.join(', ');
   autoSizeEditField(contentField, 180, 360);
@@ -2648,11 +2833,12 @@ function autoSizeEditField(field, minHeight, maxHeight = Infinity) {
 
 async function saveBucket(id) {
   const text = document.getElementById('edit-ta').value;
+  const name = (document.getElementById('edit-title')?.value || '').trim() || id;
   const tags = parseTags(document.getElementById('edit-tags').value);
   const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({content: text, tags})
+    body: JSON.stringify({content: text, name, tags})
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -4001,42 +4187,25 @@ function escHtml(s) {
 }
 
 async function loadReverieWeather() {
+  clearMoodPoints();
   try {
-    const r = await fetch(BASE + '/api/desire/state', { credentials: 'include' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
-    const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
-    const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.mood_trace || '—';
-    const weather = d.pulse_weather || {};
-    const undertow = weather.undertow || d.intent?.drive_key || Object.entries(d.drives || {}).filter(([key]) => key !== 'fatigue').sort((a,b) => b[1] - a[1])[0]?.[0] || '—';
-    const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? 0;
-    document.getElementById('rev-undertow').textContent = undertow + ' ' + finiteNumber(undertowValue).toFixed(2);
-    document.getElementById('rev-warmth').textContent = finiteNumber(weather.warmth ?? d.pa_na?.PA).toFixed(2);
-    document.getElementById('rev-shadow').textContent = Math.abs(finiteNumber(weather.shadow ?? d.pa_na?.NA)).toFixed(2);
-    document.getElementById('rev-longing').textContent = finiteNumber(weather.longing ?? d.longing).toFixed(2);
-    document.getElementById('rev-now').textContent = weather.nox_now || d.mood_word || d.rhythm?.label || '—';
-    document.getElementById('rev-trace').textContent = latestThought;
-
-    clearMoodPoints();
-    try {
-      const rh = await fetch(BASE + '/recent_moods');
-      if (rh.ok) {
-        const hist = await rh.json();
-        (hist.items || hist || []).slice(0, 10).forEach((item, i) => {
-          placeMoodPoint(
-            item.PA ?? item.pa ?? 0.5,
-            Math.abs(item.NA ?? item.na ?? 0),
-            item.importance ?? item.imp ?? 5,
-            item.content || item.title || '',
-            item.created || item.ts || '',
-            false,
-            i
-          );
-        });
-      }
-    } catch (e) {}
+    const rh = await fetch(BASE + '/recent_moods');
+    if (!rh.ok) throw new Error('HTTP ' + rh.status);
+    const hist = await rh.json();
+    (hist.items || hist || []).slice(0, 10).forEach((item, i) => {
+      placeMoodPoint(
+        item.PA ?? item.pa ?? 0.5,
+        Math.abs(item.NA ?? item.na ?? 0),
+        item.importance ?? item.imp ?? 5,
+        item.content || item.title || '',
+        item.created || item.ts || '',
+        false,
+        i
+      );
+    });
   } catch (e) {
-    document.getElementById('rev-trace').textContent = 'Pulse Weather is out of reach.';
+    const tooltip = document.getElementById('rev-moodTooltip');
+    if (tooltip) tooltip.textContent = 'Pulse Compass is out of reach.';
   }
 }
 

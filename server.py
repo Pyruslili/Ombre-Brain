@@ -3053,6 +3053,59 @@ async def api_desire_ping(request):
                            headers={"Access-Control-Allow-Origin": "*"})
 
 
+@mcp.custom_route("/api/desire/thought/{tid}/update", methods=["POST"])
+async def api_desire_thought_update(request):
+    """Dashboard edit: update one thought's text/drive/strength."""
+    from starlette.responses import JSONResponse
+    from desire_engine import DRIVE_KEYS
+    err = _require_auth(request)
+    if err: return err
+    tid = request.path_params.get("tid", "")
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    text = body.get("text") if "text" in body else None
+    drive = body.get("drive") if "drive" in body else None
+    strength = body.get("strength") if "strength" in body else None
+    if text is not None and not isinstance(text, str):
+        return JSONResponse({"error": "text must be a string"}, status_code=400)
+    if drive is not None:
+        drive = str(drive).strip()
+        if drive not in DRIVE_KEYS:
+            return JSONResponse({"error": "invalid drive"}, status_code=400)
+    if strength is not None:
+        try:
+            strength = max(0.0, min(1.0, float(strength)))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "strength must be a number"}, status_code=400)
+
+    try:
+        result = _desire.update_thought(tid, text=text, drive=drive, strength=strength)
+        if not result.get("ok"):
+            return JSONResponse({"error": "thought not found or unchanged"}, status_code=404)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@mcp.custom_route("/api/desire/thought/{tid}/delete", methods=["POST"])
+async def api_desire_thought_delete(request):
+    """Dashboard edit: remove one thought from Thought Pool."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    tid = request.path_params.get("tid", "")
+    try:
+        result = _desire.delete_thought(tid)
+        if not result.get("ok"):
+            return JSONResponse({"error": "thought not found"}, status_code=404)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @mcp.custom_route("/api/desire/feed", methods=["POST"])
 async def api_desire_feed(request):
     """
