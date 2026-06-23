@@ -150,13 +150,13 @@ html[data-theme="sakura-milk"] #archive-stars { opacity: .58; mix-blend-mode: no
 #sakura-petals {
   position: fixed;
   inset: 0;
-  z-index: 1;
+  z-index: 3;
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
   transition: opacity .9s ease;
 }
-html[data-theme="sakura-milk"] #sakura-petals { opacity: .62; }
+html[data-theme="sakura-milk"] #sakura-petals { opacity: .82; }
 .sakura-petal {
   position: absolute;
   top: -16vh;
@@ -164,7 +164,7 @@ html[data-theme="sakura-milk"] #sakura-petals { opacity: .62; }
   width: var(--size);
   height: var(--size);
   opacity: 0;
-  color: rgba(202,111,145,.34);
+  color: rgba(202,111,145,.48);
   animation: sakuraFall var(--dur) linear infinite;
   animation-delay: var(--delay);
   animation-play-state: paused;
@@ -172,8 +172,8 @@ html[data-theme="sakura-milk"] #sakura-petals { opacity: .62; }
 }
 html[data-theme="sakura-milk"] .sakura-petal { animation-play-state: running; }
 .sakura-petal svg { display: block; width: 100%; height: 100%; }
-.sakura-petal:nth-child(3n) { color: rgba(255,244,247,.54); }
-.sakura-petal:nth-child(4n) { color: rgba(216,132,159,.26); }
+.sakura-petal:nth-child(3n) { color: rgba(255,244,247,.70); }
+.sakura-petal:nth-child(4n) { color: rgba(216,132,159,.38); }
 .sakura-petal:nth-child(5n) { filter: blur(.1px); }
 ::selection { background: rgba(196,122,56,.32); color: var(--ink); }
 button, input, textarea, select { font: inherit; }
@@ -546,7 +546,8 @@ label {
   padding: 1.35rem 1.2rem 1.45rem;
   color: var(--mute);
   border-right: 1px solid var(--line-soft);
-  transition: color .35s, background .35s, box-shadow .35s;
+  background: transparent;
+  transition: color .35s;
   animation: quietStepIn .65s both;
 }
 .flow-step:nth-child(2) { animation-delay: .05s; }
@@ -559,8 +560,8 @@ label {
 .flow-title { overflow: hidden; color: var(--ink-soft); font: 400 var(--fs-label)/1.2 var(--font-body); letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; }
 .flow-step small { display: block; margin: .55rem 0 0 2.15rem; color: var(--mute); font: 300 var(--fs-micro)/1.55 var(--font-mono); letter-spacing: .08em; }
 .flow-step::after { content: ""; position: absolute; left: 1.2rem; right: 1.2rem; bottom: 0; height: 1px; background: var(--accent-deep); opacity: 0; transform: scaleX(.15); transform-origin: left; transition: opacity .35s, transform .5s cubic-bezier(.16,1,.3,1); }
-.flow-step:hover { color: var(--ink-soft); background: rgba(196,122,56,.035); }
-.flow-step.active { color: var(--accent-deep); background: rgba(196,122,56,.055); box-shadow: inset 0 0 44px rgba(196,122,56,.035); }
+.flow-step:hover { color: var(--ink-soft); }
+.flow-step.active { color: var(--accent-deep); }
 .flow-step.active::after { opacity: .72; transform: scaleX(1); }
 .breath-controls {
   width: min(100%, 840px);
@@ -1019,15 +1020,19 @@ html[data-theme="sakura-milk"] .auth-card {
     rgba(255,248,250,.74);
   box-shadow: inset 0 1px rgba(255,255,255,.68), 0 22px 60px rgba(176,105,128,.12);
 }
+html[data-theme="sakura-milk"] .breath-flow {
+  background:
+    linear-gradient(100deg, rgba(255,255,255,.72) 0%, rgba(255,248,250,.70) 38%, rgba(255,225,235,.58) 100%),
+    rgba(255,248,250,.74);
+  box-shadow: inset 0 1px rgba(255,255,255,.72), 0 22px 60px rgba(176,105,128,.10);
+}
 html[data-theme="sakura-milk"] .breath-controls {
   background: rgba(255,247,249,.56);
   box-shadow: inset 0 1px rgba(255,255,255,.56), 0 16px 42px rgba(176,105,128,.08);
 }
-html[data-theme="sakura-milk"] .flow-step:hover { background: rgba(216,132,159,.045); }
-html[data-theme="sakura-milk"] .flow-step.active {
-  background: linear-gradient(90deg, rgba(216,132,159,0), rgba(216,132,159,.085));
-  box-shadow: inset -30px 0 56px rgba(202,111,145,.085);
-}
+html[data-theme="sakura-milk"] .flow-step,
+html[data-theme="sakura-milk"] .flow-step:hover,
+html[data-theme="sakura-milk"] .flow-step.active { background: transparent; box-shadow: none; }
 html[data-theme="sakura-milk"] .flow-step::after { background: var(--accent-deep); }
 html[data-theme="sakura-milk"] .breath-debug-btn.is-running {
   border-color: rgba(202,111,145,.50);
