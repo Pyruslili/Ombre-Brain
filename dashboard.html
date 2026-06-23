@@ -1808,7 +1808,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 // 全局变量提前声明，避免TDZ
 const BASE = location.origin;
 const ECHOES_BASES = ['http://localhost:3721', 'http://127.0.0.1:3721'];
-const OPENING_SEEN_KEY = 'nocturne_opening_seen_v1';
+const OPENING_SEEN_KEY = 'nocturne_opening_seen_v2';
 let allBuckets = [];
 let currentFilter = 'all';
 let searchTimer;
@@ -1921,7 +1921,6 @@ function openingShouldRun() {
 
 function showOpeningIfNeeded() {
   if (!openingShouldRun() || openingGate) return;
-  try { sessionStorage.setItem(OPENING_SEEN_KEY, '1'); } catch(e) {}
   openingGate = document.createElement('div');
   openingGate.className = 'opening-gate';
   openingGate.id = 'opening-gate';
@@ -1930,6 +1929,7 @@ function showOpeningIfNeeded() {
 }
 
 function closeOpening(tab = '') {
+  try { sessionStorage.setItem(OPENING_SEEN_KEY, '1'); } catch(e) {}
   const gate = openingGate || document.getElementById('opening-gate');
   openingGate = null;
   if (gate) {
