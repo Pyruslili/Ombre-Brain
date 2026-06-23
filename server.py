@@ -2522,6 +2522,19 @@ async def dashboard(request):
         return HTMLResponse("<h1>dashboard.html not found</h1>", status_code=404)
 
 
+@mcp.custom_route("/opening.html", methods=["GET"])
+async def opening_html(request):
+    """Serve the isolated opening sequence."""
+    from starlette.responses import HTMLResponse
+    import os
+    opening_path = os.path.join(os.path.dirname(__file__), "opening.html")
+    try:
+        with open(opening_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except FileNotFoundError:
+        return HTMLResponse("<h1>opening.html not found</h1>", status_code=404)
+
+
 @mcp.custom_route("/api/config", methods=["GET"])
 async def api_config_get(request):
     """Get current runtime config (safe fields only, API key masked)."""

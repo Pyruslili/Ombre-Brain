@@ -1121,6 +1121,25 @@ html[data-theme="sakura-milk"] .upload-zone.dragover {
   font: var(--fs-micro) var(--font-mono); transition: .35s;
 }
 .toast-msg.show { transform: translate(-50%,0); opacity: 1; }
+.opening-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  background: #020208;
+  opacity: 1;
+  transition: opacity .55s ease;
+}
+.opening-gate.closing {
+  opacity: 0;
+  pointer-events: none;
+}
+.opening-gate iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: #020208;
+}
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-thumb { background: rgba(198,170,135,.22); }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1789,6 +1808,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 // 全局变量提前声明，避免TDZ
 const BASE = location.origin;
 const ECHOES_BASES = ['http://localhost:3721', 'http://127.0.0.1:3721'];
+const OPENING_SEEN_KEY = 'nocturne_opening_seen_v1';
 let allBuckets = [];
 let currentFilter = 'all';
 let searchTimer;
@@ -1800,6 +1820,7 @@ let echoesRaw = [];
 let echoesMode = 'recent';
 let currentEchoId = null;
 let echoProgressRaf = null;
+let openingGate = null;
 const mouse = { x: -1000, y: -1000 };
 
 const ICONS = {
@@ -1887,6 +1908,48 @@ function bucketIcon(b) {
 }
 
 /* ============================================================
+   Opening gate — isolated WebGL intro
+   ============================================================ */
+function openingShouldRun() {
+  try {
+    return !sessionStorage.getItem(OPENING_SEEN_KEY)
+      && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  } catch(e) {
+    return false;
+  }
+}
+
+function showOpeningIfNeeded() {
+  if (!openingShouldRun() || openingGate) return;
+  try { sessionStorage.setItem(OPENING_SEEN_KEY, '1'); } catch(e) {}
+  openingGate = document.createElement('div');
+  openingGate.className = 'opening-gate';
+  openingGate.id = 'opening-gate';
+  openingGate.innerHTML = '<iframe title="Nocturne opening" src="/opening.html" loading="eager" referrerpolicy="no-referrer"></iframe>';
+  document.body.appendChild(openingGate);
+}
+
+function closeOpening(tab = '') {
+  const gate = openingGate || document.getElementById('opening-gate');
+  openingGate = null;
+  if (gate) {
+    gate.classList.add('closing');
+    setTimeout(() => gate.remove(), 620);
+  }
+  if (tab) {
+    setTimeout(() => switchChapter(tab), gate ? 360 : 0);
+  } else {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+}
+
+window.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data.type !== 'nocturne-opening-finish') return;
+  closeOpening(data.tab || '');
+});
+
+/* ============================================================
    Auth (unchanged)
    ============================================================ */
 async function checkAuth() {
@@ -1899,6 +1962,7 @@ async function checkAuth() {
       document.getElementById('auth-setup-form').style.display = 'block';
     } else if (data.authenticated) {
       document.getElementById('auth-overlay').style.display = 'none';
+      setTimeout(showOpeningIfNeeded, 180);
     } else {
       document.getElementById('auth-subtitle').textContent = '请输入访问密码';
       document.getElementById('auth-setup-form').style.display = 'none';
@@ -1921,14 +1985,14 @@ async function doSetup() {
   if (p1.length < 6) return showAuthError('密码至少6位');
   if (p1 !== p2) return showAuthError('两次密码不一致');
   const resp = await fetch('/auth/setup', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: p1}) });
-  if (resp.ok) { document.getElementById('auth-overlay').style.display = 'none'; loadBuckets(); }
+  if (resp.ok) { document.getElementById('auth-overlay').style.display = 'none'; loadBuckets(); setTimeout(showOpeningIfNeeded, 180); }
   else { const d = await resp.json(); showAuthError(d.detail || '设置失败'); }
 }
 
 async function doLogin() {
   const pwd = document.getElementById('auth-login-pwd').value;
   const resp = await fetch('/auth/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({password: pwd}) });
-  if (resp.ok) { document.getElementById('auth-overlay').style.display = 'none'; loadBuckets(); }
+  if (resp.ok) { document.getElementById('auth-overlay').style.display = 'none'; loadBuckets(); setTimeout(showOpeningIfNeeded, 180); }
   else { const d = await resp.json(); showAuthError(d.detail || '密码错误'); }
 }
    
