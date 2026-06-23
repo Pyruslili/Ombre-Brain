@@ -175,9 +175,6 @@ _LIVE_WIRE_CACHE_PATH = os.environ.get(
     "LIVE_WIRE_CACHE", "/app/buckets/live_wire_cache.json"
 )
 _LIVE_WIRE_TTL = 6 * 3600  # 6 hours
-# thought_count活跃对话里几乎每次tick都会变，单靠"count对不上就重调DeepSeek"
-# 等于没有缓存——加一个最短间隔，count变了也得等够这个时间才真的重调。
-_LIVE_WIRE_MIN_RESYNTH_SECONDS = 600
 
 # drive → BRANCH_MOOD_MAP key mapping
 _DRIVE_TO_BRANCH = {
@@ -275,16 +272,13 @@ def get_daily_mood(branch: str = None, thoughts: list = None):
     从念头池综合Nox Now和Mood Trace，6小时缓存。
     优先DeepSeek综合，失败fallback词库。
     """
+    # _load_live_wire_cache()内部已经按_LIVE_WIRE_TTL(6小时)判过期了——
+    # 缓存存在就直接用，不再额外看thought_count，活跃对话里念头数几乎
+    # 每轮都变，按count判断等于没有缓存。
     cache = _load_live_wire_cache()
     current_count = len(thoughts) if thoughts else 0
 
     if cache:
-        same_count = cache.get("thought_count", -1) == current_count
-        cache_age = time.time() - cache.get("generated_at", 0)
-        if same_count or cache_age < _LIVE_WIRE_MIN_RESYNTH_SECONDS:
-            return (cache["mood_trace"], cache["live_wire"])
-
-    if cache and not thoughts:
         return (cache["mood_trace"], cache["live_wire"])
 
     if thoughts and len(thoughts) >= 2:
