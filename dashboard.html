@@ -643,10 +643,10 @@ label {
 .reverie-grid {
   display: grid;
   grid-template-columns: minmax(0,1.35fr) minmax(380px,.95fr);
-  grid-template-rows: minmax(0,1fr) auto;
-  grid-template-areas: "dream weather" "density weather";
+  grid-template-rows: auto auto;
+  grid-template-areas: "dream weather" "density .";
   gap: 1rem;
-  align-items: stretch;
+  align-items: start;
   background: transparent;
 }
 .reverie-card, .config-section {
@@ -659,7 +659,7 @@ label {
 .dream-card {
   position: relative;
   grid-area: dream;
-  min-height: 460px;
+  min-height: 400px;
   overflow: hidden;
   isolation: isolate;
   background: linear-gradient(145deg, rgba(37,26,23,.58), rgba(7,5,5,.88));
@@ -687,7 +687,7 @@ label {
   background: linear-gradient(180deg, rgba(3,2,1,.12), transparent 22%, transparent 72%, rgba(3,2,1,.45));
 }
 .dream-card .reverie-head, .dream-card .dream-body { position: relative; z-index: 1; }
-.mood-card { grid-area: weather; height: 100%; display: flex; flex-direction: column; }
+.mood-card { grid-area: weather; height: auto; display: flex; flex-direction: column; }
 .density-card { grid-area: density; padding: 1rem 1.35rem; }
 .density-card .reverie-head { margin-bottom: .45rem; }
 .reverie-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2rem; }
@@ -704,8 +704,8 @@ label {
 .refresh-btn { margin-left: auto; min-height: 28px; border: 0; padding: .3rem; }
 .refresh-btn svg { width: 13px; }
 .mood-field-wrap { position: relative; margin-top: 1.4rem; }
-.mood-card .mood-field-wrap { flex: 1 1 auto; margin-top: 0; min-height: min(64vh, 640px); }
-.mood-field { position: relative; min-height: 215px; height: 100%; border: 1px solid var(--line-soft); background: radial-gradient(circle at 65% 35%, rgba(120,166,209,.045), transparent 34%); }
+.mood-card .mood-field-wrap { flex: 0 0 auto; margin-top: 0; height: clamp(260px, 34vh, 380px); min-height: 0; }
+.mood-field { position: relative; min-height: 0; height: 100%; border: 1px solid var(--line-soft); background: radial-gradient(circle at 65% 35%, rgba(120,166,209,.045), transparent 34%); }
 .axis-hline, .axis-vline { position: absolute; background: var(--line-soft); }
 .axis-hline { left: 0; right: 0; top: 50%; height: 1px; }
 .axis-vline { top: 0; bottom: 0; left: 50%; width: 1px; }
@@ -794,8 +794,8 @@ label {
 .drift-weather-trace span { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .drift-weather-line strong { color: var(--ink); font: 300 1.05rem/1.25 var(--font-display); }
 .drift-weather-trace { margin-top: .8rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
-.drift-weather-trace div { color: var(--ink); font: 300 1rem/1.82 var(--font-body); }
-.drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1.08rem; }
+.drift-weather-trace div { color: var(--ink); font: 300 1.05rem/1.55 var(--font-display); }
+.drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1.1rem; }
 .drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
 .drive-row:first-child { border-top: 0; }
 .drive-name { min-width: 0; color: var(--ink-soft); font-size: .8rem; }
@@ -806,17 +806,17 @@ label {
 .drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 10px rgba(232,149,79,.2); }
 .drive-value { text-align: right; color: var(--ink); font: 300 1.3rem/1 var(--font-number); }
 .drive-value small { display: block; margin-top: .24rem; color: var(--mute); font: 300 .54rem/1.2 var(--font-mono); }
-.thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: .75rem; align-items: start; padding: .72rem 0; border-top: 1px solid var(--line-soft); }
+.thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: .72rem .8rem; align-items: start; padding: .9rem 0; border-top: 1px solid var(--line-soft); }
 .thought-row:first-child { border-top: 0; }
 .thought-icon { width: 18px; height: 18px; margin-top: .12rem; color: var(--accent); }
 .thought-icon svg { display: block; width: 100%; height: 100%; }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
-.thought-side { display: flex; flex-direction: column; align-items: flex-end; gap: .45rem; }
+.thought-side { grid-column: 2; display: flex; align-items: center; justify-content: space-between; gap: .7rem; margin-top: .18rem; }
 .thought-actions { display: flex; gap: .35rem; }
 .thought-actions button {
-  min-height: 25px;
-  padding: .32rem .48rem;
+  min-height: 27px;
+  padding: .34rem .58rem;
   border-color: var(--line-soft);
   color: var(--mute);
   font-size: .52rem;
@@ -833,10 +833,52 @@ label {
   line-height: 1.65;
   resize: vertical;
 }
-.thought-editor-grid { display: grid; grid-template-columns: minmax(140px,1fr) 96px auto; gap: .65rem; align-items: end; }
+.thought-editor-grid { display: grid; grid-template-columns: minmax(160px,1fr) minmax(150px,.55fr) auto; gap: .65rem; align-items: end; }
 .thought-editor label { display: grid; gap: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .thought-editor select,
 .thought-editor input { height: 34px; padding: 0 .65rem; border: 1px solid var(--line); font: 300 .72rem/1 var(--font-body); }
+.thought-editor input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.thought-editor input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent-deep)) 0 / var(--range-pct, 50%) 100% no-repeat, var(--line);
+}
+.thought-editor input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5.5px;
+  border: 1px solid rgba(232,149,79,.48);
+  border-radius: 50%;
+  background: var(--bg-deep);
+  box-shadow: 0 0 0 4px rgba(232,149,79,.08);
+}
+.thought-editor input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--line);
+}
+.thought-editor input[type="range"]::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--accent-deep);
+}
+.thought-editor input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(232,149,79,.48);
+  border-radius: 50%;
+  background: var(--bg-deep);
+  box-shadow: 0 0 0 4px rgba(232,149,79,.08);
+}
+.thought-strength-readout { color: var(--accent-deep); font: 300 1rem/1 var(--font-number); }
 .thought-editor-buttons { display: flex; gap: .45rem; justify-content: flex-end; }
 .thought-editor-buttons button { min-height: 34px; }
 .echoes-shell { max-width: 1040px; margin: 0 auto; }
@@ -913,6 +955,10 @@ label {
     0 0 0 1px rgba(232,149,79,.18),
     0 0 42px rgba(232,149,79,.14),
     0 22px 58px rgba(0,0,0,.16);
+}
+.echo-card.is-selected:not(.is-playing) {
+  border-color: rgba(232,149,79,.26);
+  background: linear-gradient(145deg, rgba(58,34,20,.36), rgba(12,7,4,.58));
 }
 .echo-op {
   align-self: stretch;
@@ -1344,6 +1390,10 @@ html[data-theme="sakura-milk"] .echo-card.is-playing {
     0 0 42px rgba(202,111,145,.16),
     0 20px 48px rgba(176,105,128,.16);
 }
+html[data-theme="sakura-milk"] .echo-card.is-selected:not(.is-playing) {
+  border-color: rgba(202,111,145,.28);
+  background: linear-gradient(145deg, rgba(255,248,250,.86), rgba(255,238,243,.72));
+}
 html[data-theme="sakura-milk"] .echo-card.is-playing .echo-op { text-shadow: 0 0 12px rgba(202,111,145,.32); }
 html[data-theme="sakura-milk"] .echo-actions button:hover,
 html[data-theme="sakura-milk"] .echo-actions a:hover { border-color: rgba(202,111,145,.38); background: rgba(216,132,159,.09); }
@@ -1623,14 +1673,13 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 <div class="content" id="desire-view" style="display:none">
   <div class="drift-shell">
     <div class="drift-header">
-      <h2>Inner Weather</h2>
+      <h2>Pulse Weather</h2>
       <button class="drift-refresh" id="drift-refresh" onclick="loadDesire(this)">
         <svg style="width:11px;height:11px;vertical-align:-2px;margin-right:.35rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M3 21v-5h5"/></svg>
         Revisit
       </button>
     </div>
     <div class="drift-card drift-weather-card" id="desire-intent">
-      <div class="drift-card-label">Pulse Weather</div>
       <div class="drift-weather-main">
         <div>
           <span class="drift-weather-kicker">Undertow</span>
@@ -1880,6 +1929,7 @@ let echoesRaw = [];
 let echoesMode = 'recent';
 let currentEchoId = null;
 let echoProgressRaf = null;
+let echoPlayToken = 0;
 let openingGate = null;
 let desireThoughts = [];
 let editingThoughtId = null;
@@ -2195,7 +2245,8 @@ function renderThoughtRow(t) {
             </select>
           </label>
           <label>Strength
-            <input id="thought-strength-${esc(tid)}" type="number" min="0" max="1" step="0.01" value="${strength.toFixed(2)}">
+            <input id="thought-strength-${esc(tid)}" type="range" min="0" max="1" step="0.01" value="${strength.toFixed(2)}" style="--range-pct:${Math.round(strength * 100)}%" oninput="updateThoughtStrengthReadout('${esc(tid)}')">
+            <span class="thought-strength-readout" id="thought-strength-readout-${esc(tid)}">${Math.round(strength * 100)}%</span>
           </label>
           <div class="thought-editor-buttons">
             <button class="btn-primary" onclick="saveThought('${esc(tid)}')">保存</button>
@@ -2223,6 +2274,15 @@ function startThoughtEdit(tid) {
 function cancelThoughtEdit() {
   editingThoughtId = null;
   renderThoughtPool();
+}
+
+function updateThoughtStrengthReadout(tid) {
+  const input = document.getElementById('thought-strength-' + tid);
+  const output = document.getElementById('thought-strength-readout-' + tid);
+  if (!input) return;
+  const pct = Math.round(finiteNumber(input.value, 0) * 100);
+  input.style.setProperty('--range-pct', pct + '%');
+  if (output) output.textContent = pct + '%';
 }
 
 async function saveThought(tid) {
@@ -2306,6 +2366,7 @@ async function loadEchoes() {
   } catch (e) {
     echoesRaw = [];
     currentEchoId = null;
+    echoPlayToken++;
     stopEchoProgressLoop();
     list.innerHTML = '<div class="loading">Local echo bridge asleep · start /Users/lili/auto-trigger/server.js on port 3721</div>';
     status.textContent = 'localhost:3721 unreachable';
@@ -2368,7 +2429,7 @@ function renderEchoes() {
     const activelyPlaying = isEchoActivelyPlaying(id);
     const progress = selected ? echoProgressPercent() : 0;
     const text = item.text || '';
-    return `<div class="echo-card ${selected ? 'is-playing' : ''}" data-echo-id="${esc(id)}">
+    return `<div class="echo-card ${activelyPlaying ? 'is-playing' : selected ? 'is-selected' : ''}" data-echo-id="${esc(id)}">
       <div class="echo-op">Op.${idx + 1}</div>
       <div>
         <div class="echo-text">${esc(text || 'Untitled echo')}</div>
@@ -2385,33 +2446,50 @@ function renderEchoes() {
   }).join('');
 }
 
-function playEcho(id) {
+async function playEcho(id) {
   const item = echoesRaw.find(e => String(e.id || '') === String(id));
   const player = document.getElementById('echoes-player');
   if (!item || !player) return;
-  if (currentEchoId === String(id) && player.src) {
+  const requestedId = String(id);
+  const token = ++echoPlayToken;
+  if (currentEchoId === requestedId && player.src) {
     if (player.paused) {
-      player.play().then(() => {
+      try {
+        await player.play();
+        if (token !== echoPlayToken || currentEchoId !== requestedId) return;
         updateEchoPlayerUI();
+        renderEchoes();
         startEchoProgressLoop();
-      }).catch(updateEchoPlayerUI);
+      } catch (e) {
+        if (token === echoPlayToken) updateEchoPlayerUI();
+      }
     } else {
       player.pause();
       stopEchoProgressLoop();
+      updateEchoPlayerUI();
+      renderEchoes();
     }
-    updateEchoPlayerUI();
-    renderEchoes();
     return;
   }
-  currentEchoId = String(id);
+
+  player.pause();
+  stopEchoProgressLoop();
+  currentEchoId = requestedId;
   player.src = echoFileUrl(item);
+  player.currentTime = 0;
+  player.load();
   updateEchoPlayerUI();
   player.classList.add('active');
   renderEchoes();
-  player.play().then(() => {
+  try {
+    await player.play();
+    if (token !== echoPlayToken || currentEchoId !== requestedId) return;
     updateEchoPlayerUI();
+    renderEchoes();
     startEchoProgressLoop();
-  }).catch(updateEchoPlayerUI);
+  } catch (e) {
+    if (token === echoPlayToken) updateEchoPlayerUI();
+  }
 }
 
 function echoPlayerIcon(isPlaying) {
@@ -2507,6 +2585,7 @@ async function deleteEcho(id) {
   try {
     const player = document.getElementById('echoes-player');
     if (String(id) === currentEchoId && player) {
+      echoPlayToken++;
       player.pause();
       player.removeAttribute('src');
       player.load();
@@ -3840,14 +3919,17 @@ function initEvents() {
     });
     echoPlayer.addEventListener('play', () => {
       updateEchoPlayerUI();
+      renderEchoes();
       startEchoProgressLoop();
     });
     echoPlayer.addEventListener('pause', () => {
       updateEchoPlayerUI();
+      renderEchoes();
       stopEchoProgressLoop();
     });
     echoPlayer.addEventListener('ended', () => {
       updateEchoPlayerUI();
+      renderEchoes();
       stopEchoProgressLoop();
     });
   }
