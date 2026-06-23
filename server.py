@@ -761,11 +761,8 @@ async def _merge_or_create(
                     valence=merged_valence,
                     arousal=merged_arousal,
                 )
-                # --- Update embedding after merge ---
-                try:
-                    await embedding_engine.generate_and_store(bucket["id"], merged)
-                except Exception:
-                    pass
+                # --- Update embedding after merge (background: don't block response on Gemini latency) ---
+                asyncio.ensure_future(embedding_engine.generate_and_store(bucket["id"], merged))
                 return bucket["metadata"].get("name", bucket["id"]), True
             except Exception as e:
                 logger.warning(f"Merge failed, creating new / 合并失败，新建: {e}")
@@ -779,11 +776,8 @@ async def _merge_or_create(
         arousal=arousal,
         name=name or None,
     )
-    # --- Generate embedding for new bucket ---
-    try:
-        await embedding_engine.generate_and_store(bucket_id, content)
-    except Exception:
-        pass
+    # --- Generate embedding for new bucket (background: don't block response on Gemini latency) ---
+    asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
     return bucket_id, False
 
 
@@ -1467,10 +1461,8 @@ async def hold(
             name=_feel_title(content) or None,
             bucket_type="feel",
         )
-        try:
-            await embedding_engine.generate_and_store(bucket_id, content)
-        except Exception:
-            pass
+        # --- background: don't block response on Gemini latency ---
+        asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         # --- Mark source memory as digested + store model's valence perspective ---
         # --- 标记源记忆为已消化 + 存储模型视角的 valence ---
         # --- Auto mood scoring on feel ---
@@ -1534,10 +1526,7 @@ async def hold(
             pinned=True,
             created_at=created_at,
         )
-        try:
-            await embedding_engine.generate_and_store(bucket_id, content)
-        except Exception:
-            pass
+        asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
 
     # --- Letter/writing/letter_jiajia: skip merge, create directly ---
@@ -1553,10 +1542,7 @@ async def hold(
             name=suggested_name or None,
             created_at=created_at,
         )
-        try:
-            await embedding_engine.generate_and_store(bucket_id, content)
-        except Exception:
-            pass
+        asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"新建→{bucket_id} {','.join(final_domain)}"
 
     # --- Step 2: merge or create / 合并或新建 ---
@@ -1736,12 +1722,9 @@ async def trace(
     if not success:
         return f"修改失败: {bucket_id}"
 
-    # Re-generate embedding if content changed
+    # Re-generate embedding if content changed (background: don't block response on Gemini latency)
     if "content" in updates:
-        try:
-            await embedding_engine.generate_and_store(bucket_id, updates["content"])
-        except Exception:
-            pass
+        asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, updates["content"]))
 
     changed = ", ".join(f"{k}={v}" for k, v in updates.items() if k != "content")
     if "content" in updates:
