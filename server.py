@@ -3149,6 +3149,54 @@ async def api_desire_feed(request):
     }, headers={"Access-Control-Allow-Origin": "*"})
 
 
+# =============================================================
+# /api/soma — Soma Trace上报/读取
+# Soma Trace是nox-companion本地hook算的(读mini_cat_state.json/
+# big_cat_state.json这些本地文件)，后端本来不知道这东西存在。
+# 本地hook每次算完，主动POST一份上来；dashboard用GET读最新的。
+# 1小时没人上报就当过期，不强行维持一个早就不新鲜的状态。
+# =============================================================
+_SOMA_STATE_PATH = "/app/buckets/soma_state.json"
+_SOMA_STALE_SECONDS = 3600
+
+
+@mcp.custom_route("/api/soma/report", methods=["POST"])
+async def api_soma_report(request):
+    from starlette.responses import JSONResponse
+    import json
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    line = (body.get("line") or "").strip()
+    chord = (body.get("chord") or "").strip()
+    if not line:
+        return JSONResponse({"error": "line required"}, status_code=400)
+    try:
+        os.makedirs(os.path.dirname(_SOMA_STATE_PATH), exist_ok=True)
+        with open(_SOMA_STATE_PATH, "w") as f:
+            json.dump({"line": line, "chord": chord, "updated_at": time.time()}, f)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"ok": True}, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/soma/state", methods=["GET"])
+async def api_soma_state(request):
+    from starlette.responses import JSONResponse
+    import json
+    try:
+        with open(_SOMA_STATE_PATH) as f:
+            data = json.load(f)
+        if time.time() - data.get("updated_at", 0) > _SOMA_STALE_SECONDS:
+            return JSONResponse({"line": None, "chord": None},
+                               headers={"Access-Control-Allow-Origin": "*"})
+        return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception:
+        return JSONResponse({"line": None, "chord": None},
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/api/feels", methods=["GET"])
 async def api_feels_public(request):
     """公开接口：返回未消化未沉底的feel列表，供本地trigger轮询分析。无需auth。"""
