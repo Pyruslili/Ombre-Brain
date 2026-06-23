@@ -180,8 +180,8 @@ let width = window.innerWidth, height = window.innerHeight;
 let currentProgress = 0, smoothedProgress = 0;
 const phaseCount = 7;
 const OPENING_LOW_POWER = matchMedia('(max-width: 760px), (pointer: coarse)').matches || (navigator.deviceMemory && navigator.deviceMemory <= 4);
-const OPENING_COUNT = OPENING_LOW_POWER ? 14000 : 32000;
-const OPENING_DPR = OPENING_LOW_POWER ? 1.15 : Math.min(window.devicePixelRatio || 1, 1.48);
+const OPENING_COUNT = OPENING_LOW_POWER ? 18000 : 40000;
+const OPENING_DPR = OPENING_LOW_POWER ? 1.25 : Math.min(window.devicePixelRatio || 1, 1.6);
 let openingFrameId = 0;
 let openingFinished = false;
 

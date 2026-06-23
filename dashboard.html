@@ -233,11 +233,12 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
 .archive-hero {
   position: relative;
   z-index: 2;
+  --hero-pad-bottom: clamp(4rem, 8vh, 7rem);
   min-height: 100svh;
   display: grid;
   align-items: end;
   overflow: hidden;
-  padding: clamp(8rem, 15vh, 12rem) var(--page-pad) clamp(4rem, 8vh, 7rem);
+  padding: clamp(8rem, 15vh, 12rem) var(--page-pad) var(--hero-pad-bottom);
   isolation: isolate;
 }
 .archive-hero::before {
@@ -296,7 +297,7 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
   position: absolute;
   z-index: 6;
   right: var(--page-pad);
-  bottom: 3.2rem;
+  bottom: var(--hero-pad-bottom);
   display: flex;
   align-items: center;
   gap: .8rem;
@@ -1933,15 +1934,25 @@ function closeOpening(tab = '') {
   try { sessionStorage.setItem(OPENING_SEEN_KEY, '1'); } catch(e) {}
   const gate = openingGate || document.getElementById('opening-gate');
   openingGate = null;
+  window.scrollTo({ top: 0, behavior: 'auto' });
   if (gate) {
     gate.classList.add('closing');
     setTimeout(() => gate.remove(), 620);
   }
   if (tab) {
-    setTimeout(() => switchChapter(tab), gate ? 360 : 0);
+    setTimeout(() => enterFromOpening(tab), gate ? 640 : 80);
   } else {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
+}
+
+function enterFromOpening(tab) {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  window.scrollTo({ top: 0, behavior: 'auto' });
+  switchChapter(tab, { scroll: false });
+  setTimeout(() => {
+    document.getElementById('chapter-index')?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' });
+  }, reduced ? 0 : 420);
 }
 
 window.addEventListener('message', (event) => {
@@ -3693,7 +3704,7 @@ function initEvents() {
   }
 }
 
-function switchChapter(target) {
+function switchChapter(target, options = {}) {
   const visibleTarget = target === 'settings' ? 'config' : target;
   if (target !== 'network') {
     cancelAnimationFrame(sphereNetworkAnimId);
@@ -3713,7 +3724,9 @@ function switchChapter(target) {
   if (target === 'settings') loadSettingsStatus();
   if (target === 'desire') loadDesire();
   if (target === 'echoes') loadEchoes();
-  document.getElementById('chapter-index').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  if (options.scroll !== false) {
+    document.getElementById('chapter-index').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
 }
 
 function initArchiveStars() {
