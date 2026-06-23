@@ -823,50 +823,10 @@ label {
   border-color: rgba(232,149,79,.34);
   background: rgba(196,122,56,.07);
 }
-.echo-player-shell {
-  display: grid;
-  grid-template-columns: minmax(0,1fr) auto 38px;
-  gap: .9rem;
-  align-items: center;
-  margin: 0 0 1.35rem;
-  padding: .72rem .9rem;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 8% 50%, rgba(232,149,79,.09), transparent 34%),
-    linear-gradient(145deg, rgba(52,33,21,.26), rgba(12,7,4,.52));
-  box-shadow: inset 0 1px rgba(255,224,186,.035), 0 18px 48px rgba(0,0,0,.09);
-}
-.echo-player-shell.active { border-color: rgba(232,149,79,.22); }
-.echo-player-toggle {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(232,149,79,.24);
-  border-radius: 50%;
-  color: var(--accent-deep);
-  background: rgba(196,122,56,.055);
-  padding: 0;
-}
-.echo-player-toggle svg {
-  display: block;
-  width: 13px;
-  height: 13px;
-}
-.echo-player-main { min-width: 0; }
-.echo-player-title {
-  color: var(--ink-soft);
-  font-size: .76rem;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .echo-progress {
   position: relative;
-  height: 3px;
-  margin-top: .52rem;
+  height: 2px;
+  margin: .58rem 0 .42rem;
   border-radius: 999px;
   background: rgba(214,190,156,.18);
   overflow: hidden;
@@ -880,13 +840,9 @@ label {
   background: var(--accent-deep);
   box-shadow: 0 0 12px rgba(232,149,79,.24);
 }
-.echo-player-time {
-  color: var(--mute);
-  font: 300 .62rem/1 var(--font-mono);
-  letter-spacing: .05em;
-  white-space: nowrap;
-}
 .echo-player { display: none; }
+.echo-card-progress { opacity: .28; transition: opacity .25s ease; }
+.echo-card.is-playing .echo-card-progress { opacity: 1; }
 .echoes-status { color: var(--mute); font: 300 .68rem/1.6 var(--font-mono); letter-spacing: .06em; text-align: right; }
 .echoes-list { display: grid; gap: .75rem; }
 .echo-card {
@@ -1197,7 +1153,6 @@ html[data-theme="sakura-milk"] .import-card-tags,
 html[data-theme="sakura-milk"] .weather-trace,
 html[data-theme="sakura-milk"] .thought-text,
 html[data-theme="sakura-milk"] .echo-text,
-html[data-theme="sakura-milk"] .echo-player-title,
 html[data-theme="sakura-milk"] .dream-body,
 html[data-theme="sakura-milk"] .score-row .name,
 html[data-theme="sakura-milk"] .section-note,
@@ -1214,7 +1169,6 @@ html[data-theme="sakura-milk"] .reverie-card,
 html[data-theme="sakura-milk"] .config-section,
 html[data-theme="sakura-milk"] .drift-card,
 html[data-theme="sakura-milk"] .echo-card,
-html[data-theme="sakura-milk"] .echo-player-shell,
 html[data-theme="sakura-milk"] .import-card,
 html[data-theme="sakura-milk"] .auth-card {
   background:
@@ -1302,8 +1256,7 @@ html[data-theme="sakura-milk"] .echoes-tabs button {
   background: rgba(255,255,255,.35);
   border-color: rgba(214,132,159,.16);
 }
-html[data-theme="sakura-milk"] .echoes-tabs button.active,
-html[data-theme="sakura-milk"] .echo-player-toggle {
+html[data-theme="sakura-milk"] .echoes-tabs button.active {
   color: var(--accent-deep);
   border-color: rgba(202,111,145,.34);
   background: rgba(216,132,159,.09);
@@ -1324,6 +1277,7 @@ html[data-theme="sakura-milk"] .echo-card.is-playing {
 html[data-theme="sakura-milk"] .echo-card.is-playing .echo-op { text-shadow: 0 0 12px rgba(202,111,145,.32); }
 html[data-theme="sakura-milk"] .echo-actions button:hover,
 html[data-theme="sakura-milk"] .echo-actions a:hover { border-color: rgba(202,111,145,.38); background: rgba(216,132,159,.09); }
+html[data-theme="sakura-milk"] .echo-actions .echo-play-action.active { color: var(--accent-deep); border-color: rgba(202,111,145,.38); background: rgba(216,132,159,.09); }
 html[data-theme="sakura-milk"] .echo-actions .favorite.active { color: var(--accent-deep); border-color: rgba(202,111,145,.38); }
 html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); color: var(--ink); }
 
@@ -1410,9 +1364,6 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     padding: 0 0 .65rem;
   }
   .echo-actions { justify-content: flex-start; }
-  .echo-player-shell { grid-template-columns: minmax(0,1fr) 36px; border-radius: 22px; }
-  .echo-player-time { grid-column: 1; grid-row: 2; }
-  .echo-player-toggle { grid-column: 2; grid-row: 1 / span 2; }
   .echoes-foot { grid-template-columns: 1fr; }
   .echoes-status { text-align: left; }
 }
@@ -1640,17 +1591,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <button class="active" data-echo-section="recent">Recent 20</button>
       <button data-echo-section="pinned">Pinned</button>
     </div>
-    <div class="echo-player-shell" id="echo-player-shell">
-      <audio class="echo-player" id="echoes-player" preload="metadata"></audio>
-      <div class="echo-player-main">
-        <div class="echo-player-title" id="echo-player-title">Select an echo to play</div>
-        <div class="echo-progress" data-echo-action="seek"><span id="echo-player-progress"></span></div>
-      </div>
-      <div class="echo-player-time" id="echo-player-time">0:00 / 0:00</div>
-      <button class="echo-player-toggle" data-echo-action="player-toggle" type="button" aria-label="Play echo">
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.4v13.2L18.4 12 8 5.4Z"/></svg>
-      </button>
-    </div>
+    <audio class="echo-player" id="echoes-player" preload="metadata"></audio>
     <div class="echoes-list" id="echoes-list"></div>
     <div class="echoes-foot">
       <p class="section-note">读取本机 <code>localhost:3721</code> 的最近二十条声音。收藏会写回本地索引；删除会同时移除音频文件。</p>
@@ -1858,6 +1799,7 @@ let echoesBase = ECHOES_BASES[0];
 let echoesRaw = [];
 let echoesMode = 'recent';
 let currentEchoId = null;
+let echoProgressRaf = null;
 const mouse = { x: -1000, y: -1000 };
 
 const ICONS = {
@@ -2110,6 +2052,7 @@ async function loadEchoes() {
   } catch (e) {
     echoesRaw = [];
     currentEchoId = null;
+    stopEchoProgressLoop();
     list.innerHTML = '<div class="loading">Local echo bridge asleep · start /Users/lili/auto-trigger/server.js on port 3721</div>';
     status.textContent = 'localhost:3721 unreachable';
     renderEchoTabs();
@@ -2144,6 +2087,18 @@ function renderEchoTabs() {
   });
 }
 
+function echoProgressPercent() {
+  const player = document.getElementById('echoes-player');
+  if (!player || !Number.isFinite(player.duration) || player.duration <= 0) return 0;
+  const current = Number.isFinite(player.currentTime) ? player.currentTime : 0;
+  return Math.min(100, Math.max(0, current / player.duration * 100));
+}
+
+function isEchoActivelyPlaying(id) {
+  const player = document.getElementById('echoes-player');
+  return String(id) === currentEchoId && !!player && !player.paused && !player.ended;
+}
+
 function renderEchoes() {
   const list = document.getElementById('echoes-list');
   if (!list) return;
@@ -2155,16 +2110,19 @@ function renderEchoes() {
   }
   list.innerHTML = items.map((item, idx) => {
     const id = String(item.id || '');
-    const playing = id === currentEchoId;
+    const selected = id === currentEchoId;
+    const activelyPlaying = isEchoActivelyPlaying(id);
+    const progress = selected ? echoProgressPercent() : 0;
     const text = item.text || '';
-    return `<div class="echo-card ${playing ? 'is-playing' : ''}" data-echo-id="${esc(id)}">
+    return `<div class="echo-card ${selected ? 'is-playing' : ''}" data-echo-id="${esc(id)}">
       <div class="echo-op">Op.${idx + 1}</div>
       <div>
         <div class="echo-text">${esc(text || 'Untitled echo')}</div>
+        <div class="echo-progress echo-card-progress" data-echo-action="seek" data-echo-id="${esc(id)}"><span style="width:${progress}%"></span></div>
         <div class="echo-meta">${esc(formatEchoDate(item.timestamp))} · ${item.favorite ? 'PINNED ECHO' : 'LOCAL'}</div>
       </div>
       <div class="echo-actions">
-        <button class="echo-play-action ${playing ? 'active' : ''}" data-echo-action="play" data-echo-id="${esc(id)}" aria-label="${playing ? 'Pause echo' : 'Play echo'}">${echoPlayerIcon(playing)}</button>
+        <button class="echo-play-action ${activelyPlaying ? 'active' : ''}" data-echo-action="play" data-echo-id="${esc(id)}" aria-label="${activelyPlaying ? 'Pause echo' : 'Play echo'}">${echoPlayerIcon(activelyPlaying)}</button>
         <button class="favorite ${item.favorite ? 'active' : ''}" data-echo-action="favorite" data-echo-id="${esc(id)}">${item.favorite ? 'Unpin' : 'Pin'}</button>
         <button data-echo-action="download" data-echo-id="${esc(id)}">Save</button>
         <button class="danger" data-echo-action="delete" data-echo-id="${esc(id)}">Delete</button>
@@ -2178,8 +2136,15 @@ function playEcho(id) {
   const player = document.getElementById('echoes-player');
   if (!item || !player) return;
   if (currentEchoId === String(id) && player.src) {
-    if (player.paused) player.play().then(updateEchoPlayerUI).catch(updateEchoPlayerUI);
-    else player.pause();
+    if (player.paused) {
+      player.play().then(() => {
+        updateEchoPlayerUI();
+        startEchoProgressLoop();
+      }).catch(updateEchoPlayerUI);
+    } else {
+      player.pause();
+      stopEchoProgressLoop();
+    }
     updateEchoPlayerUI();
     renderEchoes();
     return;
@@ -2188,15 +2153,11 @@ function playEcho(id) {
   player.src = echoFileUrl(item);
   updateEchoPlayerUI();
   player.classList.add('active');
-  player.play().then(updateEchoPlayerUI).catch(updateEchoPlayerUI);
   renderEchoes();
-}
-
-function formatEchoSeconds(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
+  player.play().then(() => {
+    updateEchoPlayerUI();
+    startEchoProgressLoop();
+  }).catch(updateEchoPlayerUI);
 }
 
 function echoPlayerIcon(isPlaying) {
@@ -2207,43 +2168,50 @@ function echoPlayerIcon(isPlaying) {
 
 function updateEchoPlayerUI() {
   const player = document.getElementById('echoes-player');
-  const shell = document.getElementById('echo-player-shell');
-  const title = document.getElementById('echo-player-title');
-  const time = document.getElementById('echo-player-time');
-  const progress = document.getElementById('echo-player-progress');
-  const toggle = document.querySelector('[data-echo-action="player-toggle"]');
-  if (!player || !shell || !title || !time || !progress || !toggle) return;
-  const item = echoesRaw.find(e => String(e.id || '') === currentEchoId);
-  shell.classList.toggle('active', !!item);
-  title.textContent = item ? (item.text || 'Untitled echo') : 'Select an echo to play';
-  const duration = Number.isFinite(player.duration) ? player.duration : 0;
-  const current = Number.isFinite(player.currentTime) ? player.currentTime : 0;
-  progress.style.width = duration ? `${Math.min(100, Math.max(0, current / duration * 100))}%` : '0%';
-  time.textContent = `${formatEchoSeconds(current)} / ${formatEchoSeconds(duration)}`;
-  const isPlaying = !!item && !player.paused;
-  toggle.innerHTML = echoPlayerIcon(isPlaying);
-  toggle.setAttribute('aria-label', isPlaying ? 'Pause echo' : 'Play echo');
-}
-
-function toggleEchoPlayer() {
-  const player = document.getElementById('echoes-player');
   if (!player) return;
-  if (!currentEchoId) {
-    const first = echoItemsForMode()[0];
-    if (first) playEcho(first.id);
-    return;
-  }
-  if (player.paused) player.play().then(updateEchoPlayerUI).catch(updateEchoPlayerUI);
-  else {
-    player.pause();
-    updateEchoPlayerUI();
-  }
+  document.querySelectorAll('.echo-play-action').forEach(button => {
+    const id = button.dataset.echoId || '';
+    const isPlaying = isEchoActivelyPlaying(id);
+    button.classList.toggle('active', isPlaying);
+    button.innerHTML = echoPlayerIcon(isPlaying);
+    button.setAttribute('aria-label', isPlaying ? 'Pause echo' : 'Play echo');
+  });
+  updateEchoCardProgress();
 }
 
-function seekEchoPlayer(event) {
+function updateEchoCardProgress() {
+  const pct = echoProgressPercent();
+  document.querySelectorAll('.echo-card-progress span').forEach(bar => {
+    const card = bar.closest('[data-echo-id]');
+    const id = card?.dataset.echoId || '';
+    bar.style.width = id === currentEchoId ? `${pct}%` : '0%';
+  });
+}
+
+function startEchoProgressLoop() {
+  const player = document.getElementById('echoes-player');
+  if (!player || echoProgressRaf) return;
+  const tick = () => {
+    updateEchoPlayerUI();
+    if (player && !player.paused && !player.ended && currentEchoId) {
+      echoProgressRaf = requestAnimationFrame(tick);
+    } else {
+      echoProgressRaf = null;
+    }
+  };
+  echoProgressRaf = requestAnimationFrame(tick);
+}
+
+function stopEchoProgressLoop() {
+  if (echoProgressRaf) cancelAnimationFrame(echoProgressRaf);
+  echoProgressRaf = null;
+}
+
+function seekEchoPlayer(event, id = "") {
   const player = document.getElementById('echoes-player');
   const bar = event.target.closest('[data-echo-action="seek"]');
   if (!player || !bar || !Number.isFinite(player.duration) || player.duration <= 0) return;
+  if (id && String(id) !== currentEchoId) return;
   const rect = bar.getBoundingClientRect();
   const pct = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
   player.currentTime = pct * player.duration;
@@ -2290,6 +2258,7 @@ async function deleteEcho(id) {
       player.load();
       player.classList.remove('active');
       currentEchoId = null;
+      stopEchoProgressLoop();
       updateEchoPlayerUI();
     }
     const res = await echoFetch('/api/audio/' + encodeURIComponent(id), { method: 'DELETE' });
@@ -3584,8 +3553,7 @@ function initEvents() {
     if (echoAction) {
       const id = echoAction.dataset.echoId || '';
       if (echoAction.dataset.echoAction === 'play') playEcho(id);
-      if (echoAction.dataset.echoAction === 'player-toggle') toggleEchoPlayer();
-      if (echoAction.dataset.echoAction === 'seek') seekEchoPlayer(e);
+      if (echoAction.dataset.echoAction === 'seek') seekEchoPlayer(e, id);
       if (echoAction.dataset.echoAction === 'favorite') toggleEchoFavorite(id);
       if (echoAction.dataset.echoAction === 'download') downloadEcho(id);
       if (echoAction.dataset.echoAction === 'delete') deleteEcho(id);
@@ -3605,8 +3573,20 @@ function initEvents() {
 
   const echoPlayer = document.getElementById('echoes-player');
   if (echoPlayer) {
-    ['timeupdate', 'loadedmetadata', 'play', 'pause', 'ended', 'durationchange'].forEach(eventName => {
+    ['timeupdate', 'loadedmetadata', 'durationchange'].forEach(eventName => {
       echoPlayer.addEventListener(eventName, updateEchoPlayerUI);
+    });
+    echoPlayer.addEventListener('play', () => {
+      updateEchoPlayerUI();
+      startEchoProgressLoop();
+    });
+    echoPlayer.addEventListener('pause', () => {
+      updateEchoPlayerUI();
+      stopEchoProgressLoop();
+    });
+    echoPlayer.addEventListener('ended', () => {
+      updateEchoPlayerUI();
+      stopEchoProgressLoop();
     });
   }
 
