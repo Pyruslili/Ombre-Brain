@@ -103,11 +103,13 @@
   /* ——— 残月 logo（嘉嘉画的，整体慢转，中间透出星星）——— */
   #logo {
     position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
-    z-index:11; width:30px; height:27px; opacity:0;  
-    transition:opacity 2.0s ease;
+    z-index:11; width:30px; height:27px; opacity:.78;
+    color:rgba(190,202,230,.74);
+    transition:opacity 1.6s ease, color 1.2s ease;
     pointer-events:auto; cursor:pointer;
   }
   #logo svg { width:100%; height:100%; display:block; transform-origin:50% 50%; animation:logospin 42s linear infinite; }
+  body.catroom-phase #logo { color:#E8954F; }
   @keyframes logospin { from{ transform:rotate(0) } to{ transform:rotate(360deg) } }
 
   .scroll-capturer { position:absolute; inset:0; z-index:5; overflow-y:scroll; }
@@ -115,23 +117,12 @@
   .scroll-height { height:1160%; }
   .planet-label{position:absolute;z-index:12;pointer-events:auto;font-family:'Jost',sans-serif;font-weight:200;font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:rgba(202,212,238,0);transition:color .6s;white-space:nowrap;transform:translate(-50%,-50%);cursor:pointer;padding:10px 12px;}
   .planet-label.show{color:rgba(204,214,238,.78);}
-  #skip-opening {
-    position:absolute; top:32px; right:36px; z-index:30;
-    border:1px solid rgba(176,188,218,.18); border-radius:999px;
-    background:rgba(2,2,8,.18); color:rgba(176,188,218,.54);
-    padding:9px 13px; font-family:'Jost',sans-serif; font-weight:300;
-    font-size:11px; letter-spacing:.22em; text-transform:uppercase;
-    cursor:pointer; transition:color .4s,border-color .4s,background .4s,opacity .4s;
-  }
-  #skip-opening:hover { color:rgba(232,149,79,.78); border-color:rgba(232,149,79,.34); background:rgba(232,149,79,.06); }
-  body.catroom-phase #skip-opening { color:rgba(232,149,79,.50); border-color:rgba(232,149,79,.18); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
 <div id="canvas-container"></div>
-<button id="skip-opening" type="button">Skip</button>
 
 <div id="wordmark">
   <div class="title">Nocturne</div>
@@ -153,11 +144,11 @@
 <div id="logo" title="Nocturne">
   <svg viewBox="0 0 130 117">
     <g transform="translate(2,2)" fill="none">
-      <ellipse stroke="#E8954F" stroke-width="2.6" cx="56" cy="56.5" rx="56" ry="56.5"/>
-      <path fill="#E8954F" d="M86.0322095,8.80516146 C109.8904,13.1107833 128.000001,34.1697957 128.000001,59.5 C128.000001,87.9426646 105.166523,111 77.000001,111 C75.2308555,111 73.4827496,110.909036 71.7600198,110.731487 C95.015733,103.863008 112.000001,82.1826574 112.000001,56.5 C112.000001,36.5293834 101.730488,18.9787561 86.2288626,8.93049628 Z"/>
-      <path fill="#E8954F" d="M1.57578227,67.0189146 C2.5237239,67.0189146 3,65.8414201 3,64.3323821 C3,62.8233441 1.99453723,62.0189146 1.04659559,62.0189146 C0.0986539597,62.0189146 0,63.6528528 0,64.6146343 C0,65.5764158 0.627840633,67.0189146 1.57578227,67.0189146 Z"/>
-      <path fill="#E8954F" d="M7.99003761,87.2305199 C9.09460711,87.2305199 9,86.1045695 9,85 C9,83.8954305 7.38342646,82.4608254 6.27885696,82.4608254 C5.17428746,82.4608254 4.58896881,83.4549138 5,85 C5.41103315,86.5450862 6.88546811,87.2305199 7.99003761,87.2305199 Z"/>
-      <circle cx="89" cy="11.5" r="4.6" fill="#E8954F" opacity="0.85"/>
+      <ellipse stroke="currentColor" stroke-width="2.6" cx="56" cy="56.5" rx="56" ry="56.5"/>
+      <path fill="currentColor" d="M86.0322095,8.80516146 C109.8904,13.1107833 128.000001,34.1697957 128.000001,59.5 C128.000001,87.9426646 105.166523,111 77.000001,111 C75.2308555,111 73.4827496,110.909036 71.7600198,110.731487 C95.015733,103.863008 112.000001,82.1826574 112.000001,56.5 C112.000001,36.5293834 101.730488,18.9787561 86.2288626,8.93049628 Z"/>
+      <path fill="currentColor" d="M1.57578227,67.0189146 C2.5237239,67.0189146 3,65.8414201 3,64.3323821 C3,62.8233441 1.99453723,62.0189146 1.04659559,62.0189146 C0.0986539597,62.0189146 0,63.6528528 0,64.6146343 C0,65.5764158 0.627840633,67.0189146 1.57578227,67.0189146 Z"/>
+      <path fill="currentColor" d="M7.99003761,87.2305199 C9.09460711,87.2305199 9,86.1045695 9,85 C9,83.8954305 7.38342646,82.4608254 6.27885696,82.4608254 C5.17428746,82.4608254 4.58896881,83.4549138 5,85 C5.41103315,86.5450862 6.88546811,87.2305199 7.99003761,87.2305199 Z"/>
+      <circle cx="89" cy="11.5" r="4.6" fill="currentColor" opacity="0.85"/>
     </g>
   </svg>
 </div>
@@ -176,7 +167,7 @@ if(!window.THREE){
   const finishWithoutThree = () => {
     try { window.parent.postMessage({ type:'nocturne-opening-finish', tab:'' }, '*'); } catch(e) {}
   };
-  document.getElementById('skip-opening')?.addEventListener('click', finishWithoutThree);
+  document.getElementById('logo')?.addEventListener('click', finishWithoutThree);
   setTimeout(finishWithoutThree, 900);
   throw new Error('THREE.js unavailable; opening skipped.');
 }
@@ -189,8 +180,8 @@ let width = window.innerWidth, height = window.innerHeight;
 let currentProgress = 0, smoothedProgress = 0;
 const phaseCount = 7;
 const OPENING_LOW_POWER = matchMedia('(max-width: 760px), (pointer: coarse)').matches || (navigator.deviceMemory && navigator.deviceMemory <= 4);
-const OPENING_COUNT = OPENING_LOW_POWER ? 18000 : 40000;
-const OPENING_DPR = OPENING_LOW_POWER ? 1.25 : Math.min(window.devicePixelRatio || 1, 1.6);
+const OPENING_COUNT = OPENING_LOW_POWER ? 12000 : 28000;
+const OPENING_DPR = OPENING_LOW_POWER ? 1.1 : Math.min(window.devicePixelRatio || 1, 1.35);
 let openingFrameId = 0;
 let openingFinished = false;
 let openingExitTimer = null;
@@ -264,7 +255,6 @@ function init(){
       openingExitTimer = null;
     }
   });
-  document.getElementById('skip-opening').addEventListener('click', (e)=>{ e.stopPropagation(); finishOpening(); });
   document.getElementById('logo').addEventListener('click', (e)=>{ e.stopPropagation(); finishOpening(); });
 
   // 角标稍晚淡入
@@ -272,8 +262,8 @@ function init(){
                    document.getElementById('code').classList.add('show');
                    document.getElementById('phasenum').classList.add('show');
                    document.getElementById('music').classList.add('show'); }, 2200);
-  // 残月 logo 更晚浮现（悬浮在宇宙边缘）
-  setTimeout(()=>{ document.getElementById('logo').style.opacity=0.85; }, 3600);
+  // 残月 logo 常驻底部；点击直接略过开屏。
+  setTimeout(()=>{ document.getElementById('logo').style.opacity=0.82; }, 600);
 
   // 胶片噪点：一张 160px 噪点图平铺，steps 跳动（见 CSS grainShift）
   (function(){
@@ -672,7 +662,7 @@ function onWindowResize(){ width=innerWidth; height=innerHeight; camera.aspect=w
 
 function onOpeningClick(e){
   if(openingFinished) return;
-  if(e.target.closest('#music,#skip-opening,#logo,.planet-label')) return;
+  if(e.target.closest('#music,#logo,.planet-label')) return;
   if(!catPlanetGroup || !Array.isArray(PLANETS)) return;
   let best = null;
   PLANETS.forEach(P => {
@@ -1016,9 +1006,15 @@ function animate(){
       if(flyP > 1.22) _updateCatPlanets(T, clamp((flyP - 1.22)/0.55, 0, 1));
     }
 
-    // logo：猫飞入后浮现
+    // logo：前段常驻银色，黑场短暂收起，猫屋阶段按原位置浮现为橙色
     const lo = document.getElementById('logo');
-    if(lo) lo.style.opacity = Math.min(1, Math.max(0, flyP - 0.2) * 2).toFixed(3);
+    if(lo) {
+      const logoAlpha = catP < holdEnd ? 0.82
+        : catP < fadeEnd ? 0.82 * (1.0 - (catP - holdEnd)/(fadeEnd - holdEnd))
+        : catP < blackEnd ? 0
+        : Math.min(0.9, Math.max(0, flyP - 0.2) * 2);
+      lo.style.opacity = logoAlpha.toFixed(3);
+    }
 
     // 猫phase字幕：黑场结束、猫粒子开始飞入时再慢慢浮现，保留到结束
     if(catP > blackEnd){
@@ -1063,7 +1059,7 @@ function animate(){
       heroSys.material.uniforms.uOpacity.value = 1.0;
     }
     const logoEl = document.getElementById('logo');
-    if(logoEl) logoEl.style.opacity = '0';
+    if(logoEl) logoEl.style.opacity = '0.82';
   }
   renderer.render(scene,camera);
 }
