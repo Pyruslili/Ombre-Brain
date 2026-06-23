@@ -165,6 +165,7 @@ html[data-theme="sakura-milk"] #sakura-petals { opacity: .82; }
   height: var(--size);
   opacity: 0;
   color: rgba(202,111,145,.48);
+  filter: drop-shadow(0 4px 7px rgba(184,112,134,.08));
   animation: sakuraFall var(--dur) linear infinite;
   animation-delay: var(--delay);
   animation-play-state: paused;
@@ -174,7 +175,7 @@ html[data-theme="sakura-milk"] .sakura-petal { animation-play-state: running; }
 .sakura-petal svg { display: block; width: 100%; height: 100%; }
 .sakura-petal:nth-child(3n) { color: rgba(255,244,247,.70); }
 .sakura-petal:nth-child(4n) { color: rgba(216,132,159,.38); }
-.sakura-petal:nth-child(5n) { filter: blur(.1px); }
+.sakura-petal:nth-child(5n) { filter: blur(.1px) drop-shadow(0 4px 7px rgba(184,112,134,.06)); }
 ::selection { background: rgba(196,122,56,.32); color: var(--ink); }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
@@ -256,6 +257,61 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
   background: linear-gradient(90deg, var(--line), transparent 74%);
 }
 .archive-hero-copy { position: relative; z-index: 4; width: min(82vw, 1100px); }
+.hero-cat-constellation {
+  position: absolute;
+  z-index: -1;
+  right: clamp(1.5rem, 5vw, 6rem);
+  top: clamp(6rem, 10vh, 9rem);
+  width: min(52vw, 780px);
+  height: min(66vh, 660px);
+  color: rgba(239,224,196,.72);
+  opacity: .78;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 0 24px rgba(232,149,79,.05));
+  animation: constellationWake 18s ease-in-out infinite alternate;
+}
+.hero-cat-constellation .orbit {
+  fill: none;
+  stroke: rgba(232,149,79,.16);
+  stroke-width: .7;
+  stroke-dasharray: 2 7;
+}
+.hero-cat-constellation .orbit.soft { stroke: rgba(239,224,196,.08); stroke-dasharray: none; }
+.hero-cat-constellation .cat-line {
+  fill: none;
+  stroke: rgba(239,224,196,.45);
+  stroke-width: .9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.hero-cat-constellation .cat-path {
+  fill: none;
+  stroke: rgba(232,149,79,.38);
+  stroke-width: .8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1.5 5;
+}
+.hero-cat-constellation .star {
+  fill: rgba(239,224,196,.86);
+  filter: drop-shadow(0 0 5px rgba(239,224,196,.42));
+}
+.hero-cat-constellation .star.dim { fill: rgba(239,224,196,.46); filter: none; }
+.hero-cat-constellation .star.core {
+  fill: var(--accent-deep);
+  filter: drop-shadow(0 0 10px rgba(232,149,79,.82));
+}
+.hero-cat-constellation .whisker {
+  stroke: rgba(239,224,196,.17);
+  stroke-width: .55;
+  stroke-linecap: round;
+}
+.hero-cat-constellation .planet {
+  fill: rgba(196,122,56,.45);
+  stroke: rgba(239,224,196,.35);
+  stroke-width: .6;
+}
 .archive-kicker {
   margin-bottom: clamp(1.4rem, 3vh, 2.7rem);
   color: var(--ink-soft);
@@ -834,6 +890,26 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
   overflow: hidden;
   transition: border-color .5s, background .5s;
 }
+html[data-theme="sakura-milk"] #import-view .fragment-section {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255,255,255,.82), transparent 30%),
+    rgba(255,252,251,.84);
+  border-color: rgba(214,132,159,.16);
+  box-shadow: inset 0 1px rgba(255,255,255,.76), 0 20px 54px rgba(176,105,128,.08);
+}
+html[data-theme="sakura-milk"] .upload-zone {
+  border-color: rgba(214,132,159,.18);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,.94), transparent 48%),
+    linear-gradient(145deg, rgba(255,254,251,.95), rgba(255,246,248,.86));
+  box-shadow: inset 0 1px rgba(255,255,255,.78), 0 18px 42px rgba(176,105,128,.08);
+}
+html[data-theme="sakura-milk"] .upload-zone.dragover {
+  border-color: rgba(202,111,145,.42);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,.98), transparent 48%),
+    linear-gradient(145deg, rgba(255,254,251,.98), rgba(255,235,242,.90));
+}
 .upload-zone::before {
   display: none;
 }
@@ -976,6 +1052,18 @@ html[data-theme="sakura-milk"] .archive-hero::before {
     linear-gradient(90deg, rgba(255,247,248,.96) 0%, rgba(255,247,248,.74) 48%, rgba(255,236,242,.20) 78%, rgba(255,246,248,.62) 100%),
     radial-gradient(circle at 76% 38%, rgba(216,132,159,.20), transparent 32%);
 }
+html[data-theme="sakura-milk"] .hero-cat-constellation {
+  color: rgba(92,65,76,.52);
+  opacity: .38;
+  filter: none;
+  animation: none;
+}
+html[data-theme="sakura-milk"] .hero-cat-constellation .orbit { stroke: rgba(202,111,145,.16); }
+html[data-theme="sakura-milk"] .hero-cat-constellation .orbit.soft { stroke: rgba(92,65,76,.06); }
+html[data-theme="sakura-milk"] .hero-cat-constellation .cat-line { stroke: rgba(92,65,76,.28); }
+html[data-theme="sakura-milk"] .hero-cat-constellation .cat-path { stroke: rgba(202,111,145,.24); }
+html[data-theme="sakura-milk"] .hero-cat-constellation .star { fill: rgba(92,65,76,.44); filter: drop-shadow(0 0 4px rgba(202,111,145,.18)); }
+html[data-theme="sakura-milk"] .hero-cat-constellation .star.core { fill: var(--accent-deep); filter: drop-shadow(0 0 8px rgba(202,111,145,.42)); }
 html[data-theme="sakura-milk"] .tabs {
   background: rgba(255,247,249,.72);
   box-shadow: 0 18px 54px rgba(184,112,134,.12);
@@ -1127,6 +1215,10 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     transform: translate3d(var(--sway-end), 112vh, 0) rotate(var(--rot2)) scale(var(--scale));
   }
 }
+@keyframes constellationWake {
+  from { opacity: .64; transform: translate3d(.4%, -.3%, 0) scale(.992); }
+  to { opacity: .84; transform: translate3d(-.3%, .4%, 0) scale(1.012); }
+}
 @keyframes cosmicBreath {
   from { opacity: .58; transform: scale(.98) translate3d(-.5%, .5%, 0); }
   to { opacity: 1; transform: scale(1.045) translate3d(.8%, -.6%, 0); }
@@ -1140,6 +1232,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .archive-title { line-height: .78; }
   .archive-title em { margin-left: 0; }
   .archive-subtitle, .archive-ledger { margin-left: 0; }
+  .hero-cat-constellation { right: -18vw; top: 8rem; width: 76vw; opacity: .34; }
   .tabs { overflow-x: auto; grid-template-columns: repeat(7, minmax(124px,1fr)); }
   .tab { min-height: 64px; }
   .bucket-row { grid-template-columns: 36px minmax(0,1fr) 72px; }
@@ -1156,6 +1249,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .topbar { padding-top: 1rem; }
   .stats-line, .brand-sep { display: none; }
   .archive-hero { min-height: 92svh; }
+  .hero-cat-constellation { display: none; }
   .archive-subtitle { width: 66vw; }
   .archive-ledger { max-width: 62vw; }
   .scroll-cue { display: none; }
@@ -1225,6 +1319,56 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 </header>
 
 <section class="archive-hero" aria-label="Nocturne archive overview">
+  <svg class="hero-cat-constellation" viewBox="0 0 620 520" aria-hidden="true">
+    <path class="orbit soft" d="M70 330 C185 110 435 40 566 152"/>
+    <path class="orbit soft" d="M116 430 C270 520 515 438 585 254"/>
+    <path class="orbit" d="M78 384 C202 476 428 462 544 320 C600 252 575 176 506 164"/>
+    <path class="orbit" d="M205 92 C362 20 570 92 596 228"/>
+
+    <path class="cat-path" d="M472 264 C548 218 568 292 522 338 C494 365 448 360 430 326"/>
+    <path class="cat-line" d="M318 104 L352 62 L385 107 L426 128 L438 176 L415 217 L372 238 L326 220 L304 178 Z"/>
+    <path class="cat-line" d="M326 220 L292 284 L302 378 L360 424 L445 405 L488 338"/>
+    <path class="cat-line" d="M372 238 L400 318 L445 405"/>
+    <path class="cat-line" d="M292 284 L238 326 L202 392"/>
+    <path class="cat-line" d="M302 378 L268 430"/>
+    <path class="cat-line" d="M360 424 L354 466"/>
+    <path class="cat-line" d="M445 405 L474 458"/>
+    <path class="cat-line" d="M352 62 L360 128 L385 107"/>
+    <path class="cat-line" d="M318 104 L304 178 L246 214 L204 284"/>
+    <path class="cat-line" d="M426 128 L488 124 L535 154"/>
+    <path class="whisker" d="M324 171 L236 152"/>
+    <path class="whisker" d="M324 184 L226 190"/>
+    <path class="whisker" d="M418 172 L508 146"/>
+    <path class="whisker" d="M418 185 L518 196"/>
+
+    <circle class="star core" cx="352" cy="62" r="3.2"/>
+    <circle class="star" cx="318" cy="104" r="2.2"/>
+    <circle class="star" cx="385" cy="107" r="2.1"/>
+    <circle class="star" cx="426" cy="128" r="2.4"/>
+    <circle class="star" cx="304" cy="178" r="2.6"/>
+    <circle class="star core" cx="246" cy="214" r="3.1"/>
+    <circle class="star" cx="326" cy="220" r="2.1"/>
+    <circle class="star" cx="372" cy="238" r="2.8"/>
+    <circle class="star" cx="415" cy="217" r="2.1"/>
+    <circle class="star" cx="292" cy="284" r="2.5"/>
+    <circle class="star" cx="400" cy="318" r="2.2"/>
+    <circle class="star core" cx="204" cy="284" r="3.4"/>
+    <circle class="star" cx="238" cy="326" r="1.9"/>
+    <circle class="star" cx="302" cy="378" r="2.3"/>
+    <circle class="star" cx="360" cy="424" r="2.8"/>
+    <circle class="star" cx="445" cy="405" r="2.4"/>
+    <circle class="star" cx="488" cy="338" r="2.3"/>
+    <circle class="star" cx="522" cy="338" r="1.9"/>
+    <circle class="star" cx="268" cy="430" r="2"/>
+    <circle class="star" cx="354" cy="466" r="2.2"/>
+    <circle class="star" cx="474" cy="458" r="2.1"/>
+    <circle class="star dim" cx="488" cy="124" r="1.5"/>
+    <circle class="star dim" cx="535" cy="154" r="1.7"/>
+    <circle class="star dim" cx="78" cy="384" r="1.4"/>
+    <circle class="star dim" cx="566" cy="152" r="1.5"/>
+    <circle class="planet" cx="118" cy="382" r="8"/>
+    <circle class="planet" cx="548" cy="246" r="12"/>
+  </svg>
   <div class="archive-hero-copy">
     <div class="archive-kicker">MEMORY OBSERVATORY / CATROOM 01</div>
     <h1 class="archive-title">A private archive<em>for what stayed.</em></h1>
@@ -3291,17 +3435,17 @@ function initSakuraPetals() {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const path = 'M19,8.10110778 C18.3621538,7.78521164 17.910872,7.40623729 17.910872,7.40623729 C17.910872,7.40623729 18.0733199,6.78463617 18.4347585,6.11196042 C17.3131919,5.37171997 15.7773111,4.86979808 13.8015842,5.5436326 C13.1178053,5.77684167 12.5539182,6.21130798 12.0667696,6.71049904 C12.0025551,6.77630094 11.939674,6.84322749 11.8780274,6.91096595 C11.6823972,7.12592831 11.5839847,7.12885114 11.7066514,6.89400995 C11.7581941,6.79533313 11.8077764,6.69472804 11.8549654,6.59232756 C12.1516277,5.94856894 12.3537067,5.23385266 12.3537067,4.48119711 C12.3537067,2.27476715 11.5463644,0.889839494 10.4661528,0 C9.98214937,0.540458125 9.49800443,0.874775598 9.49800443,0.874775598 C9.49800443,0.874775598 9.04072183,0.558968593 8.57070156,0.0450728409 C7.55947154,0.936397926 6.63952821,2.31169895 6.63952821,4.48119711 C6.63952821,5.25705205 6.82976126,5.98727439 7.13558341,6.64503798 C7.2095116,6.80404307 7.15939347,6.92164071 6.9962519,6.75673537 C6.50298181,6.25813239 5.9151855,5.83217219 5.22946739,5.59830236 C3.20519578,4.90791836 1.68833661,5.3042147 0.543219459,6.12842077 C0.843998468,6.73314558 0.980404835,7.25491496 0.980404835,7.25491496 C0.980404835,7.25491496 0.579790745,7.59128255 0,7.8944026 C0.482305058,9.21188442 1.44201824,10.613213 3.4636857,11.3027057 C4.13587357,11.531952 4.83528675,11.5537871 5.50151776,11.4612427 C5.88527709,11.4079358 5.85812935,11.5143829 5.49589425,11.7305137 C4.94435878,12.0595921 4.43104612,12.4907385 4.04010804,13.0555549 C2.81649849,14.8233788 2.6847343,16.4278472 3.04716367,17.8052577 C3.65330725,17.7063174 4.12907364,17.7295223 4.12907364,17.7295223 C4.12907364,17.7295223 4.32523386,18.2758337 4.41683191,18.9898683 C5.77868771,18.9336238 7.38621083,18.4256704 8.66295064,16.5810711 C9.0619751,16.0045762 9.29537921,15.343881 9.42132553,14.6778917 C9.43103491,14.6265497 9.44111999,14.5795077 9.44957875,14.5281389 C9.48240145,14.3288116 9.61871547,14.3483093 9.65324834,14.5472114 C9.65993016,14.5856973 9.66696108,14.6241784 9.6743523,14.6626393 C9.70332733,14.8134135 9.73783943,14.9638788 9.77856328,15.1131189 C9.91602804,15.6168838 10.124271,16.1066879 10.4292418,16.5472887 C11.6199599,18.2675738 12.9900527,18.9079825 14.3161015,19 C14.4115491,18.3272351 14.5926223,17.8230254 14.5926223,17.8230254 C14.5926223,17.8230254 15.2118998,17.7928679 15.9374945,17.9482905 C16.2931021,16.5798826 16.3113595,14.8410871 15.0520844,13.0217428 C14.5794728,12.3389283 13.9279772,11.8514364 13.2463358,11.5034859 C13.1661312,11.4625446 13.1981778,11.3496767 13.3215073,11.3713236 C14.0494971,11.4991011 14.824407,11.5014648 15.5673942,11.2480656 C17.5062385,10.5867992 18.5102222,9.40622948 19,8.10110778 Z';
   const rand = (min, max) => min + Math.random() * (max - min);
-  const count = reduced ? 6 : Math.max(12, Math.min(22, Math.round(innerWidth / 78)));
+  const count = reduced ? 7 : Math.max(16, Math.min(26, Math.round(innerWidth / 68)));
   layer.innerHTML = '';
   for (let i = 0; i < count; i += 1) {
     const petal = document.createElement('span');
     petal.className = 'sakura-petal';
     petal.innerHTML = `<svg viewBox="0 0 19 19" aria-hidden="true"><path fill="currentColor" d="${path}"></path></svg>`;
     petal.style.setProperty('--x', `${rand(-5, 105)}vw`);
-    petal.style.setProperty('--size', `${rand(7, 16)}px`);
-    petal.style.setProperty('--scale', `${rand(.72, 1.12)}`);
-    petal.style.setProperty('--alpha', `${rand(.18, .50)}`);
-    petal.style.setProperty('--dur', `${rand(24, 46)}s`);
+    petal.style.setProperty('--size', `${rand(10, 22)}px`);
+    petal.style.setProperty('--scale', `${rand(.76, 1.18)}`);
+    petal.style.setProperty('--alpha', `${rand(.30, .64)}`);
+    petal.style.setProperty('--dur', `${rand(24, 44)}s`);
     petal.style.setProperty('--delay', `${rand(-46, 1)}s`);
     petal.style.setProperty('--sway', `${rand(-42, 42)}px`);
     petal.style.setProperty('--sway-end', `${rand(-82, 82)}px`);
