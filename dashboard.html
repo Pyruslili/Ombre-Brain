@@ -53,6 +53,34 @@
   --line-strong: rgba(225, 164, 97, .20);
 }
 
+html[data-theme="sakura-milk"] {
+  color-scheme: light;
+  --bg: #f9e9ed;
+  --bg-deep: #fff7f8;
+  --surface: rgba(255, 249, 250, .72);
+  --surface-soft: rgba(255, 227, 235, .52);
+  --line: rgba(214, 132, 159, .22);
+  --line-soft: rgba(214, 132, 159, .13);
+  --ink: rgba(87, 65, 73, .92);
+  --ink-soft: rgba(112, 82, 92, .72);
+  --mute: rgba(158, 124, 135, .58);
+  --accent: #d8849f;
+  --accent-deep: #ca6f91;
+  --nox-orange: #c98763;
+  --positive: #8daf8c;
+  --cool: #8fa9c7;
+  --warning: #d39b86;
+  --negative: #b96f7c;
+  --paper: rgba(255, 249, 250, .76);
+  --paper-soft: rgba(255, 236, 241, .58);
+  --tint: rgba(255, 247, 249, .78);
+  --tint-soft: rgba(255, 231, 238, .54);
+  --border: rgba(214, 132, 159, .20);
+  --card: rgba(255, 250, 251, .78);
+  --mute-soft: rgba(181, 139, 151, .36);
+  --line-strong: rgba(214, 132, 159, .34);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: var(--bg); color-scheme: dark; scroll-behavior: smooth; }
 body {
@@ -68,6 +96,14 @@ body {
   font: 300 16px/1.65 var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
+html[data-theme="sakura-milk"] body {
+  background:
+    radial-gradient(ellipse at 78% 12%, rgba(255,255,255,.90), transparent 28%),
+    radial-gradient(ellipse at 24% 18%, rgba(255,212,223,.78), transparent 34%),
+    radial-gradient(ellipse at 64% 68%, rgba(216,132,159,.24), transparent 36%),
+    linear-gradient(150deg, #fff7f8 0%, #f9e7ec 58%, #f4dce4 100%);
+  color: var(--ink);
+}
 body::before {
   content: "";
   position: fixed;
@@ -78,6 +114,7 @@ body::before {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.17'/%3E%3C/svg%3E");
   mix-blend-mode: soft-light;
 }
+html[data-theme="sakura-milk"] body::before { opacity: .08; mix-blend-mode: multiply; }
 body::after {
   content: "";
   position: fixed;
@@ -91,6 +128,14 @@ body::after {
   transform-origin: 45% 50%;
   animation: cosmicBreath 16s ease-in-out infinite alternate;
 }
+html[data-theme="sakura-milk"] body::after {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,255,255,.56), transparent 20%),
+    radial-gradient(circle at 72% 22%, rgba(216,132,159,.24), transparent 28%),
+    radial-gradient(circle at 68% 76%, rgba(255,221,230,.50), transparent 30%);
+  filter: blur(36px);
+  opacity: .78;
+}
 #archive-stars {
   position: fixed;
   inset: 0;
@@ -101,6 +146,7 @@ body::after {
   opacity: 1;
   mix-blend-mode: screen;
 }
+html[data-theme="sakura-milk"] #archive-stars { opacity: .58; mix-blend-mode: normal; filter: sepia(.18) hue-rotate(305deg) saturate(.62) brightness(1.12); }
 ::selection { background: rgba(196,122,56,.32); color: var(--ink); }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
@@ -153,7 +199,7 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
 }
 .icon-btn:hover { color: var(--ink); background: var(--surface-soft); }
 .icon-btn svg { width: 14px; height: 14px; }
-#theme-toggle { display: none; }
+#theme-toggle { display: grid; border: 1px solid var(--line-soft); background: var(--surface-soft); }
 
 .archive-hero {
   position: relative;
@@ -505,7 +551,8 @@ label {
 .breath-info { margin: 2rem 0; color: var(--ink-soft); font-size: .78rem; }
 .breath-result { padding: 1.5rem 0; border-bottom: 1px solid var(--line-soft); }
 .breath-result .br-name { font: 300 1.6rem/1 var(--font-display); }
-.score-row { display: grid; grid-template-columns: 40px minmax(180px,240px) 1fr 70px; gap: 1rem; padding: .85rem 0; align-items: center; border-bottom: 1px solid var(--line-soft); }
+.score-row { display: grid; grid-template-columns: 40px minmax(180px,240px) 1fr 70px; gap: 1rem; padding: .85rem 0; align-items: center; border-bottom: 1px solid var(--line-soft); cursor: pointer; transition: padding .35s ease, background .35s ease; }
+.score-row:hover { padding-inline: .55rem; background: var(--surface-soft); }
 .score-row .rank { color: var(--mute); font: 300 .88rem/1 var(--font-number); }
 .score-row .name { display: flex; align-items: center; gap: .5rem; min-width: 0; color: var(--ink-soft); font: 300 .82rem/1.35 var(--font-body); }
 .score-row .name svg { width: 13px; height: 13px; flex: 0 0 13px; color: var(--accent-deep); }
@@ -539,32 +586,29 @@ label {
   min-height: 460px;
   overflow: hidden;
   isolation: isolate;
-  background: rgba(10,7,5,.86);
+  background: linear-gradient(145deg, rgba(37,26,23,.58), rgba(7,5,5,.88));
 }
 .dream-card::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -18%;
   z-index: -1;
   background:
-    repeating-linear-gradient(96deg, transparent 0 8.4%, rgba(214,190,156,.026) 8.5%, transparent 8.62%),
-    repeating-linear-gradient(84deg, transparent 0 13.6%, rgba(120,166,209,.018) 13.7%, transparent 13.82%);
-  opacity: .78;
-  transform-origin: center top;
-  animation: dreamVeil 24s ease-in-out infinite alternate;
+    radial-gradient(circle at 22% 30%, rgba(239,224,196,.24) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 68% 18%, rgba(146,178,210,.22) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 78% 72%, rgba(232,149,79,.20) 0 1.2px, transparent 2px),
+    repeating-linear-gradient(98deg, transparent 0 9%, rgba(214,190,156,.018) 9.1%, transparent 9.22%);
+  background-size: 97px 113px, 149px 131px, 181px 163px, auto;
+  filter: blur(.2px);
+  animation: dreamDrift 22s ease-in-out infinite alternate;
 }
 .dream-card::after {
   content: "";
   position: absolute;
-  top: 5.4rem;
-  right: clamp(1.5rem,4vw,3rem);
-  width: 58px;
-  height: 58px;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
-  border: 1px solid rgba(214,190,156,.13);
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 12px rgba(10,7,5,.82), inset 0 0 0 13px rgba(120,166,209,.08);
+  background: linear-gradient(180deg, rgba(3,2,1,.12), transparent 22%, transparent 72%, rgba(3,2,1,.45));
 }
 .dream-card .reverie-head, .dream-card .dream-body { position: relative; z-index: 1; }
 .mood-card { grid-area: weather; height: 100%; }
@@ -602,16 +646,16 @@ label {
 .mood-tooltip.show, .spark-tooltip.show { display: block; }
 .dream-body {
   max-width: 54rem;
-  margin: clamp(1rem,3vh,2.5rem) auto 0;
-  padding: clamp(1.35rem,3vw,2.4rem) clamp(1.2rem,3.5vw,3rem);
+  margin: clamp(1.2rem,4vh,3.5rem) auto 0;
+  padding: clamp(1.4rem,3vw,2.5rem) clamp(1.15rem,3.5vw,3rem);
   color: var(--ink-soft);
   font: 300 .94rem/2.05 var(--font-body);
-  border-left: 1px solid rgba(225,164,97,.18);
-  border-bottom: 1px solid rgba(120,166,209,.10);
-  background: rgba(8,5,3,.18);
+  border-block: 1px solid rgba(225,164,97,.11);
+  background: linear-gradient(90deg, transparent, rgba(255,224,186,.025) 18%, rgba(120,166,209,.025) 76%, transparent);
+  text-shadow: 0 1px 18px rgba(0,0,0,.55);
 }
 .dream-text { white-space: pre-wrap; text-wrap: pretty; }
-.dream-text::first-letter { color: var(--ink); font: 300 2.1rem/.8 var(--font-display); }
+.dream-text::first-letter { color: var(--accent-deep); font: 300 2.2rem/.8 var(--font-display); }
 .dream-empty { color: var(--mute); }
 .spark-wrap { position: relative; min-height: 54px; }
 .spark-wrap svg { width: 100%; height: 52px; overflow: visible; }
@@ -655,6 +699,7 @@ label {
 }
 .drift-card-label { margin-bottom: .9rem; color: var(--mute); font: 300 var(--fs-micro)/1.4 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 .drift-intent-text { color: var(--ink); font: 300 1.18rem/1.4 var(--font-display); }
+.drift-intent-text.is-high { color: var(--accent-deep); }
 .drift-intent-reason { margin-top: .35rem; color: var(--mute); font-size: .74rem; }
 .drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
 .drive-row:first-child { border-top: 0; }
@@ -673,7 +718,7 @@ label {
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
 @keyframes driftSpin { to { transform: rotate(360deg); } }
-@keyframes dreamVeil { from { opacity: .45; transform: skewX(-.4deg) translateX(-.4%); } to { opacity: .82; transform: skewX(.5deg) translateX(.5%); } }
+@keyframes dreamDrift { from { opacity: .52; transform: translate3d(-1.6%,1.2%,0) scale(.99); } to { opacity: .96; transform: translate3d(1.8%,-1.4%,0) scale(1.035); } }
 
 .config-section { margin-bottom: 1rem; }
 .config-section h3 { display: flex; align-items: center; gap: .7rem; margin-bottom: .45rem; }
@@ -810,6 +855,82 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 ::-webkit-scrollbar-thumb { background: rgba(198,170,135,.22); }
 ::-webkit-scrollbar-track { background: transparent; }
 
+/* Sakura Milk — soft porcelain pink companion theme */
+html[data-theme="sakura-milk"] .archive-hero::before {
+  background:
+    linear-gradient(90deg, rgba(255,247,248,.96) 0%, rgba(255,247,248,.74) 48%, rgba(255,236,242,.20) 78%, rgba(255,246,248,.62) 100%),
+    radial-gradient(circle at 76% 38%, rgba(216,132,159,.20), transparent 32%);
+}
+html[data-theme="sakura-milk"] .tabs {
+  background: rgba(255,247,249,.72);
+  box-shadow: 0 18px 54px rgba(184,112,134,.12);
+}
+html[data-theme="sakura-milk"] .tab::before { color: rgba(183,126,143,.32); }
+html[data-theme="sakura-milk"] button:hover { border-color: rgba(202,111,145,.38); background: rgba(216,132,159,.09); }
+html[data-theme="sakura-milk"] input,
+html[data-theme="sakura-milk"] textarea,
+html[data-theme="sakura-milk"] select { color: var(--ink); }
+html[data-theme="sakura-milk"] input:focus,
+html[data-theme="sakura-milk"] textarea:focus,
+html[data-theme="sakura-milk"] select:focus { border-color: rgba(202,111,145,.50); }
+html[data-theme="sakura-milk"] .bucket-list { border-top-color: rgba(214,132,159,.20); }
+html[data-theme="sakura-milk"] .bucket-index { color: rgba(146,102,116,.30); }
+html[data-theme="sakura-milk"] .bucket-row::after,
+html[data-theme="sakura-milk"] .score-row:hover {
+  background: radial-gradient(circle at 62% 50%, rgba(216,132,159,.16), transparent 36%);
+}
+html[data-theme="sakura-milk"] .breath-flow,
+html[data-theme="sakura-milk"] .reverie-card,
+html[data-theme="sakura-milk"] .config-section,
+html[data-theme="sakura-milk"] .drift-card,
+html[data-theme="sakura-milk"] .import-card,
+html[data-theme="sakura-milk"] .auth-card {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255,255,255,.74), transparent 28%),
+    radial-gradient(circle at 82% 82%, rgba(216,132,159,.15), transparent 36%),
+    rgba(255,248,250,.74);
+  box-shadow: inset 0 1px rgba(255,255,255,.68), 0 22px 60px rgba(176,105,128,.12);
+}
+html[data-theme="sakura-milk"] .breath-controls {
+  background: rgba(255,247,249,.56);
+  box-shadow: inset 0 1px rgba(255,255,255,.56), 0 16px 42px rgba(176,105,128,.08);
+}
+html[data-theme="sakura-milk"] .dream-card {
+  background:
+    linear-gradient(145deg, rgba(255,247,249,.82), rgba(255,235,241,.72));
+}
+html[data-theme="sakura-milk"] .dream-card::before {
+  background:
+    radial-gradient(circle at 22% 30%, rgba(202,111,145,.26) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 68% 18%, rgba(255,255,255,.64) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 78% 72%, rgba(187,130,146,.22) 0 1.2px, transparent 2px),
+    repeating-linear-gradient(98deg, transparent 0 9%, rgba(216,132,159,.025) 9.1%, transparent 9.22%);
+}
+html[data-theme="sakura-milk"] .dream-card::after {
+  background: linear-gradient(180deg, rgba(255,255,255,.08), transparent 22%, transparent 72%, rgba(245,211,221,.24));
+}
+html[data-theme="sakura-milk"] .dream-body {
+  border-block-color: rgba(202,111,145,.16);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.38) 18%, rgba(255,224,233,.32) 76%, transparent);
+  text-shadow: none;
+}
+html[data-theme="sakura-milk"] .detail-panel,
+html[data-theme="sakura-milk"] .toast-msg,
+html[data-theme="sakura-milk"] .network-tooltip,
+html[data-theme="sakura-milk"] .mood-tooltip,
+html[data-theme="sakura-milk"] .spark-tooltip {
+  background: rgba(255,248,250,.94);
+  box-shadow: 0 18px 60px rgba(176,105,128,.18);
+}
+html[data-theme="sakura-milk"] .detail-panel { backdrop-filter: blur(24px) saturate(120%); }
+html[data-theme="sakura-milk"] #auth-overlay { background: rgba(255,244,247,.94); }
+html[data-theme="sakura-milk"] #network-canvas { filter: saturate(.82) sepia(.04); }
+html[data-theme="sakura-milk"] .drive-row.high .drive-name,
+html[data-theme="sakura-milk"] .drive-row.high .drive-value,
+html[data-theme="sakura-milk"] .drift-intent-text.is-high { color: var(--accent-deep); }
+html[data-theme="sakura-milk"] .drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 12px rgba(202,111,145,.18); }
+html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); color: var(--ink); }
+
 /* ============================================================
    Motion / responsive
    ============================================================ */
@@ -918,9 +1039,9 @@ code { color: var(--accent-deep); font-family: var(--font-mono); }
 
 <section class="archive-hero" aria-label="Nocturne archive overview">
   <div class="archive-hero-copy">
-    <div class="archive-kicker">PRIVATE ARCHIVE / NOCTURNE</div>
+    <div class="archive-kicker">MEMORY OBSERVATORY / CATROOM 01</div>
     <h1 class="archive-title">A private archive<em>for what stayed.</em></h1>
-    <p class="archive-subtitle">Fragments, breaths, and unfinished stars.</p>
+    <p class="archive-subtitle">Fragments, breaths, and signals still in orbit.</p>
     <div class="archive-ledger" id="stats">Reading archive</div>
   </div>
   <a class="scroll-cue" href="#chapter-index">Enter quietly</a>
@@ -1291,14 +1412,18 @@ const ICONS = {
    Theme System
    ============================================================ */
 function applyTheme(theme) {
+  theme = theme === 'sakura-milk' ? 'sakura-milk' : 'nocturne';
+  currentTheme = theme;
   document.documentElement.dataset.theme = theme;
   localStorage.setItem('nocturne_theme', theme);
   const sun = document.getElementById('theme-icon-sun');
   const moon = document.getElementById('theme-icon-moon');
   if (sun && moon) {
     sun.style.display = theme === 'nocturne' ? 'block' : 'none';
-    moon.style.display = theme === 'archive-light' ? 'block' : 'none';
+    moon.style.display = theme === 'sakura-milk' ? 'block' : 'none';
   }
+  const toggle = document.getElementById('theme-toggle');
+  if (toggle) toggle.title = theme === 'sakura-milk' ? '切换到 Nocturne' : '切换到 Sakura Milk';
   // 更新network legend
   const legMemSvg = document.getElementById('legend-memory-svg');
   const legFeelSvg = document.getElementById('legend-feel-svg');
@@ -1325,6 +1450,10 @@ function applyTheme(theme) {
   if (window.networkData && document.getElementById('network-view')?.style.display !== 'none') {
     setTimeout(() => loadNetwork(), 50);
   }
+}
+
+function toggleTheme() {
+  applyTheme(currentTheme === 'sakura-milk' ? 'nocturne' : 'sakura-milk');
 }
 
 /* ============================================================
@@ -1425,6 +1554,7 @@ async function loadDesire(button) {
     // merely because intent selection is below its action threshold.
     const intentEl = document.getElementById('desire-intent-text');
     const reasonEl = document.getElementById('desire-intent-reason');
+    intentEl.classList.add('is-high');
     intentEl.textContent = (DRIVE_LABELS[topDrive[0]] || topDrive[0]) + ' · ' + topDrive[0] + ' ' + finiteNumber(topDrive[1]).toFixed(2);
     reasonEl.textContent = 'Mood Trace · ' + latestTrace;
 
@@ -1435,7 +1565,7 @@ async function loadDesire(button) {
       const eff = Math.max(0, v * (1 - lf));
       const pct = Math.round(v * 100);
       const effPct = Math.round(eff * 100);
-      const isHigh = eff >= 0.55;
+      const isHigh = k === topDrive[0];
       return `<div class="drive-row${isHigh ? ' high' : ''}">
         <div class="drive-name">${esc(DRIVE_LABELS[k] || k)}<small>${esc(k)}</small></div>
         <div class="drive-track"><div class="drive-fill" style="width:${Math.min(100, effPct)}%"></div></div>
@@ -1458,6 +1588,7 @@ async function loadDesire(button) {
     }
   } catch(e) {
     document.getElementById('desire-intent-text').textContent = 'The drift is out of reach.';
+    document.getElementById('desire-intent-text').classList.remove('is-high');
   } finally {
     if (refresh) { refresh.disabled = false; refresh.classList.remove('loading'); }
   }
@@ -1572,8 +1703,12 @@ function updateStats() {
   const feels = allBuckets.filter(b => b.type === 'feel').length;
   const resolved = allBuckets.filter(b => b.resolved).length;
   const digested = allBuckets.filter(b => b.digested).length;
+  const inner = allBuckets.filter(b => bucketFacets(b).includes('inner')).length;
+  const letters = allBuckets.filter(b => bucketFacets(b).some(d => d === 'letter' || d === 'letter_jiajia')).length;
+  const writing = allBuckets.filter(b => bucketFacets(b).includes('writing')).length;
+  const windowed = allBuckets.filter(b => bucketFacets(b).includes('window')).length;
   document.getElementById('stats').textContent =
-    `collection ${total} · core ${pinned} · affect ${feels} · resolved ${resolved} · digested ${digested}`;
+    `TRACES ${total} · FEEL ${feels} · PINNED ${pinned} · INNER ${inner} · LETTER ${letters} · WRITING ${writing} · WINDOW ${windowed} · RESOLVED ${resolved} · SETTLED ${digested}`;
 }
 
 function buildFilters() {
@@ -2347,7 +2482,7 @@ function drawSphereNetwork(time) {
     ctx.fillStyle = color;
     ctx.arc(screen.x, screen.y, screen.radius * (active ? 1.45 : 1), 0, Math.PI * 2);
     ctx.fill();
-    if (active || (data.pinned && screen.z > -.25)) {
+    if (active) {
       const name = String(data.name || data.id);
       ctx.globalAlpha = active ? 1 : .62;
       ctx.fillStyle = dark ? '#e7d7bd' : '#57464b';
@@ -2460,7 +2595,8 @@ async function runBreathDebug() {
           <div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%;background:${barColors[key]}"></div></div>
         </div>`;
       }).join('');
-      return `<div class="score-row" title="${esc(r.name)}">
+      const bid = r.id || r.bucket_id;
+      return `<div class="score-row" title="${esc(r.name)}" data-bucket-id="${esc(bid || '')}" ${bid ? 'onclick="showDetail(this.dataset.bucketId)"' : ''}>
         <span class="rank">${i < 9 ? '0' : ''}${i + 1}</span>
         <span class="name">${icon}${esc(r.name)}</span>
         <div class="score-bars">${bars}</div>
@@ -2707,6 +2843,10 @@ async function batchReview(idsJson, action) {
 function initEvents() {
   // Click delegation
   document.addEventListener('click', (e) => {
+    if (e.target.closest('#theme-toggle')) {
+      toggleTheme();
+      return;
+    }
     if (e.target.closest('[data-open-settings]')) {
       switchChapter('settings');
       return;
@@ -3153,7 +3293,7 @@ function loadReverie() {
 initEvents();
 initArchiveStars();
 initExperienceMotion();
-applyTheme('nocturne');
+applyTheme(localStorage.getItem('nocturne_theme') || 'nocturne');
 checkAuth().then(() => loadBuckets());
 </script>
 </body>
