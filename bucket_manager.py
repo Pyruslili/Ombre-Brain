@@ -111,6 +111,7 @@ class BucketManager:
         pinned: bool = False,
         protected: bool = False,
         created_at: str = "",
+        chord: str = "",
     ) -> str:
         """
         Create a new memory bucket, return bucket ID.
@@ -149,6 +150,8 @@ class BucketManager:
             "last_active": now_iso(),
             "activation_count": 0,
         }
+        if chord:
+            metadata["chord"] = str(chord).strip()
         if pinned:
             metadata["pinned"] = True
         if protected:

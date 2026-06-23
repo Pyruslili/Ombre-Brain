@@ -1430,12 +1430,14 @@ async def hold(
     importance: int = 5,
     pinned: bool = False,
     feel: bool = False,
-    source_bucket: str = "",    valence: float = -1,
+    source_bucket: str = "",
+    valence: float = -1,
     arousal: float = -1,
+    chord: str = "",
     domain: str = "",
     created_at: str = "",
 ) -> str:
-    """存储单条记忆,自动打标+合并。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True存储你的第一人称感受(不参与普通浮现)。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。domain可选:letter/writing/letter_jiajia/window/private,指定后跳过自动分类。created_at可选:ISO日期字符串(如2026-05-09T00:00:00),保留原始日期。"""
+    """存储单条记忆,自动打标+合并。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True存储你的第一人称感受(不参与普通浮现)。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。chord仅feel模式使用,存入metadata。domain可选:letter/writing/letter_jiajia/window/private,指定后跳过自动分类。created_at可选:ISO日期字符串(如2026-05-09T00:00:00),保留原始日期。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -1460,6 +1462,7 @@ async def hold(
             arousal=feel_arousal,
             name=_feel_title(content) or None,
             bucket_type="feel",
+            chord=chord.strip(),
         )
         # --- background: don't block response on Gemini latency ---
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
@@ -1845,6 +1848,10 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             return True
         return not _is_private_bucket(bucket, marks_by_bucket.get(bucket.get("id", ""), []))
 
+    def is_settled(bucket: dict) -> bool:
+        meta = bucket.get("metadata", {})
+        return meta.get("resolved") == 1 or meta.get("resolved") is True or meta.get("digested") == 1 or meta.get("digested") is True
+
     buckets = [b for b in all_buckets if visible(b) and matches_query(b)]
 
     if mode == "memory":
@@ -1903,8 +1910,11 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
         archive_domains = {"letter", "letter_jiajia", "writing"}
         selected = [
             b for b in buckets
-            if archive_domains & set(_bucket_domains(b.get("metadata", {})))
-            or archive_domains & set(_bucket_tags(b.get("metadata", {})))
+            if not is_settled(b)
+            and (
+                archive_domains & set(_bucket_domains(b.get("metadata", {})))
+                or archive_domains & set(_bucket_tags(b.get("metadata", {})))
+            )
         ]
         selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
         if not selected:
@@ -1920,8 +1930,14 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             match_domains.add("letter_jiajia")
         selected = [
             b for b in buckets
-            if match_domains & set(_bucket_domains(b.get("metadata", {})))
-            or match_domains & set(_bucket_tags(b.get("metadata", {})))
+            if (
+                mode == "window"
+                or not is_settled(b)
+            )
+            and (
+                match_domains & set(_bucket_domains(b.get("metadata", {})))
+                or match_domains & set(_bucket_tags(b.get("metadata", {})))
+            )
         ]
         selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
         if not selected:
@@ -3126,6 +3142,7 @@ async def api_feels_public(request):
                 "id": b["id"],
                 "content_preview": b["content"][:300],
                 "created": b["metadata"].get("created", ""),
+                "chord": b["metadata"].get("chord", ""),
             }
             for b in all_buckets
             if b["metadata"].get("type") == "feel"

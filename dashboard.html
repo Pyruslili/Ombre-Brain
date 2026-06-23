@@ -317,7 +317,7 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
   top: 0;
   z-index: 25;
   display: grid;
-  grid-template-columns: repeat(7, minmax(0,1fr));
+  grid-template-columns: repeat(8, minmax(0,1fr));
   gap: 0;
   padding: 0 var(--page-pad);
   background: rgba(10,6,3,.76);
@@ -371,12 +371,12 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
   width: min(100%, var(--content-max));
   min-height: 76vh;
   margin: 0 auto;
-  padding: clamp(7rem, 12vw, 11rem) var(--page-pad) clamp(8rem, 14vw, 14rem);
+  padding: clamp(4rem, 7vw, 6.5rem) var(--page-pad) clamp(8rem, 14vw, 14rem);
   animation: chapterIn .8s cubic-bezier(.16,1,.3,1) both;
 }
 .content::before {
   display: block;
-  margin-bottom: clamp(2.6rem, 5vw, 4.5rem);
+  margin-bottom: clamp(1.8rem, 3vw, 2.8rem);
   color: var(--ink);
   font: 300 var(--fs-chapter)/.88 var(--font-display);
   letter-spacing: -.035em;
@@ -386,6 +386,7 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
 #reverie-view::before { content: "Reverie"; }
 #network-view::before { content: "Constellations"; }
 #desire-view::before { content: "Drift"; }
+#echoes-view::before { content: "Echoes"; }
 #import-view::before { content: "Fragments"; }
 #config-view::before { content: "Axis"; }
 #settings-view::before { content: "Axis / Private"; }
@@ -441,8 +442,6 @@ label {
   margin: 0 0 2.5rem auto;
   display: block;
 }
-#list-view { padding-top: clamp(4rem, 7vw, 6.5rem); }
-#list-view::before { margin-bottom: clamp(1.8rem, 3vw, 2.8rem); }
 #list-view .archive-tools { margin-bottom: 1.65rem; }
 .list-search { position: relative; width: min(100%, 720px); margin-bottom: 1.15rem; }
 .list-search svg { position: absolute; left: 0; top: 1rem; width: 13px; height: 13px; color: var(--accent); }
@@ -793,6 +792,56 @@ label {
 .thought-icon svg { display: block; width: 100%; height: 100%; }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
+.echoes-shell { max-width: 1040px; margin: 0 auto; }
+.echoes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+.echoes-head h2 { margin: 0; font: 300 var(--fs-section)/1.1 var(--font-display); }
+.echoes-status { color: var(--mute); font: 300 .68rem/1.6 var(--font-mono); letter-spacing: .06em; }
+.echoes-list { display: grid; gap: .75rem; }
+.echo-card {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(52,33,21,.30), rgba(12,7,4,.58));
+  padding: 1rem 1.1rem;
+  box-shadow: inset 0 1px rgba(255,224,186,.025), 0 18px 52px rgba(0,0,0,.08);
+}
+.echo-card.is-playing { border-color: rgba(232,149,79,.28); box-shadow: inset 0 1px rgba(255,224,186,.04), 0 0 0 1px rgba(232,149,79,.06), 0 18px 52px rgba(0,0,0,.09); }
+.echo-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
+.echo-meta { margin-top: .35rem; color: var(--mute); font: 300 .62rem/1.45 var(--font-mono); letter-spacing: .06em; }
+.echo-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; }
+.echo-actions button,
+.echo-actions a {
+  min-height: 30px;
+  padding: .45rem .62rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: transparent;
+  font: 400 .58rem/1 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.echo-actions button:hover,
+.echo-actions a:hover { color: var(--ink); border-color: rgba(232,149,79,.35); background: rgba(196,122,56,.055); }
+.echo-actions .favorite.active { color: var(--accent-deep); border-color: rgba(232,149,79,.36); }
+.echo-actions .danger { color: var(--negative); border-color: rgba(168,108,97,.35); }
+.echo-player {
+  width: 100%;
+  margin-top: 1.2rem;
+  display: none;
+  filter: sepia(.18) saturate(.7);
+}
+.echo-player.active { display: block; }
 @keyframes driftSpin { to { transform: rotate(360deg); } }
 @keyframes dreamDrift { from { opacity: .52; transform: translate3d(-1.6%,1.2%,0) scale(.99); } to { opacity: .96; transform: translate3d(1.8%,-1.4%,0) scale(1.035); } }
 
@@ -1033,6 +1082,7 @@ html[data-theme="sakura-milk"] .breath-flow,
 html[data-theme="sakura-milk"] .reverie-card,
 html[data-theme="sakura-milk"] .config-section,
 html[data-theme="sakura-milk"] .drift-card,
+html[data-theme="sakura-milk"] .echo-card,
 html[data-theme="sakura-milk"] .import-card,
 html[data-theme="sakura-milk"] .auth-card {
   background:
@@ -1116,6 +1166,10 @@ html[data-theme="sakura-milk"] .drive-row.high .drive-name,
 html[data-theme="sakura-milk"] .drive-row.high .drive-value,
 html[data-theme="sakura-milk"] .drift-intent-text.is-high { color: var(--accent-deep); }
 html[data-theme="sakura-milk"] .drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 12px rgba(202,111,145,.18); }
+html[data-theme="sakura-milk"] .echo-card.is-playing { border-color: rgba(202,111,145,.30); box-shadow: inset 0 1px rgba(255,255,255,.66), 0 18px 48px rgba(176,105,128,.12); }
+html[data-theme="sakura-milk"] .echo-actions button:hover,
+html[data-theme="sakura-milk"] .echo-actions a:hover { border-color: rgba(202,111,145,.38); background: rgba(216,132,159,.09); }
+html[data-theme="sakura-milk"] .echo-actions .favorite.active { color: var(--accent-deep); border-color: rgba(202,111,145,.38); }
 html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); color: var(--ink); }
 
 /* ============================================================
@@ -1161,7 +1215,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .archive-title { line-height: .78; }
   .archive-title em { margin-left: 0; }
   .archive-subtitle, .archive-ledger { margin-left: 0; }
-  .tabs { overflow-x: auto; grid-template-columns: repeat(7, minmax(124px,1fr)); }
+  .tabs { overflow-x: auto; grid-template-columns: repeat(8, minmax(124px,1fr)); }
   .tab { min-height: 64px; }
   .bucket-row { grid-template-columns: 36px minmax(0,1fr) 72px; }
   .bucket-row .preview { display: none; }
@@ -1194,6 +1248,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .drive-value { font-size: 1.08rem; }
   .thought-row { grid-template-columns: 18px minmax(0,1fr); }
   .thought-meta { grid-column: 2; }
+  .echo-card { grid-template-columns: 1fr; }
+  .echo-actions { justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -1263,9 +1319,10 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   <div class="tab" data-index="02" data-tab="breath">Breath</div>
   <div class="tab" data-index="03" data-tab="reverie">Reverie</div>
   <div class="tab" data-index="04" data-tab="desire">Drift</div>
-  <div class="tab" data-index="05" data-tab="network">Constellations</div>
-  <div class="tab" data-index="06" data-tab="import">Fragments</div>
-  <div class="tab" data-index="07" data-tab="config">Axis</div>
+  <div class="tab" data-index="05" data-tab="echoes">Echoes</div>
+  <div class="tab" data-index="06" data-tab="network">Constellations</div>
+  <div class="tab" data-index="07" data-tab="import">Fragments</div>
+  <div class="tab" data-index="08" data-tab="config">Axis</div>
   <div class="tab secondary-tab" data-tab="settings">Private settings</div>
 </nav>
 
@@ -1404,6 +1461,22 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     </div>
   </div>
 </div>   
+
+<div class="content" id="echoes-view" style="display:none">
+  <div class="echoes-shell">
+    <div class="echoes-head">
+      <h2>Nox Voice Archive</h2>
+      <button class="drift-refresh" onclick="loadEchoes()">
+        <svg style="width:11px;height:11px;vertical-align:-2px;margin-right:.35rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M3 21v-5h5"/></svg>
+        Revisit
+      </button>
+    </div>
+    <p class="section-note">读取本机 <code>localhost:3721</code> 的最近二十条声音。收藏会写回本地索引；删除会同时移除音频文件。</p>
+    <div class="echoes-status" id="echoes-status">Reading local echo bridge</div>
+    <audio class="echo-player" id="echoes-player" controls preload="metadata"></audio>
+    <div class="echoes-list" id="echoes-list"></div>
+  </div>
+</div>
    
 <div class="content" id="import-view" style="display:none">
   <div class="intake-shell">
@@ -1593,12 +1666,16 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 <script>
 // 全局变量提前声明，避免TDZ
 const BASE = location.origin;
+const ECHOES_BASES = ['http://localhost:3721', 'http://127.0.0.1:3721'];
 let allBuckets = [];
 let currentFilter = 'all';
 let searchTimer;
 let importPollTimer;
 let currentTheme;
 let activeDetail = null;
+let echoesBase = ECHOES_BASES[0];
+let echoes = [];
+let currentEchoId = null;
 const mouse = { x: -1000, y: -1000 };
 
 const ICONS = {
@@ -1801,6 +1878,145 @@ async function loadDesire(button) {
     if (refresh) { refresh.disabled = false; refresh.classList.remove('loading'); }
   }
 }   
+
+function echoUrl(path) {
+  return echoesBase + path;
+}
+
+async function echoFetch(path, options = {}) {
+  const bases = [echoesBase, ...ECHOES_BASES.filter(base => base !== echoesBase)];
+  let lastError = null;
+  for (const base of bases) {
+    try {
+      const res = await fetch(base + path, { cache: 'no-store', ...options });
+      echoesBase = base;
+      return res;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error('echo bridge unreachable');
+}
+
+function echoFileUrl(item) {
+  return echoUrl('/audio/' + encodeURIComponent(item.filename || ''));
+}
+
+function formatEchoDate(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return String(ts).slice(0, 16).replace('T', ' ');
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}.${pad(d.getDate())} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function loadEchoes() {
+  const status = document.getElementById('echoes-status');
+  const list = document.getElementById('echoes-list');
+  if (!status || !list) return;
+  status.textContent = 'Reading local echo bridge';
+  list.innerHTML = '<div class="loading">Listening for echoes</div>';
+  try {
+    const res = await echoFetch('/api/audio/list');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    echoes = Array.isArray(data) ? data.slice(0, 20) : [];
+    status.textContent = echoes.length ? `${echoes.length} recent echoes · ${echoesBase.replace(/^https?:\/\//, '')}` : 'No echoes yet';
+    renderEchoes();
+  } catch (e) {
+    echoes = [];
+    currentEchoId = null;
+    list.innerHTML = '<div class="loading">Local echo bridge asleep · start /Users/lili/auto-trigger/server.js on port 3721</div>';
+    status.textContent = 'localhost:3721 unreachable';
+  }
+}
+
+function renderEchoes() {
+  const list = document.getElementById('echoes-list');
+  if (!list) return;
+  if (!echoes.length) {
+    list.innerHTML = '<div class="loading">No echoes in the local archive.</div>';
+    return;
+  }
+  list.innerHTML = echoes.map((item, idx) => {
+    const id = String(item.id || '');
+    const playing = id === currentEchoId;
+    const text = item.text || '';
+    const clipped = text.length > 220 ? text.slice(0, 220) + '…' : text;
+    return `<div class="echo-card ${playing ? 'is-playing' : ''}" data-echo-id="${esc(id)}">
+      <div>
+        <div class="echo-text">${esc(clipped || 'Untitled echo')}</div>
+        <div class="echo-meta">OP.${String(idx + 1).padStart(2, '0')} · ${esc(formatEchoDate(item.timestamp))} · ${item.favorite ? 'FAVORITE' : 'LOCAL'}</div>
+      </div>
+      <div class="echo-actions">
+        <button data-echo-action="play" data-echo-id="${esc(id)}">${playing ? 'Playing' : 'Play'}</button>
+        <button class="favorite ${item.favorite ? 'active' : ''}" data-echo-action="favorite" data-echo-id="${esc(id)}">${item.favorite ? 'Pinned' : 'Pin'}</button>
+        <button data-echo-action="download" data-echo-id="${esc(id)}">Save</button>
+        <button class="danger" data-echo-action="delete" data-echo-id="${esc(id)}">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function playEcho(id) {
+  const item = echoes.find(e => String(e.id || '') === String(id));
+  const player = document.getElementById('echoes-player');
+  if (!item || !player) return;
+  currentEchoId = String(id);
+  player.src = echoFileUrl(item);
+  player.classList.add('active');
+  player.play().catch(() => {});
+  renderEchoes();
+}
+
+async function toggleEchoFavorite(id) {
+  try {
+    const res = await echoFetch('/api/audio/' + encodeURIComponent(id) + '/favorite', { method: 'POST' });
+    if (!res.ok) throw new Error('favorite failed');
+    await loadEchoes();
+  } catch (e) {
+    toast('Echo favorite failed');
+  }
+}
+
+async function downloadEcho(id) {
+  const item = echoes.find(e => String(e.id || '') === String(id));
+  if (!item) return;
+  try {
+    const res = await echoFetch('/audio/' + encodeURIComponent(item.filename || ''));
+    if (!res.ok) throw new Error('download failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = item.filename || 'nox-echo.mp3';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    window.open(echoFileUrl(item), '_blank', 'noopener');
+  }
+}
+
+async function deleteEcho(id) {
+  if (!confirm('Delete this echo from local audio archive?')) return;
+  try {
+    const player = document.getElementById('echoes-player');
+    if (String(id) === currentEchoId && player) {
+      player.pause();
+      player.removeAttribute('src');
+      player.load();
+      player.classList.remove('active');
+      currentEchoId = null;
+    }
+    const res = await echoFetch('/api/audio/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (!res.ok) throw new Error('delete failed');
+    await loadEchoes();
+  } catch (e) {
+    toast('Echo delete failed');
+  }
+}
 
 async function doLogout() {
   await fetch('/auth/logout', { method: 'POST' });
@@ -3075,6 +3291,15 @@ function initEvents() {
       switchChapter('settings');
       return;
     }
+    const echoAction = e.target.closest('[data-echo-action]');
+    if (echoAction) {
+      const id = echoAction.dataset.echoId || '';
+      if (echoAction.dataset.echoAction === 'play') playEcho(id);
+      if (echoAction.dataset.echoAction === 'favorite') toggleEchoFavorite(id);
+      if (echoAction.dataset.echoAction === 'download') downloadEcho(id);
+      if (echoAction.dataset.echoAction === 'delete') deleteEcho(id);
+      return;
+    }
     const tab = e.target.closest('.tab');
     if (tab && tab.dataset.tab) {
       switchChapter(tab.dataset.tab);
@@ -3134,7 +3359,7 @@ function switchChapter(target) {
   document.querySelectorAll('.tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === visibleTarget);
   });
-  ['list','breath','reverie','network','config','import','settings','desire'].forEach(v => {
+  ['list','breath','reverie','network','config','import','settings','desire','echoes'].forEach(v => {
     const el = document.getElementById(v + '-view');
     if (el) el.style.display = target === v ? '' : 'none';
   });
@@ -3144,6 +3369,7 @@ function switchChapter(target) {
   if (target === 'import') { pollImportStatus(); loadImportResults(); }
   if (target === 'settings') loadSettingsStatus();
   if (target === 'desire') loadDesire();
+  if (target === 'echoes') loadEchoes();
   document.getElementById('chapter-index').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
 }
 
