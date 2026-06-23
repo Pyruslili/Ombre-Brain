@@ -180,11 +180,10 @@ let width = window.innerWidth, height = window.innerHeight;
 let currentProgress = 0, smoothedProgress = 0;
 const phaseCount = 7;
 const OPENING_LOW_POWER = matchMedia('(max-width: 760px), (pointer: coarse)').matches || (navigator.deviceMemory && navigator.deviceMemory <= 4);
-const OPENING_COUNT = OPENING_LOW_POWER ? 12000 : 28000;
-const OPENING_DPR = OPENING_LOW_POWER ? 1.1 : Math.min(window.devicePixelRatio || 1, 1.35);
+const OPENING_COUNT = OPENING_LOW_POWER ? 14000 : 32000;
+const OPENING_DPR = OPENING_LOW_POWER ? 1.15 : Math.min(window.devicePixelRatio || 1, 1.48);
 let openingFrameId = 0;
 let openingFinished = false;
-let openingExitTimer = null;
 
 let mouse = new THREE.Vector2(0,0), targetMouse = new THREE.Vector2(0,0);
 
@@ -248,12 +247,6 @@ function init(){
   sz.addEventListener('scroll', ()=>{
     const max = sz.scrollHeight - sz.clientHeight;
     currentProgress=(sz.scrollTop/max)*9.0;
-    if(currentProgress >= 8.94){
-      if(!openingExitTimer) openingExitTimer = setTimeout(()=>finishOpening(), 900);
-    } else if(openingExitTimer){
-      clearTimeout(openingExitTimer);
-      openingExitTimer = null;
-    }
   });
   document.getElementById('logo').addEventListener('click', (e)=>{ e.stopPropagation(); finishOpening(); });
 
@@ -676,10 +669,6 @@ function onOpeningClick(e){
 function finishOpening(tab=''){
   if(openingFinished) return;
   openingFinished = true;
-  if(openingExitTimer){
-    clearTimeout(openingExitTimer);
-    openingExitTimer = null;
-  }
   try {
     window.parent.postMessage({ type:'nocturne-opening-finish', tab }, '*');
   } catch(e) {}
