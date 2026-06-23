@@ -1155,7 +1155,8 @@ async def nocturne_breath(
                 ]
             except Exception:
                 pass
-            mood_entry = get_daily_mood(
+            mood_entry = await asyncio.to_thread(
+                get_daily_mood,
                 branch=bs.get("二级分支") or None,
                 thoughts=_thought_list or None,
             )
@@ -2940,7 +2941,11 @@ async def api_desire_state(request):
         state["thoughts"] = thoughts
         thought_dicts = [{"text": t.get("text", ""), "drive": t.get("drive", ""), "strength": t.get("strength", 0)}
                          for t in thoughts]
-        mood_entry = get_daily_mood(branch=bs.get("二级分支") or None, thoughts=thought_dicts)
+        # get_daily_mood缓存不命中时会同步调DeepSeek(最长10s)，扔进线程池跑，
+        # 不然这一个请求会卡住整个事件循环，拖累同时打过来的所有其他请求。
+        mood_entry = await asyncio.to_thread(
+            get_daily_mood, branch=bs.get("二级分支") or None, thoughts=thought_dicts
+        )
         base_score = score(mood_entry[0])
         def _weather_float(value, fallback):
             try:

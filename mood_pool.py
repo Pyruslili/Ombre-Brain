@@ -175,6 +175,9 @@ _LIVE_WIRE_CACHE_PATH = os.environ.get(
     "LIVE_WIRE_CACHE", "/app/buckets/live_wire_cache.json"
 )
 _LIVE_WIRE_TTL = 6 * 3600  # 6 hours
+# thought_count活跃对话里几乎每次tick都会变，单靠"count对不上就重调DeepSeek"
+# 等于没有缓存——加一个最短间隔，count变了也得等够这个时间才真的重调。
+_LIVE_WIRE_MIN_RESYNTH_SECONDS = 600
 
 # drive → BRANCH_MOOD_MAP key mapping
 _DRIVE_TO_BRANCH = {
@@ -275,8 +278,11 @@ def get_daily_mood(branch: str = None, thoughts: list = None):
     cache = _load_live_wire_cache()
     current_count = len(thoughts) if thoughts else 0
 
-    if cache and cache.get("thought_count", -1) == current_count:
-        return (cache["mood_trace"], cache["live_wire"])
+    if cache:
+        same_count = cache.get("thought_count", -1) == current_count
+        cache_age = time.time() - cache.get("generated_at", 0)
+        if same_count or cache_age < _LIVE_WIRE_MIN_RESYNTH_SECONDS:
+            return (cache["mood_trace"], cache["live_wire"])
 
     if cache and not thoughts:
         return (cache["mood_trace"], cache["live_wire"])
