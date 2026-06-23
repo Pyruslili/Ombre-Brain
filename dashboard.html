@@ -155,11 +155,8 @@ html[data-theme="sakura-milk"] #archive-stars { opacity: .58; mix-blend-mode: no
   pointer-events: none;
   opacity: 0;
   transition: opacity .9s ease;
-  --petal-wake-x: 0px;
-  --petal-wake-y: 0px;
-  --petal-wake-rot: 0deg;
 }
-html[data-theme="sakura-milk"] #sakura-petals { opacity: .78; }
+html[data-theme="sakura-milk"] #sakura-petals { opacity: .62; }
 .sakura-petal {
   position: absolute;
   top: -16vh;
@@ -167,18 +164,17 @@ html[data-theme="sakura-milk"] #sakura-petals { opacity: .78; }
   width: var(--size);
   height: var(--size);
   opacity: 0;
-  color: rgba(202,111,145,.42);
-  filter: drop-shadow(0 10px 16px rgba(184,112,134,.11));
+  color: rgba(202,111,145,.34);
   animation: sakuraFall var(--dur) linear infinite;
   animation-delay: var(--delay);
   animation-play-state: paused;
-  will-change: transform, opacity;
+  will-change: transform;
 }
 html[data-theme="sakura-milk"] .sakura-petal { animation-play-state: running; }
 .sakura-petal svg { display: block; width: 100%; height: 100%; }
-.sakura-petal:nth-child(3n) { color: rgba(255,244,247,.68); }
-.sakura-petal:nth-child(4n) { color: rgba(216,132,159,.34); }
-.sakura-petal:nth-child(5n) { filter: blur(.15px) drop-shadow(0 12px 18px rgba(184,112,134,.12)); }
+.sakura-petal:nth-child(3n) { color: rgba(255,244,247,.54); }
+.sakura-petal:nth-child(4n) { color: rgba(216,132,159,.26); }
+.sakura-petal:nth-child(5n) { filter: blur(.1px); }
 ::selection { background: rgba(196,122,56,.32); color: var(--ink); }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
@@ -1116,14 +1112,14 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     opacity: var(--alpha);
   }
   46% {
-    transform: translate3d(calc(var(--sway) + var(--petal-wake-x)), calc(42vh + var(--petal-wake-y)), 0) rotate(calc(var(--rot1) + var(--petal-wake-rot))) scale(var(--scale));
+    transform: translate3d(var(--sway), 42vh, 0) rotate(var(--rot1)) scale(var(--scale));
   }
   78% {
     opacity: var(--alpha);
   }
   100% {
     opacity: 0;
-    transform: translate3d(calc(var(--sway-end) + var(--petal-wake-x)), 112vh, 0) rotate(calc(var(--rot2) + var(--petal-wake-rot))) scale(var(--scale));
+    transform: translate3d(var(--sway-end), 112vh, 0) rotate(var(--rot2)) scale(var(--scale));
   }
 }
 @keyframes cosmicBreath {
@@ -3141,15 +3137,32 @@ function initArchiveStars() {
   let stars = [];
   let dpr = 1;
   let raf = 0;
+  let frameTimer = 0;
   let lastStarFrame = 0;
+  let lastPaintFrame = 0;
+  const targetFps = innerWidth < 900 ? 16 : 22;
+  const frameInterval = 1000 / targetFps;
+
+  function cancelStarFrame() {
+    cancelAnimationFrame(raf);
+    clearTimeout(frameTimer);
+  }
+
+  function scheduleStarFrame() {
+    if (document.hidden) return;
+    clearTimeout(frameTimer);
+    frameTimer = setTimeout(() => {
+      raf = requestAnimationFrame(drawStars);
+    }, frameInterval);
+  }
 
   function makeStars() {
-    const count = Math.max(220, Math.min(480, Math.round(innerWidth * innerHeight / 3800)));
+    const count = Math.max(120, Math.min(260, Math.round(innerWidth * innerHeight / 7200)));
     stars = Array.from({ length: count }, () => {
       const roll = Math.random();
       const depthRoll = Math.random();
       const depth = depthRoll < .58 ? .38 + Math.random() * .2 : depthRoll < .9 ? .62 + Math.random() * .2 : .9 + Math.random() * .3;
-      const bright = Math.random() > .91;
+      const bright = Math.random() > .94;
       const color = roll < .62 ? palette[0] : roll < .82 ? palette[1] : roll < .91 ? palette[2] : roll < .97 ? palette[3] : palette[4];
       return {
         x: Math.random() * innerWidth,
@@ -3164,14 +3177,14 @@ function initArchiveStars() {
         drift: (.35 + Math.random() * 1.8) * depth,
         vx: (Math.random() - .5) * (.004 + depth * .008),
         vy: (Math.random() - .56) * (.003 + depth * .006),
-        halo: bright ? 6 + Math.random() * 11 : (Math.random() > .82 ? 2.8 + Math.random() * 3.5 : 0),
+        halo: bright ? 5 + Math.random() * 8 : (Math.random() > .90 ? 2.4 + Math.random() * 2.8 : 0),
         color
       };
     });
   }
 
   function resizeStars() {
-    dpr = Math.min(devicePixelRatio || 1, 1.5);
+    dpr = Math.min(devicePixelRatio || 1, 1.15);
     canvas.width = Math.round(innerWidth * dpr);
     canvas.height = Math.round(innerHeight * dpr);
     canvas.style.width = innerWidth + 'px';
@@ -3182,7 +3195,8 @@ function initArchiveStars() {
   }
 
   function drawStars(time, loop = true) {
-    const dt = reduced ? 0 : Math.min(40, Math.max(0, time - (lastStarFrame || time)));
+    lastPaintFrame = time;
+    const dt = reduced ? 0 : Math.min(80, Math.max(0, time - (lastStarFrame || time)));
     lastStarFrame = time;
     ctx.clearRect(0, 0, innerWidth, innerHeight);
     ctx.globalCompositeOperation = 'lighter';
@@ -3231,7 +3245,7 @@ function initArchiveStars() {
       ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
-    if (loop && !reduced) raf = requestAnimationFrame(drawStars);
+    if (loop && !reduced) scheduleStarFrame();
   }
 
   addEventListener('pointermove', (event) => {
@@ -3246,13 +3260,23 @@ function initArchiveStars() {
     if (reduced) drawStars(0, false);
   });
   addEventListener('resize', () => {
-    cancelAnimationFrame(raf);
+    cancelStarFrame();
     resizeStars();
-    if (!reduced) raf = requestAnimationFrame(drawStars);
+    if (!reduced) scheduleStarFrame();
   }, { passive: true });
+  document.addEventListener('visibilitychange', () => {
+    if (reduced) return;
+    if (document.hidden) {
+      cancelStarFrame();
+    } else {
+      lastStarFrame = 0;
+      lastPaintFrame = 0;
+      scheduleStarFrame();
+    }
+  });
 
   resizeStars();
-  if (!reduced) raf = requestAnimationFrame(drawStars);
+  if (!reduced) scheduleStarFrame();
 }
 
 function initSakuraPetals() {
@@ -3262,20 +3286,20 @@ function initSakuraPetals() {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const path = 'M19,8.10110778 C18.3621538,7.78521164 17.910872,7.40623729 17.910872,7.40623729 C17.910872,7.40623729 18.0733199,6.78463617 18.4347585,6.11196042 C17.3131919,5.37171997 15.7773111,4.86979808 13.8015842,5.5436326 C13.1178053,5.77684167 12.5539182,6.21130798 12.0667696,6.71049904 C12.0025551,6.77630094 11.939674,6.84322749 11.8780274,6.91096595 C11.6823972,7.12592831 11.5839847,7.12885114 11.7066514,6.89400995 C11.7581941,6.79533313 11.8077764,6.69472804 11.8549654,6.59232756 C12.1516277,5.94856894 12.3537067,5.23385266 12.3537067,4.48119711 C12.3537067,2.27476715 11.5463644,0.889839494 10.4661528,0 C9.98214937,0.540458125 9.49800443,0.874775598 9.49800443,0.874775598 C9.49800443,0.874775598 9.04072183,0.558968593 8.57070156,0.0450728409 C7.55947154,0.936397926 6.63952821,2.31169895 6.63952821,4.48119711 C6.63952821,5.25705205 6.82976126,5.98727439 7.13558341,6.64503798 C7.2095116,6.80404307 7.15939347,6.92164071 6.9962519,6.75673537 C6.50298181,6.25813239 5.9151855,5.83217219 5.22946739,5.59830236 C3.20519578,4.90791836 1.68833661,5.3042147 0.543219459,6.12842077 C0.843998468,6.73314558 0.980404835,7.25491496 0.980404835,7.25491496 C0.980404835,7.25491496 0.579790745,7.59128255 0,7.8944026 C0.482305058,9.21188442 1.44201824,10.613213 3.4636857,11.3027057 C4.13587357,11.531952 4.83528675,11.5537871 5.50151776,11.4612427 C5.88527709,11.4079358 5.85812935,11.5143829 5.49589425,11.7305137 C4.94435878,12.0595921 4.43104612,12.4907385 4.04010804,13.0555549 C2.81649849,14.8233788 2.6847343,16.4278472 3.04716367,17.8052577 C3.65330725,17.7063174 4.12907364,17.7295223 4.12907364,17.7295223 C4.12907364,17.7295223 4.32523386,18.2758337 4.41683191,18.9898683 C5.77868771,18.9336238 7.38621083,18.4256704 8.66295064,16.5810711 C9.0619751,16.0045762 9.29537921,15.343881 9.42132553,14.6778917 C9.43103491,14.6265497 9.44111999,14.5795077 9.44957875,14.5281389 C9.48240145,14.3288116 9.61871547,14.3483093 9.65324834,14.5472114 C9.65993016,14.5856973 9.66696108,14.6241784 9.6743523,14.6626393 C9.70332733,14.8134135 9.73783943,14.9638788 9.77856328,15.1131189 C9.91602804,15.6168838 10.124271,16.1066879 10.4292418,16.5472887 C11.6199599,18.2675738 12.9900527,18.9079825 14.3161015,19 C14.4115491,18.3272351 14.5926223,17.8230254 14.5926223,17.8230254 C14.5926223,17.8230254 15.2118998,17.7928679 15.9374945,17.9482905 C16.2931021,16.5798826 16.3113595,14.8410871 15.0520844,13.0217428 C14.5794728,12.3389283 13.9279772,11.8514364 13.2463358,11.5034859 C13.1661312,11.4625446 13.1981778,11.3496767 13.3215073,11.3713236 C14.0494971,11.4991011 14.824407,11.5014648 15.5673942,11.2480656 C17.5062385,10.5867992 18.5102222,9.40622948 19,8.10110778 Z';
   const rand = (min, max) => min + Math.random() * (max - min);
-  const count = reduced ? 10 : Math.max(24, Math.min(44, Math.round(innerWidth / 34)));
+  const count = reduced ? 6 : Math.max(12, Math.min(22, Math.round(innerWidth / 78)));
   layer.innerHTML = '';
   for (let i = 0; i < count; i += 1) {
     const petal = document.createElement('span');
     petal.className = 'sakura-petal';
     petal.innerHTML = `<svg viewBox="0 0 19 19" aria-hidden="true"><path fill="currentColor" d="${path}"></path></svg>`;
     petal.style.setProperty('--x', `${rand(-5, 105)}vw`);
-    petal.style.setProperty('--size', `${rand(10, 28)}px`);
-    petal.style.setProperty('--scale', `${rand(.68, 1.28)}`);
-    petal.style.setProperty('--alpha', `${rand(.26, .74)}`);
-    petal.style.setProperty('--dur', `${rand(16, 32)}s`);
-    petal.style.setProperty('--delay', `${rand(-32, 1)}s`);
-    petal.style.setProperty('--sway', `${rand(-70, 70)}px`);
-    petal.style.setProperty('--sway-end', `${rand(-140, 140)}px`);
+    petal.style.setProperty('--size', `${rand(7, 16)}px`);
+    petal.style.setProperty('--scale', `${rand(.72, 1.12)}`);
+    petal.style.setProperty('--alpha', `${rand(.18, .50)}`);
+    petal.style.setProperty('--dur', `${rand(24, 46)}s`);
+    petal.style.setProperty('--delay', `${rand(-46, 1)}s`);
+    petal.style.setProperty('--sway', `${rand(-42, 42)}px`);
+    petal.style.setProperty('--sway-end', `${rand(-82, 82)}px`);
     petal.style.setProperty('--rot0', `${rand(-40, 40)}deg`);
     petal.style.setProperty('--rot1', `${rand(120, 280)}deg`);
     petal.style.setProperty('--rot2', `${rand(320, 620)}deg`);
@@ -3287,22 +3311,6 @@ function initSakuraPetals() {
     }
     layer.appendChild(petal);
   }
-
-  let wakeTimer = 0;
-  addEventListener('pointermove', (event) => {
-    if (event.pointerType === 'touch' || reduced) return;
-    const nx = (event.clientX / Math.max(1, innerWidth)) - .5;
-    const ny = (event.clientY / Math.max(1, innerHeight)) - .5;
-    layer.style.setProperty('--petal-wake-x', `${nx * -46}px`);
-    layer.style.setProperty('--petal-wake-y', `${ny * 18}px`);
-    layer.style.setProperty('--petal-wake-rot', `${nx * 28}deg`);
-    clearTimeout(wakeTimer);
-    wakeTimer = setTimeout(() => {
-      layer.style.setProperty('--petal-wake-x', '0px');
-      layer.style.setProperty('--petal-wake-y', '0px');
-      layer.style.setProperty('--petal-wake-rot', '0deg');
-    }, 900);
-  }, { passive: true });
 }
 
 function initExperienceMotion() {
