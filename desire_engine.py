@@ -250,8 +250,8 @@ class Thought:
     strength: float
     born_at: float
     fed_count: int = 0
-    # 念头来源："manual"=Nox亲手存 | "cli"=CLI分析feel提取 | "echo"=旧念头回声
-    #          "autofeed"=硬编码词池兜底 | "reflex"=条件反射（如breath时的「嘉嘉来了」）
+    # 念头来源："manual"=Nox亲手存 | "cli"=CLI分析feel提取 | "collision"=念头碰撞
+    #          "echo"=旧念头回声 | "autofeed"=硬编码词池兜底 | "reflex"=条件反射
     source: str = "manual"
     last_ticked_at: float = 0.0      # 上次tick的时间戳，0表示用born_at
 
@@ -820,6 +820,7 @@ def tick_thoughts(thoughts: list) -> tuple:
                 strength=0.55,
                 born_at=now_ts,
                 fed_count=0,
+                source="collision",
             ))
             _last_collision[pair] = now_ts
             seen_collisions.add(pair)

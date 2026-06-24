@@ -788,10 +788,48 @@ label {
 .drift-weather-main { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(220px,.95fr); gap: 1.2rem; align-items: end; }
 .drift-weather-kicker { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .11em; text-transform: uppercase; }
 .drift-undertow { color: var(--accent-deep); font: 300 clamp(1.55rem,3vw,2.65rem)/.95 var(--font-display); letter-spacing: -.03em; }
-.drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .65rem; }
-.drift-weather-mini { border-top: 1px solid var(--line-soft); padding-top: .62rem; }
-.drift-weather-mini span { display: block; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
-.drift-weather-mini strong { display: block; margin-top: .16rem; color: var(--ink); font: 300 1.24rem/1.05 var(--font-number); font-variant-numeric: oldstyle-nums proportional-nums; }
+.drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .72rem; }
+.drift-weather-mini {
+  position: relative;
+  min-height: 108px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255,224,186,.055), rgba(255,224,186,.012)),
+    rgba(9,6,4,.26);
+  padding: .78rem .82rem .72rem;
+  overflow: hidden;
+}
+.drift-weather-mini::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--accent);
+  opacity: .6;
+}
+.weather-label { display: flex; align-items: center; gap: .34rem; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.weather-label svg { width: 13px; height: 13px; flex: 0 0 auto; stroke-width: 1.55; }
+.drift-weather-mini strong {
+  display: block;
+  margin-top: .28rem;
+  color: var(--accent-deep);
+  font: 300 1.62rem/1 var(--font-number);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+}
+.weather-breakdown {
+  display: block;
+  margin-top: .42rem;
+  color: var(--mute);
+  font-style: normal;
+  font: 300 .62rem/1.35 var(--font-mono);
+  letter-spacing: .025em;
+  white-space: nowrap;
+}
+.weather-breakdown b { color: var(--ink-soft); font-weight: 300; }
+.weather-warm .weather-label svg { color: var(--accent-deep); }
+.weather-shadow .weather-label svg { color: #92b2d2; }
+.weather-longing .weather-label svg { color: #d9bd8f; }
 .drift-weather-line { margin-top: 1.05rem; padding-top: .85rem; border-top: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .82rem/1.5 var(--font-body); }
 .drift-weather-line span,
 .drift-weather-trace span { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -811,8 +849,21 @@ label {
 .drive-value small { display: block; margin-top: .24rem; color: var(--mute); font: 300 .54rem/1.2 var(--font-mono); }
 .thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: .36rem .65rem; align-items: start; padding: .82rem 0; border-top: 1px solid var(--line-soft); }
 .thought-row:first-child { border-top: 0; }
-.thought-icon { width: 18px; height: 18px; margin-top: .12rem; color: var(--accent); }
-.thought-icon svg { display: block; width: 100%; height: 100%; }
+.thought-icon {
+  width: 20px;
+  height: 20px;
+  margin-top: .08rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255,224,186,.035);
+  color: var(--accent);
+}
+.thought-icon svg { display: block; width: 13px; height: 13px; }
+.thought-source-cli { color: #92b2d2; background: rgba(146,178,210,.08); }
+.thought-source-self { color: var(--accent-deep); background: rgba(232,149,79,.075); }
+.thought-source-collision { color: #d9bd8f; background: rgba(217,189,143,.08); }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
 .thought-side { grid-column: 2; display: flex; align-items: center; justify-content: space-between; width: 100%; gap: .65rem; margin-top: 0; }
@@ -1468,6 +1519,9 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .archive-ledger { max-width: 62vw; }
   .scroll-cue { display: none; }
   .drift-weather-main { grid-template-columns: 1fr; }
+  .drift-weather-values { grid-template-columns: 1fr; }
+  .drift-weather-mini { min-height: 94px; }
+  .weather-breakdown { white-space: normal; }
   .thought-row { grid-template-columns: 22px minmax(0,1fr); }
   .thought-side { grid-column: 2; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
   .thought-editor { grid-column: 2; }
@@ -1690,9 +1744,21 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
           <div class="drift-undertow" id="desire-undertow">Reading…</div>
         </div>
         <div class="drift-weather-values">
-          <div class="drift-weather-mini"><span>Warmth</span><strong id="desire-warmth">—</strong></div>
-          <div class="drift-weather-mini"><span>Shadow</span><strong id="desire-shadow">—</strong></div>
-          <div class="drift-weather-mini"><span>Longing</span><strong id="desire-longing">—</strong></div>
+          <div class="drift-weather-mini weather-warm">
+            <span class="weather-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Warmth</span>
+            <strong id="desire-warmth">—</strong>
+            <em class="weather-breakdown" id="desire-warmth-breakdown">base — + residue —</em>
+          </div>
+          <div class="drift-weather-mini weather-shadow">
+            <span class="weather-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 15.5a4.5 4.5 0 0 1 1.1-8.86A6.3 6.3 0 0 1 18.3 9.2 3.6 3.6 0 0 1 18 16H5Z"/><path d="M8 20h8"/></svg>Shadow</span>
+            <strong id="desire-shadow">—</strong>
+            <em class="weather-breakdown" id="desire-shadow-breakdown">base — + residue —</em>
+          </div>
+          <div class="drift-weather-mini weather-longing">
+            <span class="weather-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3a7 7 0 1 0 7 7 5 5 0 0 1-7-7Z"/><path d="M12 21v-2"/></svg>Longing</span>
+            <strong id="desire-longing">—</strong>
+            <em class="weather-breakdown" id="desire-longing-breakdown">absence curve</em>
+          </div>
         </div>
       </div>
       <div class="drift-weather-line"><span>Nox Now</span><strong id="desire-now">—</strong></div>
@@ -2144,14 +2210,49 @@ async function doLogin() {
   else { const d = await resp.json(); showAuthError(d.detail || '密码错误'); }
 }
    
-function thoughtPoolIcon(kind) {
-  const icons = {
-    fixation: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>',
-    unsourced: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 16a4 4 0 0 1 1-7.9A6 6 0 0 1 18.5 10 3 3 0 0 1 18 16H6Z"/><path d="M8 20h8"/></svg>',
-    rumination: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7v5h-5"/><path d="M4 17v-5h5"/><path d="M6.1 9A7 7 0 0 1 18 6l2 1M4 17l2 1a7 7 0 0 0 11.9-3"/></svg>',
-    flit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><circle cx="12" cy="12" r="3"/></svg>'
+function thoughtSourceInfo(source) {
+  const key = String(source || 'manual').toLowerCase();
+  if (key === 'cli') {
+    return {
+      key: 'cli',
+      label: 'CLI feel analysis',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><circle cx="11" cy="14" r="2.4"/><path d="m13 16 2.2 2.2"/></svg>'
+    };
+  }
+  if (key === 'collision') {
+    return {
+      key: 'collision',
+      label: 'Thought collision',
+      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55"><path d="M4 7h4.5c2.5 0 4.2 2.1 5.5 5s3 5 5.5 5H20"/><path d="M20 7h-.5c-2.5 0-4.2 2.1-5.5 5s-3 5-5.5 5H4"/><path d="m18 5 2 2-2 2M6 15l-2 2 2 2"/></svg>'
+    };
+  }
+  return {
+    key: 'self',
+    label: key === 'reflex' ? 'Nox reflex' : 'Nox stored thought',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16Z"/><path d="m13.5 6.5 4 4"/><path d="M4 20l3.5-1"/></svg>'
   };
-  return icons[kind] || icons.flit;
+}
+
+function thoughtSourceIcon(source) {
+  const info = thoughtSourceInfo(source);
+  return `<span class="thought-icon thought-source-${info.key}" title="${esc(info.label)}" aria-label="${esc(info.label)}">${info.icon}</span>`;
+}
+
+function signedMetric(value) {
+  const n = finiteNumber(value);
+  return `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}`;
+}
+
+function setWeatherMetric(kind, current, base, residue) {
+  const target = document.getElementById(`desire-${kind}`);
+  const detail = document.getElementById(`desire-${kind}-breakdown`);
+  const now = finiteNumber(current);
+  const residueValue = finiteNumber(residue);
+  const baseValue = finiteNumber(base, now - residueValue);
+  if (target) target.textContent = now.toFixed(2);
+  if (detail) {
+    detail.innerHTML = `base <b>${baseValue.toFixed(2)}</b> + residue <b>${signedMetric(residueValue)}</b> = <b>${now.toFixed(2)}</b>`;
+  }
 }
 
 async function loadDesire(button) {
@@ -2174,10 +2275,18 @@ async function loadDesire(button) {
     const weather = d.pulse_weather || {};
     const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
     const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
+    const warmthNow = finiteNumber(weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);
+    const warmthResidue = finiteNumber(weather.warmth_residue ?? d.weather_residue?.warmth);
+    const warmthBase = finiteNumber(weather.base_warmth ?? d.weather_residue?.base_warmth ?? d.effective_pa_na?.base_PA, warmthNow - warmthResidue);
+    const shadowNow = Math.abs(finiteNumber(weather.shadow ?? d.effective_pa_na?.effective_NA ?? d.pa_na?.NA));
+    const shadowResidue = finiteNumber(weather.shadow_residue ?? d.weather_residue?.shadow);
+    const shadowBase = finiteNumber(weather.base_shadow ?? d.weather_residue?.base_shadow ?? d.effective_pa_na?.base_NA, shadowNow - shadowResidue);
+    const longingNow = finiteNumber(weather.longing ?? d.longing);
     document.getElementById('desire-undertow').textContent = `${undertow} ${finiteNumber(undertowValue).toFixed(2)}`;
-    document.getElementById('desire-warmth').textContent = finiteNumber(weather.warmth ?? d.pa_na?.PA).toFixed(2);
-    document.getElementById('desire-shadow').textContent = Math.abs(finiteNumber(weather.shadow ?? d.pa_na?.NA)).toFixed(2);
-    document.getElementById('desire-longing').textContent = finiteNumber(weather.longing ?? d.longing).toFixed(2);
+    setWeatherMetric('warmth', warmthNow, warmthBase, warmthResidue);
+    setWeatherMetric('shadow', shadowNow, shadowBase, shadowResidue);
+    document.getElementById('desire-longing').textContent = longingNow.toFixed(2);
+    document.getElementById('desire-longing-breakdown').innerHTML = `absence curve = <b>${longingNow.toFixed(2)}</b>`;
     document.getElementById('desire-now').textContent = weather.nox_now || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSomaTrace(soma);
@@ -2248,7 +2357,7 @@ function renderThoughtRow(t) {
   const strength = finiteNumber(t.strength, 0);
   if (tid && editingThoughtId === tid) {
     return `<div class="thought-row editing" data-thought-id="${esc(tid)}">
-      <span class="thought-icon">${thoughtPoolIcon(t.kind)}</span>
+      ${thoughtSourceIcon(t.source)}
       <div class="thought-editor">
         <textarea id="thought-text-${esc(tid)}" aria-label="念头正文">${esc(text)}</textarea>
         <div class="thought-editor-grid">
@@ -2270,7 +2379,7 @@ function renderThoughtRow(t) {
     </div>`;
   }
   return `<div class="thought-row" data-thought-id="${esc(tid)}">
-    <span class="thought-icon">${thoughtPoolIcon(t.kind)}</span>
+    ${thoughtSourceIcon(t.source)}
     <span class="thought-text">${esc(text)}</span>
     <span class="thought-side">
       <span class="thought-meta">${esc(drive)} · ${Math.round(strength * 100)}%</span>
