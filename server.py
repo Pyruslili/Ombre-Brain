@@ -61,6 +61,16 @@ from embedding_engine import EmbeddingEngine
 from import_memory import ImportEngine
 from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx, now_iso
 from desire_engine import DesireEngine
+from speech_event_engine import (
+    apply_speech_event_review,
+    classify_speech_event_dp,
+    is_recent_speech_event,
+    load_speech_event_state,
+    normalize_speech_event,
+    save_speech_event_state,
+    speech_event_classifier_available,
+    append_ledger as append_speech_event_ledger,
+)
 
 # --- Load config & init logging / 加载配置 & 初始化日志 ---
 config = load_config()
@@ -116,6 +126,64 @@ _last_signal_ts: list = [0.0]  # 最近一次嘉嘉输入信号时间戳
 
 NOXMEW_SPEAK_URL = "https://toy.pyrus.uk/speak"
 NOXMEW_SPEAK_TOKEN = os.environ.get("SPEAK_TOKEN", "")
+
+
+def _speech_event_context_snapshot() -> dict:
+    """Small state sample for async classification; never blocks the hook path."""
+    try:
+        desire = _desire.state()
+    except Exception:
+        desire = {}
+    drives = desire.get("drives") or {}
+    top_drive = ""
+    top_value = 0.0
+    if drives:
+        candidates = {k: v for k, v in drives.items() if k != "fatigue"}
+        top_drive = max(candidates, key=candidates.get, default="")
+        try:
+            top_value = float(candidates.get(top_drive, 0.0))
+        except (TypeError, ValueError):
+            top_value = 0.0
+    weather = desire.get("effective_pa_na") or {}
+    current = load_speech_event_state(config["buckets_dir"])
+    return {
+        "undertow": top_drive,
+        "undertow_value": round(top_value, 3),
+        "warmth": weather.get("effective_PA"),
+        "shadow": weather.get("effective_NA"),
+        "current_chord": weather.get("current_chord"),
+        "last_speech_label": current.get("label"),
+        "last_speech_review": (current.get("review") or {}).get("mark"),
+    }
+
+
+async def _refine_speech_event_background(prompt: str, event_id: str, fallback_event: dict) -> None:
+    """Async DP refinement. It may update speech_event_state, but never the hook response."""
+    try:
+        refined = await classify_speech_event_dp(
+            prompt,
+            state_context=_speech_event_context_snapshot(),
+            fallback_event=fallback_event,
+        )
+        current = load_speech_event_state(config["buckets_dir"])
+        if current.get("event_id") == event_id:
+            save_speech_event_state(config["buckets_dir"], refined, ledger_stage="dp_refined")
+        else:
+            append_speech_event_ledger(
+                config["buckets_dir"],
+                {"stage": "dp_refined_stale", "event_id": event_id, "event": refined},
+            )
+    except Exception as e:
+        current = load_speech_event_state(config["buckets_dir"])
+        if current.get("event_id") == event_id:
+            current["status"] = "dp_failed"
+            current["dp_error"] = str(e)[:180]
+            current["updated_at"] = time.time()
+            try:
+                save_speech_event_state(config["buckets_dir"], current, ledger_stage="dp_failed")
+            except Exception:
+                pass
+        logger.warning(f"speech_event DP refine failed: {e}")
 
 
 
@@ -2934,6 +3002,77 @@ async def api_import_review(request):
     return JSONResponse({"applied": applied, "errors": errors})
 
 
+# =============================================================
+# /api/speech-event — 每轮话的短时残影
+# Hook 热路径只提交本地初判；DP 复判在后台异步跑，结果下一轮生效。
+# 复核语义沿用 Nocturne 的 认 / 不认 / 悬置，不让 rubric 写死成旧 Nox。
+# =============================================================
+@mcp.custom_route("/api/speech-event/submit", methods=["POST"])
+async def api_speech_event_submit(request):
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    prompt = (body.get("prompt") or body.get("text") or "").strip()
+    event = normalize_speech_event(body.get("event"), prompt)
+    if not prompt and not event.get("text_preview"):
+        return JSONResponse({"error": "prompt required"}, status_code=400,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+    if not speech_event_classifier_available():
+        event["status"] = "local_only"
+
+    try:
+        saved = save_speech_event_state(config["buckets_dir"], event, ledger_stage="local_submit")
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+    if prompt and speech_event_classifier_available():
+        asyncio.create_task(_refine_speech_event_background(prompt, saved["event_id"], saved))
+
+    return JSONResponse(
+        {"ok": True, "event": saved, "dp_queued": speech_event_classifier_available()},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
+@mcp.custom_route("/api/speech-event/state", methods=["GET"])
+async def api_speech_event_state(request):
+    from starlette.responses import JSONResponse
+    event = load_speech_event_state(config["buckets_dir"])
+    if event:
+        event = dict(event)
+        event["recent"] = is_recent_speech_event(event)
+    return JSONResponse(event or {}, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/speech-event/review", methods=["POST"])
+async def api_speech_event_review(request):
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400,
+                           headers={"Access-Control-Allow-Origin": "*"})
+    try:
+        result = apply_speech_event_review(
+            config["buckets_dir"],
+            body.get("event_id", ""),
+            body.get("mark", ""),
+            body.get("note", ""),
+        )
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400,
+                           headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500,
+                           headers={"Access-Control-Allow-Origin": "*"})
+    return JSONResponse(result, headers={"Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/api/desire/state", methods=["GET"])
 async def api_desire_state(request):
     """只读：当前drive/intent/pa_na等快照，不tick。
@@ -3002,6 +3141,11 @@ async def api_desire_state(request):
             "nox_now": mood_entry[1],
             "mood_trace": latest_thought,
         }
+        speech_event = load_speech_event_state(config["buckets_dir"])
+        if speech_event:
+            speech_event = dict(speech_event)
+            speech_event["recent"] = is_recent_speech_event(speech_event)
+            state["speech_event"] = speech_event
     except Exception:
         pass
     return JSONResponse(state,
