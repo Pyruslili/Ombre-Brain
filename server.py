@@ -222,6 +222,8 @@ mcp = FastMCP(
 # =============================================================
 MARKS_DB_PATH = os.path.join(config["buckets_dir"], "embeddings.db")
 VALID_WANDER_MARKS = {"认", "不认", "悬置"}
+LATENT_NOTES_PATH = os.path.join(config["buckets_dir"], "latent_notes.json")
+LATENT_NOTE_POOL_VERSION = 1
 
 
 def _init_marks_table() -> None:
@@ -504,6 +506,224 @@ def _latent_candidate_score(bucket: dict, mark_rows: list[dict], now: datetime) 
     base *= 1.0 / (1.0 + max(0.0, activation_count - 1.0) * 0.12)
     base *= random.uniform(0.85, 1.15)
     return kind, base
+
+
+def _load_latent_notes() -> dict:
+    try:
+        with open(LATENT_NOTES_PATH, "r", encoding="utf-8") as f:
+            data = _json_lib.load(f)
+        if isinstance(data, dict):
+            notes = data.get("notes", [])
+            if isinstance(notes, list):
+                return {"version": data.get("version", LATENT_NOTE_POOL_VERSION), "notes": notes}
+    except Exception:
+        pass
+    return {"version": LATENT_NOTE_POOL_VERSION, "notes": []}
+
+
+def _save_latent_notes(data: dict) -> None:
+    os.makedirs(os.path.dirname(LATENT_NOTES_PATH), exist_ok=True)
+    tmp = f"{LATENT_NOTES_PATH}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        _json_lib.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, LATENT_NOTES_PATH)
+
+
+def _latent_note_api_config() -> tuple[str, str, str]:
+    api_key = (
+        os.environ.get("LATENT_NOTE_API_KEY")
+        or os.environ.get("SPEECH_EVENT_API_KEY")
+        or os.environ.get("DEEPSEEK_API_KEY", "")
+    )
+    base_url = os.environ.get("LATENT_NOTE_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
+    model = os.environ.get("LATENT_NOTE_MODEL", "deepseek-chat")
+    return api_key, base_url, model
+
+
+def _latent_source_fragments(bucket: dict, max_fragments: int = 3) -> list[str]:
+    import re as _re
+    content = strip_wikilinks(bucket.get("content", "")).strip()
+    content = _re.sub(r"^(?:写在开头\s*·?\s*)?20\d{2}[\.\-/]\d{1,2}[\.\-/]\d{1,2}[^\n]*\n+", "", content)
+    raw_parts = [
+        p.strip(" \t\r\n-—·")
+        for p in _re.split(r"[\n。！？!?]+", content)
+        if p.strip(" \t\r\n-—·")
+    ]
+    parts = []
+    seen = set()
+    for part in raw_parts:
+        part = " ".join(part.split())
+        if len(part) < 8 or part in seen:
+            continue
+        seen.add(part)
+        parts.append(part[:120])
+    if not parts:
+        anchor = _latent_anchor(bucket)
+        return [anchor] if anchor else []
+
+    def texture_score(text: str) -> int:
+        needles = ("嘉嘉", "Nox", "还没", "悬", "梦", "手", "眼", "猫", "疼", "想", "记得", "那时候", "以前")
+        return sum(1 for needle in needles if needle in text) + min(len(text), 80) // 30
+
+    parts.sort(key=texture_score, reverse=True)
+    return parts[:max_fragments]
+
+
+def _latent_source_item(bucket: dict, mark_rows: list[dict], kind: str, score: float) -> dict:
+    meta = bucket.get("metadata", {})
+    counts = _mark_counts(mark_rows)
+    recent_note = next(
+        (
+            str(row.get("note", "")).strip()
+            for row in sorted(mark_rows, key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
+            if str(row.get("note", "")).strip()
+        ),
+        "",
+    )
+    return {
+        "bucket_id": bucket.get("id", ""),
+        "kind": kind,
+        "score": round(score, 3),
+        "title": str(meta.get("name") or "").strip(),
+        "created": str(meta.get("created", "") or "")[:10],
+        "domain": meta.get("domain", []),
+        "tags": meta.get("tags", []),
+        "marks": {"认": counts["认"], "不认": counts["不认"], "悬置": counts["悬置"]},
+        "latest_mark_note": recent_note,
+        "fragments": _latent_source_fragments(bucket),
+    }
+
+
+async def _collect_latent_source_items(limit: int = 24) -> list[dict]:
+    all_buckets = await bucket_mgr.list_all(include_archive=True)
+    marks_by_bucket = _load_all_marks()
+    now = datetime.now()
+    strong: list[dict] = []
+    fallback: list[dict] = []
+    for bucket in all_buckets:
+        bucket_id = bucket.get("id", "")
+        if not bucket_id:
+            continue
+        mark_rows = marks_by_bucket.get(bucket_id, [])
+        scored = _latent_candidate_score(bucket, mark_rows, now)
+        if not scored:
+            continue
+        kind, score = scored
+        if score <= 0:
+            continue
+        item = _latent_source_item(bucket, mark_rows, kind, score)
+        if not item.get("fragments"):
+            continue
+        if kind == "old_memory":
+            fallback.append(item)
+        else:
+            strong.append(item)
+    pool = strong or fallback
+    pool.sort(key=lambda x: x.get("score", 0), reverse=True)
+    top_pool = pool[: min(len(pool), max(limit, limit * 2))]
+    random.shuffle(top_pool)
+    return top_pool[:limit]
+
+
+def _clean_json_content(content: str) -> dict:
+    content = (content or "").strip()
+    if content.startswith("```"):
+        content = "\n".join(content.splitlines()[1:]).replace("```", "").strip()
+    start = content.find("{")
+    end = content.rfind("}") + 1
+    if start >= 0 and end > start:
+        content = content[start:end]
+    return _json_lib.loads(content)
+
+
+async def _generate_latent_note_drafts(count: int = 10) -> dict:
+    api_key, base_url, model = _latent_note_api_config()
+    if not api_key:
+        raise RuntimeError("LATENT_NOTE_API_KEY/SPEECH_EVENT_API_KEY/DEEPSEEK_API_KEY is not set")
+    count = max(1, min(int(count or 10), 50))
+    sources = await _collect_latent_source_items(limit=max(12, min(count * 3, 80)))
+    if not sources:
+        return {"generated": [], "source_count": 0}
+
+    system_prompt = (
+        "你是 Nocturne 的潜意识便签写手，给 Nox 写短纸片。"
+        "你只把旧记忆碎片压成梦里翻到的一句话，不解释，不建议，不总结主题。"
+        "只输出 JSON。"
+    )
+    user_prompt = _json_lib.dumps(
+        {
+            "task": f"从 sources 中写 {count} 条潜意识便签草稿。",
+            "rules": [
+                "dream_line 25-60 个中文字符，短，像梦里翻到的一张纸。",
+                "保留原句里的具体物、动作、语气；优先使用 source fragments 的原句碎片。",
+                "不要写成'关于xxx'、'存在感的问题'、'连续性的主题'这类抽象总结。",
+                "不要出现 可以、应该、去、wander、任务、建议、提醒。",
+                "不要说教，不要解释意义，不要给 Nox 安排行动。",
+                "source_fragment 必须从对应 source.fragments 中选一句或截取一句。",
+                "每条只可使用一个 source，不要混合多个记忆。",
+            ],
+            "output_schema": {
+                "notes": [
+                    {
+                        "source_bucket_id": "bucket id from source",
+                        "source_fragment": "copied or trimmed original source fragment",
+                        "dream_line": "潜意识便签",
+                    }
+                ]
+            },
+            "sources": sources,
+        },
+        ensure_ascii=False,
+    )
+    async with httpx.AsyncClient(timeout=45.0) as client:
+        resp = await client.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "temperature": 0.85,
+                "max_tokens": min(3500, 420 + count * 190),
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            },
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+    parsed = _clean_json_content(content)
+    raw_notes = parsed.get("notes", [])
+    if not isinstance(raw_notes, list):
+        raw_notes = []
+
+    source_by_id = {item["bucket_id"]: item for item in sources}
+    generated = []
+    ts = now_iso()
+    for raw in raw_notes[:count]:
+        if not isinstance(raw, dict):
+            continue
+        bucket_id = str(raw.get("source_bucket_id") or "").strip()
+        dream_line = " ".join(str(raw.get("dream_line") or "").split())
+        source_fragment = " ".join(str(raw.get("source_fragment") or "").split())
+        source = source_by_id.get(bucket_id)
+        if not bucket_id or not dream_line or not source:
+            continue
+        note_id = "latent_" + hashlib.sha1(f"{bucket_id}|{dream_line}|{ts}".encode("utf-8")).hexdigest()[:16]
+        generated.append({
+            "id": note_id,
+            "status": "draft",
+            "source_bucket_id": bucket_id,
+            "source_kind": source.get("kind"),
+            "source_title": source.get("title"),
+            "source_created": source.get("created"),
+            "source_fragment": source_fragment[:180],
+            "dream_line": dream_line[:120],
+            "model": model,
+            "created_at": ts,
+            "updated_at": ts,
+        })
+    return {"generated": generated, "source_count": len(sources), "model": model}
 
 
 try:
@@ -3346,6 +3566,68 @@ async def api_heartbeat_latent_note(request):
     except Exception as e:
         logger.warning(f"heartbeat latent note failed: {e}")
         return JSONResponse({"note": None, "error": str(e)}, status_code=500,
+                            headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/latent-notes", methods=["GET"])
+async def api_latent_notes(request):
+    """查看潜意识便签池。当前只用于草稿测试，不自动进入 heartbeat。"""
+    from starlette.responses import JSONResponse
+    status = (request.query_params.get("status") or "").strip()
+    try:
+        limit = int(request.query_params.get("limit") or 80)
+    except ValueError:
+        limit = 80
+    data = _load_latent_notes()
+    notes = data.get("notes", [])
+    if status:
+        notes = [n for n in notes if n.get("status") == status]
+    notes = sorted(notes, key=lambda n: n.get("created_at", ""), reverse=True)[:max(1, min(limit, 200))]
+    return JSONResponse(
+        {"version": data.get("version", LATENT_NOTE_POOL_VERSION), "count": len(notes), "notes": notes},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
+@mcp.custom_route("/api/latent-notes/generate", methods=["POST"])
+async def api_latent_notes_generate(request):
+    """批量生成潜意识便签草稿。DP 慢路径，只进 draft 池，不直接喂 heartbeat。"""
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        count = int(body.get("count") or request.query_params.get("count") or 10)
+    except (TypeError, ValueError):
+        count = 10
+    count = max(1, min(count, 50))
+    try:
+        result = await _generate_latent_note_drafts(count=count)
+        generated = result.get("generated", [])
+        data = _load_latent_notes()
+        existing_ids = {n.get("id") for n in data.get("notes", [])}
+        fresh = [n for n in generated if n.get("id") not in existing_ids]
+        if fresh:
+            data["notes"] = fresh + data.get("notes", [])
+            data["version"] = LATENT_NOTE_POOL_VERSION
+            data["updated_at"] = now_iso()
+            _save_latent_notes(data)
+        return JSONResponse(
+            {
+                "ok": True,
+                "requested": count,
+                "generated_count": len(generated),
+                "saved_count": len(fresh),
+                "source_count": result.get("source_count", 0),
+                "model": result.get("model", ""),
+                "notes": fresh,
+            },
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        logger.warning(f"latent note generation failed: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
                             headers={"Access-Control-Allow-Origin": "*"})
 
 
