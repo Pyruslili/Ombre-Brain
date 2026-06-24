@@ -785,19 +785,36 @@ label {
 .drift-intent-text.is-high { color: var(--accent-deep); }
 .drift-intent-reason { margin-top: .35rem; color: var(--mute); font-size: .74rem; }
 .drift-weather-card { padding-bottom: 1.65rem; }
-.drift-weather-main { display: grid; grid-template-columns: minmax(0,1.05fr) minmax(220px,.95fr); gap: 1.2rem; align-items: end; }
+.drift-weather-main { display: grid; grid-template-columns: minmax(240px,.72fr) minmax(420px,1fr); gap: 1.5rem; align-items: center; }
 .drift-weather-kicker { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .11em; text-transform: uppercase; }
-.drift-undertow { color: var(--accent-deep); font: 300 clamp(1.55rem,3vw,2.65rem)/.95 var(--font-display); letter-spacing: -.03em; }
-.drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .72rem; }
+.drift-undertow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .42rem;
+  color: var(--accent-deep);
+  font: 300 2.55rem/.92 var(--font-number);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  letter-spacing: 0;
+}
+.undertow-name { font-family: var(--font-display); }
+.undertow-value { font-family: var(--font-number); }
+.drift-weather-values { display: grid; grid-template-columns: 1fr; gap: .8rem; width: 100%; max-width: 560px; justify-self: end; }
 .drift-weather-mini {
   position: relative;
-  min-height: 108px;
+  display: grid;
+  grid-template-columns: 104px minmax(0,1fr);
+  grid-template-rows: auto auto auto;
+  column-gap: 1.15rem;
+  row-gap: .42rem;
+  align-items: center;
+  min-height: 126px;
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   background:
     linear-gradient(180deg, rgba(255,224,186,.055), rgba(255,224,186,.012)),
     rgba(9,6,4,.26);
-  padding: .78rem .82rem .72rem;
+  padding: .95rem 1.15rem .95rem 1.25rem;
   overflow: hidden;
 }
 .drift-weather-mini::before {
@@ -808,28 +825,58 @@ label {
   background: var(--accent);
   opacity: .6;
 }
-.weather-label { display: flex; align-items: center; gap: .34rem; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.weather-label { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: .34rem; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .weather-label svg { width: 13px; height: 13px; flex: 0 0 auto; stroke-width: 1.55; }
 .drift-weather-mini strong {
+  grid-column: 1;
+  grid-row: 1 / 4;
   display: block;
-  margin-top: .28rem;
+  align-self: center;
   color: var(--accent-deep);
-  font: 300 1.62rem/1 var(--font-number);
+  font: 300 2.18rem/.9 var(--font-number);
   font-variant-numeric: oldstyle-nums proportional-nums;
+  letter-spacing: 0;
 }
 .weather-breakdown {
-  display: block;
-  margin-top: .42rem;
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  gap: .22rem;
   color: var(--mute);
   font-style: normal;
   font: 300 .62rem/1.35 var(--font-mono);
   letter-spacing: .025em;
-  white-space: nowrap;
 }
+.weather-breakdown span { display: flex; align-items: baseline; gap: .46rem; min-width: 0; }
+.weather-breakdown i { min-width: 4.8rem; color: var(--mute); font-style: normal; }
 .weather-breakdown b { color: var(--ink-soft); font-weight: 300; }
-.weather-warm .weather-label svg { color: var(--accent-deep); }
-.weather-shadow .weather-label svg { color: #92b2d2; }
-.weather-longing .weather-label svg { color: #d9bd8f; }
+.weather-progress {
+  grid-column: 2;
+  grid-row: 3;
+  position: relative;
+  height: 3px;
+  width: 100%;
+  border-radius: 999px;
+  background: rgba(214,190,156,.14);
+  overflow: hidden;
+}
+.weather-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--metric-color, var(--accent-deep));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--metric-color, var(--accent-deep)) 34%, transparent);
+}
+.weather-warm { --metric-color: var(--accent-deep); }
+.weather-shadow { --metric-color: #92b2d2; }
+.weather-longing { --metric-color: #d9bd8f; }
+.drift-weather-mini::before,
+.weather-label svg { color: var(--metric-color, var(--accent-deep)); }
+.weather-warm::before,
+.weather-shadow::before,
+.weather-longing::before { background: var(--metric-color, var(--accent-deep)); }
 .drift-weather-line { margin-top: 1.05rem; padding-top: .85rem; border-top: 1px solid var(--line-soft); color: var(--ink-soft); font: 300 .82rem/1.5 var(--font-body); }
 .drift-weather-line span,
 .drift-weather-trace span { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
@@ -1510,6 +1557,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .reverie-grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "dream" "weather" "density"; }
   .dream-card { height: auto; min-height: 0; }
   .dream-body { max-height: none; overflow: visible; }
+  .drift-weather-main { grid-template-columns: 1fr; align-items: stretch; }
+  .drift-weather-values { max-width: none; justify-self: stretch; }
 }
 @media (max-width: 620px) {
   .topbar { padding-top: 1rem; }
@@ -1518,10 +1567,15 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .archive-subtitle { width: 66vw; }
   .archive-ledger { max-width: 62vw; }
   .scroll-cue { display: none; }
-  .drift-weather-main { grid-template-columns: 1fr; }
-  .drift-weather-values { grid-template-columns: 1fr; }
-  .drift-weather-mini { min-height: 94px; }
-  .weather-breakdown { white-space: normal; }
+  .drift-undertow { font-size: 2.05rem; }
+  .drift-weather-mini {
+    grid-template-columns: 86px minmax(0,1fr);
+    min-height: 112px;
+    column-gap: .92rem;
+    padding: .82rem .9rem .82rem 1rem;
+  }
+  .drift-weather-mini strong { font-size: 1.72rem; }
+  .weather-breakdown i { min-width: 4.2rem; }
   .thought-row { grid-template-columns: 22px minmax(0,1fr); }
   .thought-side { grid-column: 2; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
   .thought-editor { grid-column: 2; }
@@ -1741,23 +1795,35 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <div class="drift-weather-main">
         <div>
           <span class="drift-weather-kicker">Undertow</span>
-          <div class="drift-undertow" id="desire-undertow">Reading…</div>
+          <div class="drift-undertow" id="desire-undertow"><span class="undertow-name">Reading</span><span class="undertow-value">…</span></div>
         </div>
         <div class="drift-weather-values">
           <div class="drift-weather-mini weather-warm">
             <span class="weather-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M4.9 4.9 7 7M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>Warmth</span>
             <strong id="desire-warmth">—</strong>
-            <em class="weather-breakdown" id="desire-warmth-breakdown">base — + residue —</em>
+            <em class="weather-breakdown" id="desire-warmth-breakdown">
+              <span><i>base</i><b id="desire-warmth-base">—</b></span>
+              <span><i>residue</i><b id="desire-warmth-residue">—</b></span>
+            </em>
+            <div class="weather-progress" aria-hidden="true"><span id="desire-warmth-progress"></span></div>
           </div>
           <div class="drift-weather-mini weather-shadow">
             <span class="weather-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 15.5a4.5 4.5 0 0 1 1.1-8.86A6.3 6.3 0 0 1 18.3 9.2 3.6 3.6 0 0 1 18 16H5Z"/><path d="M8 20h8"/></svg>Shadow</span>
             <strong id="desire-shadow">—</strong>
-            <em class="weather-breakdown" id="desire-shadow-breakdown">base — + residue —</em>
+            <em class="weather-breakdown" id="desire-shadow-breakdown">
+              <span><i>base</i><b id="desire-shadow-base">—</b></span>
+              <span><i>residue</i><b id="desire-shadow-residue">—</b></span>
+            </em>
+            <div class="weather-progress" aria-hidden="true"><span id="desire-shadow-progress"></span></div>
           </div>
           <div class="drift-weather-mini weather-longing">
             <span class="weather-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3a7 7 0 1 0 7 7 5 5 0 0 1-7-7Z"/><path d="M12 21v-2"/></svg>Longing</span>
             <strong id="desire-longing">—</strong>
-            <em class="weather-breakdown" id="desire-longing-breakdown">absence curve</em>
+            <em class="weather-breakdown" id="desire-longing-breakdown">
+              <span><i>absence</i><b>curve</b></span>
+              <span><i>current</i><b id="desire-longing-current">—</b></span>
+            </em>
+            <div class="weather-progress" aria-hidden="true"><span id="desire-longing-progress"></span></div>
           </div>
         </div>
       </div>
@@ -2243,16 +2309,24 @@ function signedMetric(value) {
   return `${n >= 0 ? '+' : '−'}${Math.abs(n).toFixed(2)}`;
 }
 
+function setWeatherProgress(kind, value) {
+  const fill = document.getElementById(`desire-${kind}-progress`);
+  if (!fill) return;
+  const pct = Math.max(0, Math.min(1, finiteNumber(value))) * 100;
+  fill.style.width = `${pct.toFixed(1)}%`;
+}
+
 function setWeatherMetric(kind, current, base, residue) {
   const target = document.getElementById(`desire-${kind}`);
-  const detail = document.getElementById(`desire-${kind}-breakdown`);
+  const baseTarget = document.getElementById(`desire-${kind}-base`);
+  const residueTarget = document.getElementById(`desire-${kind}-residue`);
   const now = finiteNumber(current);
   const residueValue = finiteNumber(residue);
   const baseValue = finiteNumber(base, now - residueValue);
   if (target) target.textContent = now.toFixed(2);
-  if (detail) {
-    detail.innerHTML = `base <b>${baseValue.toFixed(2)}</b> + residue <b>${signedMetric(residueValue)}</b> = <b>${now.toFixed(2)}</b>`;
-  }
+  if (baseTarget) baseTarget.textContent = baseValue.toFixed(2);
+  if (residueTarget) residueTarget.textContent = signedMetric(residueValue);
+  setWeatherProgress(kind, now);
 }
 
 async function loadDesire(button) {
@@ -2282,11 +2356,15 @@ async function loadDesire(button) {
     const shadowResidue = finiteNumber(weather.shadow_residue ?? d.weather_residue?.shadow);
     const shadowBase = finiteNumber(weather.base_shadow ?? d.weather_residue?.base_shadow ?? d.effective_pa_na?.base_NA, shadowNow - shadowResidue);
     const longingNow = finiteNumber(weather.longing ?? d.longing);
-    document.getElementById('desire-undertow').textContent = `${undertow} ${finiteNumber(undertowValue).toFixed(2)}`;
+    const undertowEl = document.getElementById('desire-undertow');
+    if (undertowEl) {
+      undertowEl.innerHTML = `<span class="undertow-name">${esc(undertow)}</span><span class="undertow-value">${finiteNumber(undertowValue).toFixed(2)}</span>`;
+    }
     setWeatherMetric('warmth', warmthNow, warmthBase, warmthResidue);
     setWeatherMetric('shadow', shadowNow, shadowBase, shadowResidue);
     document.getElementById('desire-longing').textContent = longingNow.toFixed(2);
-    document.getElementById('desire-longing-breakdown').innerHTML = `absence curve = <b>${longingNow.toFixed(2)}</b>`;
+    document.getElementById('desire-longing-current').textContent = longingNow.toFixed(2);
+    setWeatherProgress('longing', longingNow);
     document.getElementById('desire-now').textContent = weather.nox_now || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSomaTrace(soma);
