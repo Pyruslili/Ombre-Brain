@@ -425,6 +425,17 @@ def weather_chord_kind(chord: str) -> Optional[str]:
     return None
 
 
+def current_weather_chord(warmth: float, shadow: float) -> str:
+    """Snapshot chord from current effective Warmth/Shadow."""
+    warmth = _clamp(float(warmth or 0.0))
+    shadow = _clamp(float(shadow or 0.0))
+    if warmth < 0.3 and shadow < 0.3:
+        return "C6"
+    if shadow > warmth:
+        return "Dm7" if shadow > 0.5 else "Em7"
+    return "Fmaj7" if warmth > 0.5 else "Gmaj7"
+
+
 def _decay_weather_value(value: float, elapsed: float, halflife_hours: float,
                          soothe_elapsed: float = 0.0) -> float:
     value = max(0.0, float(value or 0.0))
@@ -1489,6 +1500,7 @@ class DesireEngine:
             "base_NA": round(base["NA"], 3),
             "effective_PA": round(effective_pa, 3),
             "effective_NA": round(effective_na, 3),
+            "current_chord": current_weather_chord(effective_pa, effective_na),
             "warmth_residue": round(float(residue.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(residue.get("shadow_residue", 0.0)), 3),
             "updated_at": residue.get("updated_at"),

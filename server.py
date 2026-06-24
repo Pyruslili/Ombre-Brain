@@ -3410,6 +3410,14 @@ if __name__ == "__main__":
             _app = mcp.streamable_http_app()
         else:
             _app = mcp.sse_app()
+
+        async def _start_decay_background():
+            try:
+                await decay_engine.ensure_started()
+            except Exception as e:
+                logger.warning(f"Decay engine startup failed / 衰减引擎启动失败: {e}")
+
+        _app.add_event_handler("startup", _start_decay_background)
         _app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],

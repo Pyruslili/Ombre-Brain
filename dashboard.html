@@ -785,36 +785,63 @@ label {
 .drift-intent-text.is-high { color: var(--accent-deep); }
 .drift-intent-reason { margin-top: .35rem; color: var(--mute); font-size: .74rem; }
 .drift-weather-card { padding-bottom: 1.65rem; }
-.drift-weather-main { display: grid; grid-template-columns: minmax(240px,.72fr) minmax(420px,1fr); gap: 1.5rem; align-items: center; }
+.drift-weather-main { display: grid; gap: 1.08rem; }
+.drift-weather-overview {
+  min-height: 126px;
+  display: grid;
+  align-content: center;
+  padding: .18rem .15rem 1.05rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.drift-weather-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .35rem; }
 .drift-weather-kicker { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .11em; text-transform: uppercase; }
+.drift-weather-head .drift-weather-kicker { margin-bottom: 0; }
+.drift-current-chord {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .48rem;
+  min-height: 28px;
+  padding: .38rem .62rem;
+  border: 1px solid rgba(239,224,196,.08);
+  border-radius: 999px;
+  background: rgba(255,224,186,.035);
+  color: var(--ink-soft);
+  font: 300 .58rem/1 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.drift-current-chord b {
+  color: var(--accent-deep);
+  font: 300 1rem/1 var(--font-number);
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .drift-undertow {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: .42rem;
   color: var(--accent-deep);
-  font: 300 2.55rem/.92 var(--font-number);
+  font: 300 clamp(2.35rem,4.9vw,4.15rem)/.86 var(--font-number);
   font-variant-numeric: oldstyle-nums proportional-nums;
   letter-spacing: 0;
 }
 .undertow-name { font-family: var(--font-display); }
 .undertow-value { font-family: var(--font-number); }
-.drift-weather-values { display: grid; grid-template-columns: 1fr; gap: .8rem; width: 100%; max-width: 560px; justify-self: end; }
+.drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .78rem; width: 100%; }
 .drift-weather-mini {
   position: relative;
   display: grid;
-  grid-template-columns: 104px minmax(0,1fr);
-  grid-template-rows: auto auto auto;
-  column-gap: 1.15rem;
-  row-gap: .42rem;
-  align-items: center;
-  min-height: 126px;
+  grid-template-rows: auto auto auto auto;
+  row-gap: .6rem;
+  min-height: 172px;
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   background:
     linear-gradient(180deg, rgba(255,224,186,.055), rgba(255,224,186,.012)),
     rgba(9,6,4,.26);
-  padding: .95rem 1.15rem .95rem 1.25rem;
+  padding: .95rem 1rem .95rem 1.08rem;
   overflow: hidden;
 }
 .drift-weather-mini::before {
@@ -825,34 +852,27 @@ label {
   background: var(--accent);
   opacity: .6;
 }
-.weather-label { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: .34rem; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.weather-label { display: flex; align-items: center; gap: .34rem; color: var(--mute); font: 300 .55rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .weather-label svg { width: 13px; height: 13px; flex: 0 0 auto; stroke-width: 1.55; }
 .drift-weather-mini strong {
-  grid-column: 1;
-  grid-row: 1 / 4;
   display: block;
-  align-self: center;
   color: var(--accent-deep);
-  font: 300 2.18rem/.9 var(--font-number);
+  font: 300 2.42rem/.86 var(--font-number);
   font-variant-numeric: oldstyle-nums proportional-nums;
   letter-spacing: 0;
 }
 .weather-breakdown {
-  grid-column: 2;
-  grid-row: 2;
   display: grid;
-  gap: .22rem;
+  gap: .25rem;
   color: var(--mute);
   font-style: normal;
   font: 300 .62rem/1.35 var(--font-mono);
   letter-spacing: .025em;
 }
-.weather-breakdown span { display: flex; align-items: baseline; gap: .46rem; min-width: 0; }
-.weather-breakdown i { min-width: 4.8rem; color: var(--mute); font-style: normal; }
+.weather-breakdown span { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; min-width: 0; }
+.weather-breakdown i { color: var(--mute); font-style: normal; }
 .weather-breakdown b { color: var(--ink-soft); font-weight: 300; }
 .weather-progress {
-  grid-column: 2;
-  grid-row: 3;
   position: relative;
   height: 3px;
   width: 100%;
@@ -1557,8 +1577,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .reverie-grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "dream" "weather" "density"; }
   .dream-card { height: auto; min-height: 0; }
   .dream-body { max-height: none; overflow: visible; }
-  .drift-weather-main { grid-template-columns: 1fr; align-items: stretch; }
-  .drift-weather-values { max-width: none; justify-self: stretch; }
+  .drift-weather-values { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
   .topbar { padding-top: 1rem; }
@@ -1567,15 +1586,16 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .archive-subtitle { width: 66vw; }
   .archive-ledger { max-width: 62vw; }
   .scroll-cue { display: none; }
-  .drift-undertow { font-size: 2.05rem; }
+  .drift-weather-overview { min-height: 98px; padding-bottom: .9rem; }
+  .drift-weather-head { align-items: flex-start; flex-direction: column; gap: .5rem; }
+  .drift-current-chord { align-self: flex-start; }
+  .drift-undertow { font-size: 2.2rem; }
   .drift-weather-mini {
-    grid-template-columns: 86px minmax(0,1fr);
-    min-height: 112px;
-    column-gap: .92rem;
-    padding: .82rem .9rem .82rem 1rem;
+    min-height: 142px;
+    padding: .85rem .92rem .9rem 1rem;
+    row-gap: .48rem;
   }
-  .drift-weather-mini strong { font-size: 1.72rem; }
-  .weather-breakdown i { min-width: 4.2rem; }
+  .drift-weather-mini strong { font-size: 2.05rem; }
   .thought-row { grid-template-columns: 22px minmax(0,1fr); }
   .thought-side { grid-column: 2; align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
   .thought-editor { grid-column: 2; }
@@ -1793,8 +1813,11 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     </div>
     <div class="drift-card drift-weather-card" id="desire-intent">
       <div class="drift-weather-main">
-        <div>
-          <span class="drift-weather-kicker">Undertow</span>
+        <div class="drift-weather-overview">
+          <div class="drift-weather-head">
+            <span class="drift-weather-kicker">Undertow</span>
+            <span class="drift-current-chord">Current Chord <b id="desire-current-chord">—</b></span>
+          </div>
           <div class="drift-undertow" id="desire-undertow"><span class="undertow-name">Reading</span><span class="undertow-value">…</span></div>
         </div>
         <div class="drift-weather-values">
@@ -2316,6 +2339,14 @@ function setWeatherProgress(kind, value) {
   fill.style.width = `${pct.toFixed(1)}%`;
 }
 
+function currentWeatherChord(warmth, shadow) {
+  const w = finiteNumber(warmth);
+  const s = finiteNumber(shadow);
+  if (w < .3 && s < .3) return 'C6';
+  if (s > w) return s > .5 ? 'Dm7' : 'Em7';
+  return w > .5 ? 'Fmaj7' : 'Gmaj7';
+}
+
 function setWeatherMetric(kind, current, base, residue) {
   const target = document.getElementById(`desire-${kind}`);
   const baseTarget = document.getElementById(`desire-${kind}-base`);
@@ -2365,6 +2396,7 @@ async function loadDesire(button) {
     document.getElementById('desire-longing').textContent = longingNow.toFixed(2);
     document.getElementById('desire-longing-current').textContent = longingNow.toFixed(2);
     setWeatherProgress('longing', longingNow);
+    document.getElementById('desire-current-chord').textContent = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
     document.getElementById('desire-now').textContent = weather.nox_now || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSomaTrace(soma);
