@@ -152,6 +152,22 @@ LONGING_FEELINGS = {
     "detachment": {"word": "落寞", "valence": -0.55, "arousal": 0.30},
 }
 
+# ─── Weather residue展示层（v1）──────────────────────────────────────────────
+# 独立持久化的PA/NA余波；只叠到展示，不反推drive。
+WEATHER_COMPONENTS = {
+    "keyword": {"halflife_hours": 4.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
+    "thought": {"halflife_hours": 8.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
+    "feel": {"halflife_hours": 72.0, "warmth_cap": 0.35, "shadow_cap": 0.35},
+}
+WEATHER_WARM_CHORDS = {"Fmaj7", "Gmaj7", "Dmaj7"}
+WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim"}
+WEATHER_CHORD_DELTAS = {"feel": 0.075, "thought": 0.035}
+WEATHER_SOOTHE_SHADOW_THRESHOLD = 0.08
+WEATHER_RECENT_LOW_CHORD_SEC = 3 * 3600
+WEATHER_SOOTHE_DURATION_SEC = 30 * 60
+WEATHER_SOOTHE_SHADOW_HALFLIFE_HOURS = 0.75
+WEATHER_SOOTHE_WARMTH_DELTA = 0.025
+
 # ─── 悲恸引擎常量 ──────────────────────────────────────────────────────────────
 # 三层：抗议→绝望→疏离
 GRIEF_PROTEST_TICKS = 6            # 抗议层持续多少tick没有嘉嘉输入信号→跌绝望
@@ -369,6 +385,183 @@ def pa_na_snapshot(drives: dict) -> dict:
     pa = sum(pos_vals) / len(pos_vals) if pos_vals else 0.0
     na = sum(neg_vals) / len(neg_vals) if neg_vals else 0.0
     return {"PA": round(pa, 3), "NA": round(na, 3)}
+
+
+def _weather_default_state(now: float = None) -> dict:
+    now = now if now is not None else time.time()
+    return {
+        "warmth_residue": 0.0,
+        "shadow_residue": 0.0,
+        "updated_at": now,
+        "components": {
+            name: {"warmth": 0.0, "shadow": 0.0, "updated_at": now}
+            for name in WEATHER_COMPONENTS
+        },
+        "last_low_chord_at": 0.0,
+        "soothe_until": 0.0,
+    }
+
+
+def _normalize_chord(chord: str) -> str:
+    token = (chord or "").strip().split()[0] if chord else ""
+    aliases = {
+        "fmaj7": "Fmaj7",
+        "gmaj7": "Gmaj7",
+        "dmaj7": "Dmaj7",
+        "dm7": "Dm7",
+        "em7": "Em7",
+        "f#dim": "F#dim",
+        "f♯dim": "F#dim",
+    }
+    return aliases.get(token.lower(), token)
+
+
+def weather_chord_kind(chord: str) -> Optional[str]:
+    normalized = _normalize_chord(chord)
+    if normalized in WEATHER_WARM_CHORDS:
+        return "warmth"
+    if normalized in WEATHER_SHADOW_CHORDS:
+        return "shadow"
+    return None
+
+
+def _decay_weather_value(value: float, elapsed: float, halflife_hours: float,
+                         soothe_elapsed: float = 0.0) -> float:
+    value = max(0.0, float(value or 0.0))
+    if value <= 0.0:
+        return 0.0
+    normal_elapsed = max(0.0, elapsed - max(0.0, soothe_elapsed))
+    factor = _time_decay_factor(normal_elapsed, halflife_hours)
+    if soothe_elapsed > 0:
+        factor *= _time_decay_factor(soothe_elapsed, WEATHER_SOOTHE_SHADOW_HALFLIFE_HOURS)
+    return value * factor
+
+
+class WeatherResidueStore:
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+
+    def _read_raw(self) -> dict:
+        try:
+            with self.path.open(encoding="utf-8") as f:
+                raw = json.load(f)
+            return raw if isinstance(raw, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _write_raw(self, state: dict) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        tmp.replace(self.path)
+
+    def load(self, now: float = None, decay: bool = True) -> dict:
+        now = now if now is not None else time.time()
+        raw = self._read_raw()
+        state = _weather_default_state(now)
+        state.update({k: v for k, v in raw.items() if k not in ("components",)})
+        raw_components = raw.get("components") if isinstance(raw.get("components"), dict) else {}
+        for name in WEATHER_COMPONENTS:
+            component = raw_components.get(name, {})
+            state["components"][name] = {
+                "warmth": float(component.get("warmth", 0.0) or 0.0),
+                "shadow": float(component.get("shadow", 0.0) or 0.0),
+                "updated_at": float(component.get("updated_at", raw.get("updated_at", now)) or now),
+            }
+
+        if decay:
+            state = self._decay(state, now)
+            self._write_raw(state)
+        else:
+            state = self._refresh_totals(state, float(state.get("updated_at", now) or now))
+        return state
+
+    def save(self, state: dict) -> dict:
+        refreshed = self._refresh_totals(state, time.time())
+        self._write_raw(refreshed)
+        return refreshed
+
+    def apply_delta(self, warmth_delta: float = 0.0, shadow_delta: float = 0.0,
+                    source: str = "keyword", soothe: bool = False,
+                    now: float = None) -> dict:
+        now = now if now is not None else time.time()
+        source = source if source in WEATHER_COMPONENTS else "keyword"
+        state = self.load(now, decay=True)
+        active_soothe = False
+        if soothe:
+            active_soothe = (
+                float(state.get("shadow_residue", 0.0) or 0.0) > WEATHER_SOOTHE_SHADOW_THRESHOLD
+                or now - float(state.get("last_low_chord_at", 0.0) or 0.0) <= WEATHER_RECENT_LOW_CHORD_SEC
+            )
+            if active_soothe:
+                state["soothe_until"] = max(
+                    float(state.get("soothe_until", 0.0) or 0.0),
+                    now + WEATHER_SOOTHE_DURATION_SEC,
+                )
+                warmth_delta = max(float(warmth_delta or 0.0), WEATHER_SOOTHE_WARMTH_DELTA)
+            else:
+                warmth_delta = max(float(warmth_delta or 0.0), WEATHER_SOOTHE_WARMTH_DELTA / 2)
+
+        component = state["components"][source]
+        caps = WEATHER_COMPONENTS[source]
+        component["warmth"] = _clamp(
+            float(component.get("warmth", 0.0) or 0.0) + max(0.0, float(warmth_delta or 0.0)),
+            0.0,
+            caps["warmth_cap"],
+        )
+        component["shadow"] = _clamp(
+            float(component.get("shadow", 0.0) or 0.0) + max(0.0, float(shadow_delta or 0.0)),
+            0.0,
+            caps["shadow_cap"],
+        )
+        component["updated_at"] = now
+        state["updated_at"] = now
+        state["last_soothe_active"] = active_soothe
+        return self.save(state)
+
+    def apply_chord(self, chord: str, source: str = "thought", now: float = None) -> dict:
+        kind = weather_chord_kind(chord)
+        if not kind:
+            return self.load(now, decay=True)
+        source = source if source in ("feel", "thought") else "thought"
+        delta = WEATHER_CHORD_DELTAS[source]
+        warmth_delta = delta if kind == "warmth" else 0.0
+        shadow_delta = delta if kind == "shadow" else 0.0
+        state = self.apply_delta(
+            warmth_delta=warmth_delta,
+            shadow_delta=shadow_delta,
+            source=source,
+            now=now,
+        )
+        if kind == "shadow":
+            state["last_low_chord_at"] = now if now is not None else time.time()
+            state = self.save(state)
+        return state
+
+    def _decay(self, state: dict, now: float) -> dict:
+        soothe_until = float(state.get("soothe_until", 0.0) or 0.0)
+        for name, spec in WEATHER_COMPONENTS.items():
+            component = state["components"][name]
+            last = float(component.get("updated_at", now) or now)
+            elapsed = max(0.0, now - last)
+            soothe_elapsed = max(0.0, min(now, soothe_until) - last) if soothe_until > last else 0.0
+            component["warmth"] = _decay_weather_value(
+                component.get("warmth", 0.0), elapsed, spec["halflife_hours"]
+            )
+            component["shadow"] = _decay_weather_value(
+                component.get("shadow", 0.0), elapsed, spec["halflife_hours"], soothe_elapsed
+            )
+            component["updated_at"] = now
+        return self._refresh_totals(state, now)
+
+    def _refresh_totals(self, state: dict, now: float) -> dict:
+        warmth = sum(float(c.get("warmth", 0.0) or 0.0) for c in state["components"].values())
+        shadow = sum(float(c.get("shadow", 0.0) or 0.0) for c in state["components"].values())
+        state["warmth_residue"] = round(_clamp(warmth), 6)
+        state["shadow_residue"] = round(_clamp(shadow), 6)
+        state["updated_at"] = now
+        return state
 
 
 def longing_value(hours_since_last_message: float, attachment: float) -> float:
@@ -1257,6 +1450,7 @@ class DesireStore:
 class DesireEngine:
     def __init__(self, db_path: str = "desire.db"):
         self.store = DesireStore(db_path)
+        self.weather = WeatherResidueStore(Path(db_path).with_name("weather_residue.json"))
 
     def _longing_context(self, state: DriveState, now: float = None) -> dict:
         now = now if now is not None else time.time()
@@ -1282,6 +1476,52 @@ class DesireEngine:
                 state.reunion_pa_boost = 0.0
                 self.store.save_state(state)
         return pa_na
+
+    def _weather_readout(self, state: DriveState, now: float = None) -> dict:
+        now = now if now is not None else time.time()
+        base = pa_na_snapshot(state.drives)
+        residue = self.weather.load(now, decay=True)
+        effective_pa = _clamp(float(base["PA"]) + float(residue.get("warmth_residue", 0.0)))
+        effective_na = _clamp(float(base["NA"]) + float(residue.get("shadow_residue", 0.0)))
+        return {
+            "base_PA": round(base["PA"], 3),
+            "base_NA": round(base["NA"], 3),
+            "effective_PA": round(effective_pa, 3),
+            "effective_NA": round(effective_na, 3),
+            "warmth_residue": round(float(residue.get("warmth_residue", 0.0)), 3),
+            "shadow_residue": round(float(residue.get("shadow_residue", 0.0)), 3),
+            "updated_at": residue.get("updated_at"),
+            "soothe_until": residue.get("soothe_until", 0.0),
+            "last_low_chord_at": residue.get("last_low_chord_at", 0.0),
+        }
+
+    def apply_weather_delta(self, warmth_delta: float = 0.0, shadow_delta: float = 0.0,
+                            source: str = "keyword", soothe: bool = False) -> dict:
+        state = self.weather.apply_delta(
+            warmth_delta=warmth_delta,
+            shadow_delta=shadow_delta,
+            source=source,
+            soothe=soothe,
+        )
+        return {
+            "warmth_residue": round(float(state.get("warmth_residue", 0.0)), 3),
+            "shadow_residue": round(float(state.get("shadow_residue", 0.0)), 3),
+            "soothe_active": bool(state.get("last_soothe_active", False)),
+        }
+
+    def apply_chord_echo(self, chord: str, source: str = "thought") -> dict:
+        state = self.weather.apply_chord(chord, source=source)
+        return {
+            "chord": _normalize_chord(chord),
+            "kind": weather_chord_kind(chord),
+            "source": source,
+            "warmth_residue": round(float(state.get("warmth_residue", 0.0)), 3),
+            "shadow_residue": round(float(state.get("shadow_residue", 0.0)), 3),
+        }
+
+    def weather_state(self) -> dict:
+        state = self.store.load_state()
+        return self._weather_readout(state)
 
     def _mark_real_user_message(self, state: DriveState, now: float) -> DriveState:
         hours = max(0.0, (now - state.last_user_message_at) / 3600.0)
@@ -1337,7 +1577,7 @@ class DesireEngine:
 
         return self._state_dict(state, new_thoughts)
 
-    def pulse(self, drive_key: str, delta: float = 0.18) -> dict:
+    def pulse(self, drive_key: str, delta: float = 0.18, chord: str = "") -> dict:
         now = time.time()
         state = self.store.load_state()
         # attachment使用非线性跳变
@@ -1350,10 +1590,12 @@ class DesireEngine:
         grief = self.store.load_grief()
         grief = tick_grief(grief, state, has_signal=True, now_ts=now)
         self.store.save_grief(grief)
+        chord_echo = self.apply_chord_echo(chord, source="thought") if chord.strip() else None
         return {
             "drive_key": drive_key,
             "new_value": round(state.drives[drive_key], 3),
             "local_fatigue": round(state.local_fatigue.get(drive_key, 0.0), 3),
+            "chord_echo": chord_echo,
         }
 
     def satisfy(self, drive_key: str) -> dict:
@@ -1543,6 +1785,7 @@ class DesireEngine:
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
+            "effective_pa_na": self._weather_readout(state),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts": [
@@ -1586,6 +1829,7 @@ class DesireEngine:
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
+            "effective_pa_na": self._weather_readout(state),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts_count": len(thoughts),

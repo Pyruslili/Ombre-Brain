@@ -1386,14 +1386,15 @@ def desire_state() -> dict:
 
 
 @mcp.tool()
-def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "") -> dict:
+def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
     """
     让某个驱动维度上涨。
     嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
     drive_key: attachment|curiosity|reflection|duty|social|fatigue|libido|stress
     thought: 可选，把这次经历的一句话存入念头池（flit）
+    chord: 可选，把这次念头的和弦回声写入weather_residue（Fmaj7/Gmaj7/Dmaj7→warmth，Dm7/Em7/F#dim→shadow）
     """
-    result = _desire.pulse(drive_key, delta)
+    result = _desire.pulse(drive_key, delta, chord=chord.strip())
     if thought.strip():
         _desire.add_thought(thought.strip(), drive_key, strength=0.5)
     return result
@@ -1465,6 +1466,11 @@ async def hold(
             bucket_type="feel",
             chord=chord.strip(),
         )
+        if chord.strip():
+            try:
+                _desire.apply_chord_echo(chord.strip(), source="feel")
+            except Exception as e:
+                logger.warning(f"feel chord echo failed: {e}")
         # --- background: don't block response on Gemini latency ---
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         # --- Mark source memory as digested + store model's valence perspective ---
@@ -2960,13 +2966,9 @@ async def api_desire_state(request):
             get_daily_mood, branch=bs.get("二级分支") or None, thoughts=thought_dicts
         )
         base_score = score(mood_entry[0])
-        def _weather_float(value, fallback):
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return float(fallback)
-        warmth = _weather_float(live.get("PA", base_score["PA"]), base_score["PA"])
-        shadow = abs(_weather_float(live.get("NA", base_score["NA"]), base_score["NA"]))
+        weather = state.get("effective_pa_na") or _desire.weather_state()
+        warmth = float(weather.get("effective_PA", state.get("pa_na", {}).get("PA", base_score["PA"])))
+        shadow = float(weather.get("effective_NA", state.get("pa_na", {}).get("NA", base_score["NA"])))
         latest_thought = next(
             (t.get("text", "").strip() for t in thoughts if t.get("text", "").strip()),
             mood_entry[0],
@@ -2979,11 +2981,22 @@ async def api_desire_state(request):
         undertow_value = float(state.get("drives", {}).get(top_drive, 0)) if top_drive else 0.0
         state["mood_trace"] = latest_thought
         state["mood_word"] = mood_entry[1]
+        state["weather_residue"] = {
+            "warmth": round(float(weather.get("warmth_residue", 0.0)), 3),
+            "shadow": round(float(weather.get("shadow_residue", 0.0)), 3),
+            "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
+            "base_shadow": round(float(weather.get("base_NA", 0.0)), 3),
+            "updated_at": weather.get("updated_at"),
+        }
         state["pulse_weather"] = {
             "undertow": top_drive,
             "undertow_value": round(undertow_value, 3),
             "warmth": round(warmth, 3),
             "shadow": round(shadow, 3),
+            "warmth_residue": round(float(weather.get("warmth_residue", 0.0)), 3),
+            "shadow_residue": round(float(weather.get("shadow_residue", 0.0)), 3),
+            "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
+            "base_shadow": round(float(weather.get("base_NA", 0.0)), 3),
             "longing": round(float(state.get("longing", 0)), 3),
             "nox_now": mood_entry[1],
             "mood_trace": latest_thought,
@@ -3042,11 +3055,31 @@ async def api_desire_intent_ack(request):
 
 @mcp.custom_route("/api/desire/ping", methods=["POST"])
 async def api_desire_ping(request):
-    """嘉嘉发消息时调用，重置longing计时器。"""
+    """嘉嘉发消息时调用，重置longing计时器；可携带本地关键词天气轻推。"""
     from starlette.responses import JSONResponse
     try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
         result = _desire.mark_user_signal()
-        return JSONResponse({"ok": True, **result},
+        weather = None
+        def _safe_delta(key: str) -> float:
+            try:
+                return max(0.0, float(body.get(key, 0.0) or 0.0))
+            except (TypeError, ValueError):
+                return 0.0
+        warmth_delta = _safe_delta("warmth_delta")
+        shadow_delta = _safe_delta("shadow_delta")
+        soothe = bool(body.get("soothe", False))
+        if warmth_delta > 0 or shadow_delta > 0 or soothe:
+            weather = _desire.apply_weather_delta(
+                warmth_delta=warmth_delta,
+                shadow_delta=shadow_delta,
+                source=body.get("source", "keyword"),
+                soothe=soothe,
+            )
+        return JSONResponse({"ok": True, **result, "weather_residue": weather},
                            headers={"Access-Control-Allow-Origin": "*"})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500,
@@ -3153,6 +3186,8 @@ async def api_desire_feed(request):
             try:
                 _desire.add_thought(text, drive, strength=strength, source="cli")
                 _desire.store.add_echo(text, drive)   # 真实念头存档进回声池
+                if (t.get("chord") or "").strip():
+                    _desire.apply_chord_echo(t.get("chord", "").strip(), source="thought")
                 added += 1
             except Exception as e:
                 logger.warning(f"desire/feed add_thought failed: {e}")
