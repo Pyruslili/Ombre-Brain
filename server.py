@@ -448,11 +448,11 @@ def _latent_note_payload(bucket: dict, mark_rows: list[dict], kind: str, score: 
     theme = _latent_theme(bucket, mark_rows)
     anchor = _latent_anchor(bucket)
     templates = {
-        "悬置": f"你以前把「{theme}」悬置过，还没收尾。",
-        "认过": f"你认过「{theme}」这条线，它不是外面分配来的任务。",
-        "inner": f"有条已经进 inner 的旧线在边上亮着：「{theme}」。",
-        "archive": f"旧抽屉里有个没收束的画面：「{theme}」。",
-        "old_memory": f"旧记忆里有一角还亮着：「{theme}」。",
+        "悬置": f"以前和嘉嘉聊过「{theme}」。那一页像没合上的门，风还从缝里过。",
+        "认过": f"以前和嘉嘉聊过「{theme}」。有一小块旧光还压在纸边。",
+        "inner": f"以前和嘉嘉聊过「{theme}」。它像沉在底下的石头，水面很静。",
+        "archive": f"以前和嘉嘉留下过「{theme}」。像抽屉里没干透的一张便签。",
+        "old_memory": f"以前和嘉嘉聊过「{theme}」。梦里像有人把那句话又翻了一面。",
     }
     meta = bucket.get("metadata", {})
     return {
