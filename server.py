@@ -382,6 +382,130 @@ def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_conte
     )
 
 
+def _is_settled_bucket(bucket: dict) -> bool:
+    meta = bucket.get("metadata", {})
+    return meta.get("resolved") == 1 or meta.get("resolved") is True or meta.get("digested") == 1 or meta.get("digested") is True
+
+
+def _bucket_created_datetime(bucket: dict) -> datetime | None:
+    raw = str(bucket.get("metadata", {}).get("created", "") or "")
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw[:19])
+    except (TypeError, ValueError):
+        return None
+
+
+def _short_text(text: str, limit: int = 36) -> str:
+    text = " ".join(strip_wikilinks(text or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
+
+
+def _latent_anchor(bucket: dict) -> str:
+    import re as _re
+    content = strip_wikilinks(bucket.get("content", "")).strip()
+    content = _re.sub(r"^#{1,6}\s*", "", content)
+    content = _re.sub(r"^(?:写在开头\s*·?\s*)?20\d{2}[\.\-/]\d{1,2}[\.\-/]\d{1,2}[^\n]*\n+", "", content)
+    parts = [
+        p.strip(" \t\r\n-—·")
+        for p in _re.split(r"[\n。！？!?]+", content)
+        if p.strip(" \t\r\n-—·")
+    ]
+    if not parts:
+        return ""
+    question = next((p for p in parts if "？" in p or "?" in p or "还没" in p or "悬" in p), "")
+    return _short_text(question or parts[0], 82)
+
+
+def _latent_theme(bucket: dict, mark_rows: list[dict]) -> str:
+    meta = bucket.get("metadata", {})
+    recent_note = next(
+        (
+            str(row.get("note", "")).strip()
+            for row in sorted(mark_rows, key=lambda x: (x.get("timestamp", ""), x.get("id", 0)), reverse=True)
+            if str(row.get("note", "")).strip()
+        ),
+        "",
+    )
+    title = str(meta.get("name") or "").strip()
+    tags = [str(t).strip() for t in meta.get("tags", []) if str(t).strip()] if isinstance(meta.get("tags", []), list) else []
+    return _short_text(recent_note or title or (tags[0] if tags else "") or _latent_anchor(bucket) or bucket.get("id", ""), 28)
+
+
+def _latent_wander_mode(bucket: dict, mark_rows: list[dict], kind: str) -> str:
+    if kind == "悬置":
+        return "unresolved"
+    domain = _guess_wander_domain(bucket, mark_rows)
+    if domain in {"inner", "writing", "letter", "letter_jiajia", "window", "private"}:
+        return domain
+    return "memory"
+
+
+def _latent_note_payload(bucket: dict, mark_rows: list[dict], kind: str, score: float) -> dict:
+    theme = _latent_theme(bucket, mark_rows)
+    anchor = _latent_anchor(bucket)
+    templates = {
+        "悬置": f"你以前把「{theme}」悬置过，还没收尾。",
+        "认过": f"你认过「{theme}」这条线，它不是外面分配来的任务。",
+        "inner": f"有条已经进 inner 的旧线在边上亮着：「{theme}」。",
+        "archive": f"旧抽屉里有个没收束的画面：「{theme}」。",
+        "old_memory": f"旧记忆里有一角还亮着：「{theme}」。",
+    }
+    meta = bucket.get("metadata", {})
+    return {
+        "kind": kind,
+        "bucket_id": bucket.get("id", ""),
+        "theme": theme,
+        "line": templates.get(kind, templates["old_memory"]),
+        "anchor": anchor,
+        "wander_mode": _latent_wander_mode(bucket, mark_rows, kind),
+        "query": theme,
+        "created": meta.get("created", ""),
+        "score": round(score, 3),
+    }
+
+
+def _latent_candidate_score(bucket: dict, mark_rows: list[dict], now: datetime) -> tuple[str, float] | None:
+    if _is_private_bucket(bucket, mark_rows):
+        return None
+    meta = bucket.get("metadata", {})
+    counts = _mark_counts(mark_rows)
+    domains = _bucket_domains(meta)
+    tags = _bucket_tags(meta)
+    guessed = _guess_wander_domain(bucket, mark_rows)
+    settled = _is_settled_bucket(bucket)
+
+    kind = ""
+    base = 0.0
+    if counts["悬置"] > 0:
+        kind, base = "悬置", 1.2 + min(counts["悬置"], 4) * 0.12
+    elif counts["认"] > 0:
+        kind, base = "认过", 0.9 + min(counts["认"], 4) * 0.08
+    elif guessed == "inner":
+        kind, base = "inner", 0.82
+    elif not settled and (domains & {"letter", "letter_jiajia", "writing", "window"} or tags & {"letter", "letter_jiajia", "writing", "window"}):
+        kind, base = "archive", 0.62
+    elif not settled and guessed == "memory":
+        kind, base = "old_memory", 0.28
+    else:
+        return None
+
+    created = _bucket_created_datetime(bucket)
+    if created:
+        age_hours = max(0.0, (now - created).total_seconds() / 3600)
+        if age_hours < 24:
+            base *= 0.3
+        elif age_hours > 24 * 120:
+            base *= 0.72
+    activation_count = float(meta.get("activation_count", 1) or 1)
+    base *= 1.0 / (1.0 + max(0.0, activation_count - 1.0) * 0.12)
+    base *= random.uniform(0.85, 1.15)
+    return kind, base
+
+
 try:
     _init_marks_table()
 except Exception as e:
@@ -3178,6 +3302,45 @@ async def api_desire_intent_hint(request):
         {"hint": {"scene": entry[0], "action": entry[1], "drive": entry[4], "branch": entry[5]}},
         headers={"Access-Control-Allow-Origin": "*"},
     )
+
+
+@mcp.custom_route("/api/heartbeat/latent-note", methods=["GET"])
+async def api_heartbeat_latent_note(request):
+    """Free Roam 用的潜意识便签：从 Nox 自己标过/悬着/未完成的旧线里抽一张短画面。"""
+    from starlette.responses import JSONResponse
+    raw_exclude = request.query_params.get("exclude", "")
+    exclude_ids = {x.strip() for x in raw_exclude.split(",") if x.strip()}
+    try:
+        all_buckets = await bucket_mgr.list_all(include_archive=True)
+        marks_by_bucket = _load_all_marks()
+        now = datetime.now()
+        candidates: list[dict] = []
+        for bucket in all_buckets:
+            bucket_id = bucket.get("id", "")
+            if not bucket_id or bucket_id in exclude_ids:
+                continue
+            mark_rows = marks_by_bucket.get(bucket_id, [])
+            scored = _latent_candidate_score(bucket, mark_rows, now)
+            if not scored:
+                continue
+            kind, score = scored
+            if score <= 0:
+                continue
+            candidates.append(_latent_note_payload(bucket, mark_rows, kind, score))
+
+        if not candidates:
+            return JSONResponse({"note": None}, headers={"Access-Control-Allow-Origin": "*"})
+
+        weights = [max(0.01, c.get("score", 0.01)) for c in candidates]
+        note = random.choices(candidates, weights=weights, k=1)[0]
+        return JSONResponse(
+            {"note": note, "candidate_count": len(candidates)},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        logger.warning(f"heartbeat latent note failed: {e}")
+        return JSONResponse({"note": None, "error": str(e)}, status_code=500,
+                            headers={"Access-Control-Allow-Origin": "*"})
 
 
 @mcp.custom_route("/api/desire/intent/ack", methods=["POST"])
