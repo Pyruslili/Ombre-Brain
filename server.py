@@ -3411,13 +3411,21 @@ if __name__ == "__main__":
         else:
             _app = mcp.sse_app()
 
-        async def _start_decay_background():
+        async def _decay_background_loop():
             try:
                 await decay_engine.ensure_started()
+                while True:
+                    await asyncio.sleep(3600)
             except Exception as e:
                 logger.warning(f"Decay engine startup failed / 衰减引擎启动失败: {e}")
 
-        _app.add_event_handler("startup", _start_decay_background)
+        def _start_decay_background():
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(_decay_background_loop())
+
+        decay_thread = threading.Thread(target=_start_decay_background, daemon=True)
+        decay_thread.start()
+
         _app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
