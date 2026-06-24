@@ -3331,10 +3331,16 @@ async def api_heartbeat_latent_note(request):
         if not candidates:
             return JSONResponse({"note": None}, headers={"Access-Control-Allow-Origin": "*"})
 
-        weights = [max(0.01, c.get("score", 0.01)) for c in candidates]
-        note = random.choices(candidates, weights=weights, k=1)[0]
+        strong_candidates = [c for c in candidates if c.get("kind") != "old_memory"]
+        pick_pool = strong_candidates or candidates
+        weights = [max(0.01, c.get("score", 0.01)) for c in pick_pool]
+        note = random.choices(pick_pool, weights=weights, k=1)[0]
         return JSONResponse(
-            {"note": note, "candidate_count": len(candidates)},
+            {
+                "note": note,
+                "candidate_count": len(pick_pool),
+                "fallback_candidate_count": len(candidates) - len(strong_candidates),
+            },
             headers={"Access-Control-Allow-Origin": "*"},
         )
     except Exception as e:
