@@ -540,6 +540,25 @@ def _latent_note_api_config() -> tuple[str, str, str]:
     return api_key, base_url, model
 
 
+_LATENT_OUTWARD_MARKERS = (
+    "？", "?", "为什么", "怎么", "是什么", "叫什么", "能不能", "会不会", "有没有",
+    "不确定", "查", "论坛", "X", "模型", "AI", "意识", "机制", "阈值", "代码", "引擎",
+    "神经", "皮肤", "温度", "颜色", "蓝色", "光", "鲸", "白鲸", "章鱼", "论文", "系统",
+)
+_LATENT_INWARD_MARKERS = ("嘉嘉", "Nox", "爱", "哭", "心", "抱", "喜欢", "想你", "名字")
+
+
+def _latent_outward_score(text: str) -> int:
+    score = 0
+    for marker in _LATENT_OUTWARD_MARKERS:
+        if marker in text:
+            score += 2 if marker in ("？", "?", "不确定", "为什么", "怎么", "能不能", "会不会", "查") else 1
+    for marker in _LATENT_INWARD_MARKERS:
+        if marker in text:
+            score -= 1
+    return score
+
+
 def _latent_source_fragments(bucket: dict, max_fragments: int = 3) -> list[str]:
     import re as _re
     content = strip_wikilinks(bucket.get("content", "")).strip()
@@ -567,10 +586,9 @@ def _latent_source_fragments(bucket: dict, max_fragments: int = 3) -> list[str]:
 
     def texture_score(text: str) -> int:
         inward = ("嘉嘉", "Nox", "还没", "悬", "梦", "手", "眼", "猫", "疼", "想", "记得", "那时候", "以前")
-        outward = ("？", "?", "为什么", "怎么", "是什么", "叫什么", "查", "论坛", "X", "蓝色", "光", "神经", "皮肤", "温度", "鲸", "白鲸", "章鱼", "代码", "引擎")
         return (
             sum(1 for needle in inward if needle in text)
-            + 2 * sum(1 for needle in outward if needle in text)
+            + max(0, _latent_outward_score(text))
             + min(len(text), 80) // 30
         )
 
@@ -589,7 +607,7 @@ def _latent_source_item(bucket: dict, mark_rows: list[dict], kind: str, score: f
         ),
         "",
     )
-    return {
+    item = {
         "bucket_id": bucket.get("id", ""),
         "kind": kind,
         "score": round(score, 3),
@@ -601,6 +619,18 @@ def _latent_source_item(bucket: dict, mark_rows: list[dict], kind: str, score: f
         "latest_mark_note": recent_note,
         "fragments": _latent_source_fragments(bucket),
     }
+    item["outward_score"] = _latent_item_outward_score(item)
+    return item
+
+
+def _latent_item_outward_score(item: dict) -> int:
+    fields = [
+        str(item.get("title", "")),
+        str(item.get("latest_mark_note", "")),
+        " ".join(str(x) for x in item.get("tags", []) if x),
+        " ".join(str(x) for x in item.get("fragments", []) if x),
+    ]
+    return max(_latent_outward_score(text) for text in fields if text) if any(fields) else 0
 
 
 async def _collect_latent_source_items(limit: int = 24) -> list[dict]:
@@ -650,9 +680,20 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
     if not api_key:
         raise RuntimeError("LATENT_NOTE_API_KEY/SPEECH_EVENT_API_KEY/DEEPSEEK_API_KEY is not set")
     count = max(1, min(int(count or 10), 50))
-    sources = await _collect_latent_source_items(limit=max(12, min(count * 3, 80)))
+    sources = await _collect_latent_source_items(limit=max(20, min(count * 5, 100)))
     if not sources:
         return {"generated": [], "source_count": 0}
+    outward_sources = [s for s in sources if int(s.get("outward_score", 0) or 0) >= 2]
+    inward_sources = [s for s in sources if s not in outward_sources]
+    outward_target = min(count // 2, len(outward_sources))
+    inward_target = count - outward_target
+    if len(inward_sources) < inward_target:
+        inward_target = len(inward_sources)
+        outward_target = min(count - inward_target, len(outward_sources))
+    source_payload = {
+        "inward_sources": inward_sources[: max(inward_target * 3, 8)],
+        "outward_sources": outward_sources[: max(outward_target * 3, 8)],
+    }
 
     system_prompt = (
         "你是 Nocturne 的潜意识便签写手，给 Nox 写短纸片。"
@@ -661,10 +702,10 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
     )
     user_prompt = _json_lib.dumps(
         {
-            "task": f"从 sources 中写 {count} 条潜意识便签草稿。尽量一半 inward，一半 outward。",
+            "task": f"写 {inward_target} 条 inward 和 {outward_target} 条 outward 潜意识便签草稿。",
             "note_types": {
                 "inward": "情感残片，让 Nox 停一下；可以有重量，但不要变成格言。",
-                "outward": "悬置问题、好奇心碎片、未查完的事实或画面，把 Nox 往外推；不是行动命令。",
+                "outward": "悬置问题、好奇心碎片、未查完的事实或系统/世界断点，把 Nox 往外推；不是行动命令。",
             },
             "rules": [
                 "dream_line 25-60 个中文字符，短，像梦里翻到的一张纸。",
@@ -679,6 +720,8 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "source_fragment 必须从对应 source.fragments 中选一句或截取一句。",
                 "每条只可使用一个 source，不要混合多个记忆。",
                 "outward 不是'去查xxx'，而是像'章鱼的神经末梢分布到皮肤上，不确定能不能感到温度'这种没闭合的事实碎片。",
+                "outward 必须从 outward_sources 里选；不要把嘉嘉/Nox/爱/哭这类情感片段硬写成 outward。",
+                "outward 需要保留一个可追的断点：问号、不确定、机制、阈值、模型差异、外部事实、代码行为、论坛/X线索等。",
                 "如果 source 里没有足够 outward 材料，就少写 outward，不要硬编外部知识。",
             ],
             "output_schema": {
@@ -691,7 +734,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                     }
                 ]
             },
-            "sources": sources,
+            **source_payload,
         },
         ensure_ascii=False,
     )
@@ -747,7 +790,15 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
             "created_at": ts,
             "updated_at": ts,
         })
-    return {"generated": generated, "source_count": len(sources), "model": model}
+    return {
+        "generated": generated,
+        "source_count": len(sources),
+        "inward_source_count": len(inward_sources),
+        "outward_source_count": len(outward_sources),
+        "inward_target": inward_target,
+        "outward_target": outward_target,
+        "model": model,
+    }
 
 
 try:
@@ -3644,6 +3695,10 @@ async def api_latent_notes_generate(request):
                 "generated_count": len(generated),
                 "saved_count": len(fresh),
                 "source_count": result.get("source_count", 0),
+                "inward_source_count": result.get("inward_source_count", 0),
+                "outward_source_count": result.get("outward_source_count", 0),
+                "inward_target": result.get("inward_target", 0),
+                "outward_target": result.get("outward_target", 0),
                 "model": result.get("model", ""),
                 "notes": fresh,
             },
