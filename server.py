@@ -2993,6 +2993,7 @@ async def api_desire_state(request):
             "undertow_value": round(undertow_value, 3),
             "warmth": round(warmth, 3),
             "shadow": round(shadow, 3),
+            "current_chord": weather.get("current_chord", ""),
             "warmth_residue": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(weather.get("shadow_residue", 0.0)), 3),
             "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
