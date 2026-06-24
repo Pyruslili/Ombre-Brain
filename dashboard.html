@@ -645,9 +645,9 @@ label {
   display: grid;
   grid-template-columns: minmax(0,1.35fr) minmax(380px,.95fr);
   grid-template-rows: auto auto;
-  grid-template-areas: "dream weather" ". density";
+  grid-template-areas: "dream weather" "dream density";
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
   background: transparent;
 }
 .reverie-card, .config-section {
@@ -660,8 +660,8 @@ label {
 .dream-card {
   position: relative;
   grid-area: dream;
-  height: 400px;
-  min-height: 400px;
+  height: auto;
+  min-height: 560px;
   overflow: hidden;
   isolation: isolate;
   background: linear-gradient(145deg, rgba(37,26,23,.58), rgba(7,5,5,.88));
@@ -815,7 +815,7 @@ label {
 .thought-icon svg { display: block; width: 100%; height: 100%; }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
-.thought-side { grid-column: 2; display: flex; align-items: center; justify-content: flex-start; gap: .65rem; margin-top: 0; }
+.thought-side { grid-column: 2; display: flex; align-items: center; justify-content: space-between; width: 100%; gap: .65rem; margin-top: 0; }
 .thought-actions { display: flex; gap: .42rem; }
 .thought-actions button {
   min-height: 30px;
