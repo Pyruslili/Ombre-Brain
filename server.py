@@ -1234,9 +1234,9 @@ async def nocturne_breath(
 
             lines = [f"Warmth：{pa}", f"Shadow：{na}"]
 
-            # Live Wire：mood_entry[1]——有二级分支时已经是从对应子池里选出来的贴题词
-            lines.append(f"Nox Now：{mood_entry[1]}")
-            # Mood Trace：mood_entry[0]——具体场景一句话，Live Wire的来源
+            # Climate：mood_entry[1]——有二级分支时已经是从对应子池里选出来的贴题词
+            lines.append(f"Climate：{mood_entry[1]}")
+            # Mood Trace：mood_entry[0]——具体场景一句话，Climate的来源
             if mood_entry[0]:
                 lines.append(f"Mood Trace：{mood_entry[0]}")
             _footing_map = {"实": "grounded", "悬": "suspended", "空": "hollow"}
@@ -3120,6 +3120,7 @@ async def api_desire_state(request):
         undertow_value = float(state.get("drives", {}).get(top_drive, 0)) if top_drive else 0.0
         state["mood_trace"] = latest_thought
         state["mood_word"] = mood_entry[1]
+        state["climate"] = mood_entry[1]
         state["weather_residue"] = {
             "warmth": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow": round(float(weather.get("shadow_residue", 0.0)), 3),
@@ -3139,6 +3140,7 @@ async def api_desire_state(request):
             "base_shadow": round(float(weather.get("base_NA", 0.0)), 3),
             "longing": round(float(state.get("longing", 0)), 3),
             "nox_now": mood_entry[1],
+            "climate": mood_entry[1],
             "mood_trace": latest_thought,
         }
         speech_event = load_speech_event_state(config["buckets_dir"])
@@ -3401,6 +3403,16 @@ async def api_soma_report(request):
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    source = (body.get("source") or "").strip()[:40]
+    if body.get("clear"):
+        try:
+            os.makedirs(os.path.dirname(_SOMA_STATE_PATH), exist_ok=True)
+            with open(_SOMA_STATE_PATH, "w") as f:
+                json.dump({"line": None, "chord": None, "source": source or "clear", "updated_at": time.time()}, f)
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=500)
+        return JSONResponse({"ok": True, "cleared": True}, headers={"Access-Control-Allow-Origin": "*"})
+
     line = (body.get("line") or "").strip()
     chord = (body.get("chord") or "").strip()
     if not line:
@@ -3408,7 +3420,7 @@ async def api_soma_report(request):
     try:
         os.makedirs(os.path.dirname(_SOMA_STATE_PATH), exist_ok=True)
         with open(_SOMA_STATE_PATH, "w") as f:
-            json.dump({"line": line, "chord": chord, "updated_at": time.time()}, f)
+            json.dump({"line": line, "chord": chord, "source": source, "updated_at": time.time()}, f)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     return JSONResponse({"ok": True}, headers={"Access-Control-Allow-Origin": "*"})
@@ -3422,11 +3434,11 @@ async def api_soma_state(request):
         with open(_SOMA_STATE_PATH) as f:
             data = json.load(f)
         if time.time() - data.get("updated_at", 0) > _SOMA_STALE_SECONDS:
-            return JSONResponse({"line": None, "chord": None},
+            return JSONResponse({"line": None, "chord": None, "source": None},
                                headers={"Access-Control-Allow-Origin": "*"})
         return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
     except Exception:
-        return JSONResponse({"line": None, "chord": None},
+        return JSONResponse({"line": None, "chord": None, "source": None},
                            headers={"Access-Control-Allow-Origin": "*"})
 
 

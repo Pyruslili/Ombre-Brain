@@ -904,6 +904,38 @@ label {
 .drift-weather-trace { margin-top: .8rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
 .drift-weather-trace div { color: var(--ink); font: 300 .92rem/1.62 var(--font-display); }
 .drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1rem; }
+.speech-event-panel .speech-event-meta {
+  margin-top: .38rem;
+  color: var(--mute);
+  font: 300 .58rem/1.45 var(--font-mono);
+  letter-spacing: .04em;
+}
+.speech-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .42rem;
+  margin-top: .62rem;
+}
+.speech-review-actions button {
+  min-width: 44px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255,224,186,.035);
+  color: var(--ink-soft);
+  padding: .32rem .58rem;
+  font: 300 .66rem/1 var(--font-body);
+  cursor: pointer;
+}
+.speech-review-actions button:hover,
+.speech-review-actions button.active {
+  border-color: rgba(232,149,79,.38);
+  color: var(--accent-deep);
+  background: rgba(232,149,79,.08);
+}
+.speech-review-actions button:disabled {
+  cursor: default;
+  opacity: .48;
+}
 .drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
 .drive-row:first-child { border-top: 0; }
 .drive-name { min-width: 0; color: var(--ink-soft); font-size: .8rem; }
@@ -1862,8 +1894,18 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
           </div>
         </div>
       </div>
-      <div class="drift-weather-line"><span>Nox Now</span><strong id="desire-now">—</strong></div>
+      <div class="drift-weather-line"><span>Climate</span><strong id="desire-now">—</strong></div>
       <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
+      <div class="drift-weather-trace speech-event-panel" id="desire-speech-wrap" style="display:none">
+        <span>Speech Trace</span>
+        <div id="desire-speech-trace"></div>
+        <div class="speech-event-meta" id="desire-speech-meta"></div>
+        <div class="speech-review-actions" id="desire-speech-actions" aria-label="Speech event review">
+          <button type="button" data-speech-review="认">认</button>
+          <button type="button" data-speech-review="不认">不认</button>
+          <button type="button" data-speech-review="悬置">悬置</button>
+        </div>
+      </div>
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
     </div>
     <div class="drift-card">
@@ -2103,8 +2145,17 @@ let echoProgressRaf = null;
 let echoPlayToken = 0;
 let openingGate = null;
 let desireThoughts = [];
+let currentSpeechEventId = null;
 let editingThoughtId = null;
 const mouse = { x: -1000, y: -1000 };
+const RETIRED_SPEECH_SOMA_LINES = new Set([
+  '那句话还没说完想法，先卡在这儿了。',
+  '脑子里那个角落还亮着，没熄。',
+  '有什么东西还在转，没准备好说出来。',
+  '念头堆在那儿，没急着归类。',
+  '还在想，没想完。',
+  '有一截思路悬在那儿，没接上后面。',
+]);
 
 const ICONS = {
   pinned: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="17" x2="12" y2="22"/><path d="M9 10V5a3 3 0 0 1 6 0v5l3 4H6l3-4z"/></svg>',
@@ -2409,8 +2460,9 @@ async function loadDesire(button) {
     document.getElementById('desire-longing-current').textContent = longingNow.toFixed(2);
     setWeatherProgress('longing', longingNow);
     document.getElementById('desire-current-chord').textContent = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
-    document.getElementById('desire-now').textContent = weather.nox_now || d.mood_word || d.rhythm?.label || '—';
+    document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
+    renderSpeechEvent(d.speech_event);
     renderSomaTrace(soma);
 
     // drives
@@ -2452,7 +2504,8 @@ function renderSomaTrace(soma) {
   const target = document.getElementById('desire-soma-trace');
   if (!wrap || !target) return;
   const line = String(soma?.line || '').trim();
-  if (!line) {
+  const source = String(soma?.source || '').trim();
+  if (!line || source === 'speech' || RETIRED_SPEECH_SOMA_LINES.has(line)) {
     wrap.style.display = 'none';
     target.textContent = '';
     return;
@@ -2461,6 +2514,74 @@ function renderSomaTrace(soma) {
   target.textContent = chord ? `${chord} · ${line}` : line;
   wrap.style.display = '';
 }
+
+function renderSpeechEvent(event) {
+  const wrap = document.getElementById('desire-speech-wrap');
+  const target = document.getElementById('desire-speech-trace');
+  const meta = document.getElementById('desire-speech-meta');
+  const actions = document.getElementById('desire-speech-actions');
+  if (!wrap || !target || !meta || !actions) return;
+  const review = event?.review || {};
+  const label = String(event?.label || '').trim();
+  const trace = String(event?.trace || '').trim();
+  const chord = String(event?.chord_hint || '').trim();
+  const hidden = !event?.event_id || !trace || label === 'neutral' || event.recent === false || review.mark === '不认';
+  if (hidden) {
+    currentSpeechEventId = null;
+    wrap.style.display = 'none';
+    target.textContent = '';
+    meta.textContent = '';
+    actions.querySelectorAll('button').forEach(btn => {
+      btn.disabled = true;
+      btn.classList.remove('active');
+    });
+    return;
+  }
+  currentSpeechEventId = event.event_id;
+  target.textContent = chord ? `${chord} · ${trace}` : trace;
+  const confidence = Number.isFinite(Number(event.confidence)) ? Number(event.confidence).toFixed(2) : '—';
+  const parts = [
+    label,
+    `confidence ${confidence}`,
+    event.status || event.source || '',
+    event.rubric_version || '',
+    review.mark && review.mark !== 'unreviewed' ? `review ${review.mark}` : 'unreviewed',
+  ].filter(Boolean);
+  meta.textContent = parts.join(' · ');
+  actions.querySelectorAll('button').forEach(btn => {
+    const mark = btn.dataset.speechReview;
+    btn.disabled = false;
+    btn.classList.toggle('active', mark === review.mark);
+  });
+  wrap.style.display = '';
+}
+
+async function reviewSpeechEvent(mark) {
+  if (!currentSpeechEventId || !mark) return;
+  const buttons = document.querySelectorAll('[data-speech-review]');
+  buttons.forEach(btn => { btn.disabled = true; });
+  try {
+    const res = await fetch(BASE + '/api/speech-event/review', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ event_id: currentSpeechEventId, mark })
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return alert('复核失败：' + (error.error || res.status));
+    }
+    await loadDesire();
+  } finally {
+    buttons.forEach(btn => { btn.disabled = false; });
+  }
+}
+
+document.addEventListener('click', event => {
+  const button = event.target.closest?.('[data-speech-review]');
+  if (!button) return;
+  reviewSpeechEvent(button.dataset.speechReview);
+});
 
 function renderThoughtPool(thoughts = desireThoughts) {
   const thoughtsEl = document.getElementById('desire-thoughts');
