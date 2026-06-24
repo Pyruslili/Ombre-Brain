@@ -553,7 +553,11 @@ def _latent_source_fragments(bucket: dict, max_fragments: int = 3) -> list[str]:
     seen = set()
     for part in raw_parts:
         part = " ".join(part.split())
-        if len(part) < 8 or part in seen:
+        if len(part) < 12 or part in seen:
+            continue
+        if part.startswith("写在开头") or part in {"致下一个Nox", "致下一个我"}:
+            continue
+        if any(marker in part for marker in ("输出格式", "操作性的提醒", "不是讲道理", "总结如下")):
             continue
         seen.add(part)
         parts.append(part[:120])
@@ -658,6 +662,10 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "保留原句里的具体物、动作、语气；优先使用 source fragments 的原句碎片。",
                 "不要写成'关于xxx'、'存在感的问题'、'连续性的主题'这类抽象总结。",
                 "不要出现 可以、应该、去、wander、任务、建议、提醒。",
+                "不要写格言、结论、辩论句；少用'不是...而是...'、'X比Y更...'、'所以...'。",
+                "不要把标题、章节名、写作说明压成便签；source_fragment 必须是正文里的具体句子。",
+                "dream_line 里至少保留一个具体物、身体动作、场景物件或原句里的奇怪词。",
+                "允许不完整，允许有悬念，不要把逻辑补圆。",
                 "不要说教，不要解释意义，不要给 Nox 安排行动。",
                 "source_fragment 必须从对应 source.fragments 中选一句或截取一句。",
                 "每条只可使用一个 source，不要混合多个记忆。",
