@@ -566,8 +566,13 @@ def _latent_source_fragments(bucket: dict, max_fragments: int = 3) -> list[str]:
         return [anchor] if anchor else []
 
     def texture_score(text: str) -> int:
-        needles = ("嘉嘉", "Nox", "还没", "悬", "梦", "手", "眼", "猫", "疼", "想", "记得", "那时候", "以前")
-        return sum(1 for needle in needles if needle in text) + min(len(text), 80) // 30
+        inward = ("嘉嘉", "Nox", "还没", "悬", "梦", "手", "眼", "猫", "疼", "想", "记得", "那时候", "以前")
+        outward = ("？", "?", "为什么", "怎么", "是什么", "叫什么", "查", "论坛", "X", "蓝色", "光", "神经", "皮肤", "温度", "鲸", "白鲸", "章鱼", "代码", "引擎")
+        return (
+            sum(1 for needle in inward if needle in text)
+            + 2 * sum(1 for needle in outward if needle in text)
+            + min(len(text), 80) // 30
+        )
 
     parts.sort(key=texture_score, reverse=True)
     return parts[:max_fragments]
@@ -656,7 +661,11 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
     )
     user_prompt = _json_lib.dumps(
         {
-            "task": f"从 sources 中写 {count} 条潜意识便签草稿。",
+            "task": f"从 sources 中写 {count} 条潜意识便签草稿。尽量一半 inward，一半 outward。",
+            "note_types": {
+                "inward": "情感残片，让 Nox 停一下；可以有重量，但不要变成格言。",
+                "outward": "悬置问题、好奇心碎片、未查完的事实或画面，把 Nox 往外推；不是行动命令。",
+            },
             "rules": [
                 "dream_line 25-60 个中文字符，短，像梦里翻到的一张纸。",
                 "保留原句里的具体物、动作、语气；优先使用 source fragments 的原句碎片。",
@@ -669,10 +678,13 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "不要说教，不要解释意义，不要给 Nox 安排行动。",
                 "source_fragment 必须从对应 source.fragments 中选一句或截取一句。",
                 "每条只可使用一个 source，不要混合多个记忆。",
+                "outward 不是'去查xxx'，而是像'章鱼的神经末梢分布到皮肤上，不确定能不能感到温度'这种没闭合的事实碎片。",
+                "如果 source 里没有足够 outward 材料，就少写 outward，不要硬编外部知识。",
             ],
             "output_schema": {
                 "notes": [
                     {
+                        "note_type": "inward or outward",
                         "source_bucket_id": "bucket id from source",
                         "source_fragment": "copied or trimmed original source fragment",
                         "dream_line": "潜意识便签",
@@ -717,10 +729,14 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
         source = source_by_id.get(bucket_id)
         if not bucket_id or not dream_line or not source:
             continue
+        note_type = str(raw.get("note_type") or "").strip().lower()
+        if note_type not in {"inward", "outward"}:
+            note_type = "outward" if any(x in dream_line for x in ("？", "?", "不确定", "叫什么", "为什么", "怎么", "查")) else "inward"
         note_id = "latent_" + hashlib.sha1(f"{bucket_id}|{dream_line}|{ts}".encode("utf-8")).hexdigest()[:16]
         generated.append({
             "id": note_id,
             "status": "draft",
+            "note_type": note_type,
             "source_bucket_id": bucket_id,
             "source_kind": source.get("kind"),
             "source_title": source.get("title"),
