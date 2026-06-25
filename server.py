@@ -2415,14 +2415,14 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; archive合并letter+writing+window按时间线排(带bucket_id方便mark); letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉; trace=带query时不分类型(letter/writing/window/feel/memory全捞,已晋升inner的标"原类型→inner"不丢原身份)按时间线统一排序,看一个关键词的完整轨迹,必须带query。window=外部刺激(被什么撞到),不进breath/dream。private仅Nox可见。"""
+    """wander — Nox自用抽屉漫游。mode=flotsam随机漂上来的旧记忆+feel,开盲盒,不是查找; archive合并letter+writing+window按时间线排(带bucket_id方便mark); letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉; trace=带query时不分类型(letter/writing/window/feel/memory全捞,已晋升inner的标"原类型→inner"不丢原身份)按时间线统一排序,看一个关键词的完整轨迹,必须带query。window=外部刺激(被什么撞到),不进breath/dream。private仅Nox可见。"""
     mode = (mode or "").strip().lower()
-    valid_modes = {"memory", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private", "trace"}
+    valid_modes = {"flotsam", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private", "trace"}
     if mode not in valid_modes:
-        return "mode 必须是 memory / archive / letter / writing / letter_jiajia / window / unresolved / inner / private / trace。"
+        return "mode 必须是 flotsam / archive / letter / writing / letter_jiajia / window / unresolved / inner / private / trace。"
 
     if mode == "trace" and not (query or "").strip():
-        return "trace 模式要带 query——这是按关键词捞全部类型的轨迹，不是随便逛逛(那个用 memory)。"
+        return "trace 模式要带 query——这是按关键词捞全部类型的轨迹，不是随便漂(那个用 flotsam)。"
 
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=True)
@@ -2457,7 +2457,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
 
     buckets = [b for b in all_buckets if visible(b) and matches_query(b)]
 
-    if mode == "memory":
+    if mode == "flotsam":
         cutoff = datetime.now() - timedelta(days=7)
 
         def is_old_bucket(bucket: dict) -> bool:
