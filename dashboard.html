@@ -1050,17 +1050,32 @@ label {
 .drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 10px rgba(232,149,79,.2); }
 .drive-value {
   justify-self: end;
-  width: 132px;
-  text-align: right;
+  display: grid;
+  grid-template-columns: auto max-content;
+  align-items: center;
+  column-gap: .9rem;
+  width: 100%;
+  max-width: 220px;
+  color: var(--ink);
+}
+.drive-value-main {
+  justify-self: end;
   color: var(--ink);
   font: 300 1.3rem/1 var(--font-number);
+  white-space: nowrap;
 }
-.drive-value small {
+.drive-value-side {
+  display: grid;
+  gap: .1rem;
+  align-content: center;
+  justify-items: start;
+}
+.drive-value-side small {
   display: block;
-  margin-top: .24rem;
   color: var(--mute);
   font: 300 .54rem/1.2 var(--font-mono);
   line-height: 1.22;
+  white-space: nowrap;
 }
 .drive-summary {
   display: flex;
@@ -1101,7 +1116,7 @@ label {
   padding: .72rem .82rem .78rem;
   border: 1px solid rgba(239,224,196,.16);
   border-radius: 16px;
-  background: var(--card);
+  background: var(--bg-deep);
   box-shadow: 0 16px 40px rgba(0,0,0,.12), inset 0 1px rgba(255,255,255,.04);
   transform-origin: top;
   max-height: 0;
@@ -2814,7 +2829,13 @@ async function loadDesire(button) {
       return `<div class="drive-row${isHigh ? ' high' : ''}">
         <div class="drive-name">${esc(DRIVE_LABELS[k] || k)}<small>${esc(k)}</small></div>
         <div class="drive-track"><div class="drive-fill" style="width:${Math.min(100, effPct)}%"></div></div>
-        <div class="drive-value">${pct}%<small>eff ${effPct}%${lf > 0 ? ' · fatigue −' + Math.round(lf * 100) + '%' : ''}</small></div>
+        <div class="drive-value">
+          <span class="drive-value-main">${pct}%</span>
+          <span class="drive-value-side">
+            <small>eff ${effPct}%</small>
+            <small>fatigue ${lf > 0 ? '−' + Math.round(lf * 100) + '%' : '0%'}</small>
+          </span>
+        </div>
         <div class="drive-row-popover">
           <div class="drive-row-popover-line">${detail.overview}</div>
           <div class="drive-row-popover-line">${detail.recent}</div>
