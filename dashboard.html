@@ -756,16 +756,14 @@ label {
 .latent-tabs {
   display: inline-flex;
   gap: .35rem;
-  padding: .22rem;
   margin-bottom: 1rem;
-  border: 1px solid var(--line-soft);
-  background: rgba(255,224,186,.028);
 }
 .latent-tabs button {
   min-height: 30px;
-  border: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
   padding: .42rem .75rem;
-  background: transparent;
+  background: rgba(255,224,186,.018);
   color: var(--mute);
   cursor: pointer;
   font: 300 var(--fs-micro)/1 var(--font-mono);
@@ -774,6 +772,7 @@ label {
 }
 .latent-tabs button.active {
   color: var(--accent-deep);
+  border-color: rgba(232,149,79,.30);
   background: rgba(232,149,79,.08);
 }
 .latent-list { display: grid; gap: .7rem; }
@@ -812,7 +811,7 @@ label {
 .latent-note-editor {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0,1fr) 140px auto;
+  grid-template-columns: minmax(0,1fr) 130px 150px auto;
   gap: .6rem;
   align-items: start;
 }
@@ -4807,6 +4806,7 @@ let latentNotes = [];
 let latentNoteTab = 'draft';
 let latentEditingId = '';
 let latentCreating = false;
+const LATENT_DRIVE_OPTIONS = ['general','attachment','curiosity','reflection','duty','social','fatigue','libido','stress','disgust'];
 
 function latentTypeLabel(type) {
   return type === 'outward' ? 'outward' : 'inward';
@@ -4814,6 +4814,10 @@ function latentTypeLabel(type) {
 
 function latentStatusLabel(status) {
   return status === 'approved' ? '已确认' : '草稿';
+}
+
+function latentDriveLabel(drive) {
+  return LATENT_DRIVE_OPTIONS.includes(drive) ? drive : 'general';
 }
 
 async function loadLatentNotes() {
@@ -4857,6 +4861,7 @@ function renderLatentNoteRow(note) {
   const line = String(note.dream_line || note.line || '');
   const meta = [
     latentTypeLabel(note.note_type),
+    latentDriveLabel(note.drive_tag),
     latentStatusLabel(note.status),
     note.source_kind || '',
     note.source_title || '',
@@ -4880,13 +4885,20 @@ function renderLatentNoteRow(note) {
 function renderLatentEditor(note, isNew) {
   const id = String(note.id || '');
   const type = latentTypeLabel(note.note_type);
+  const drive = latentDriveLabel(note.drive_tag || (type === 'outward' ? 'curiosity' : 'reflection'));
   const line = String(note.dream_line || note.line || '');
+  const driveOptions = LATENT_DRIVE_OPTIONS.map(d =>
+    `<option value="${esc(d)}"${drive === d ? ' selected' : ''}>${esc(d)}</option>`
+  ).join('');
   return `<div class="latent-note-row editing" data-latent-id="${esc(id)}">
     <div class="latent-note-editor">
       <textarea id="latent-line-${esc(id)}" aria-label="潜意识便签">${esc(line)}</textarea>
       <select id="latent-type-${esc(id)}" aria-label="便签类型">
         <option value="inward"${type === 'inward' ? ' selected' : ''}>inward</option>
         <option value="outward"${type === 'outward' ? ' selected' : ''}>outward</option>
+      </select>
+      <select id="latent-drive-${esc(id)}" aria-label="维度标签">
+        ${driveOptions}
       </select>
       <div class="latent-editor-actions">
         <button class="btn-primary" onclick="${isNew ? 'saveNewLatentNote()' : `saveLatentNote('${esc(id)}')`}">保存</button>
@@ -4924,7 +4936,8 @@ function cancelLatentNoteEdit() {
 function latentEditorPayload(id) {
   const line = document.getElementById('latent-line-' + id)?.value.trim() || '';
   const noteType = document.getElementById('latent-type-' + id)?.value || 'inward';
-  return { dream_line: line, note_type: noteType };
+  const driveTag = document.getElementById('latent-drive-' + id)?.value || 'general';
+  return { dream_line: line, note_type: noteType, drive_tag: driveTag };
 }
 
 async function saveNewLatentNote() {

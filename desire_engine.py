@@ -702,8 +702,10 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
 COLLISION_STRENGTH_THRESHOLD = 0.40
 COLLISION_COOLDOWN_SEC = 21600
 COLLISION_DAILY_MAX = 2
+COLLISION_PER_THOUGHT_MAX = 2
 _last_collision: dict = {}
 _collision_today: dict = {"date": "", "count": 0}
+_collision_thought_counts: dict = {}
 
 
 def _collision_synthesize(text_a: str, text_b: str) -> str | None:
@@ -736,6 +738,22 @@ def _collision_synthesize(text_a: str, text_b: str) -> str | None:
         return result if result else None
     except Exception:
         return None
+
+
+def _collision_key(thought: Thought) -> str:
+    return thought.tid or f"{thought.drive}:{thought.text[:48]}"
+
+
+def _can_collision_touch(thought: Thought) -> bool:
+    if getattr(thought, "source", "manual") == "collision":
+        return False
+    return int(_collision_thought_counts.get(_collision_key(thought), 0) or 0) < COLLISION_PER_THOUGHT_MAX
+
+
+def _record_collision_touch(*thoughts: Thought) -> None:
+    for thought in thoughts:
+        key = _collision_key(thought)
+        _collision_thought_counts[key] = int(_collision_thought_counts.get(key, 0) or 0) + 1
 
 
 def _time_decay_factor(elapsed_seconds: float, halflife_hours: float) -> float:
@@ -804,13 +822,18 @@ def tick_thoughts(thoughts: list) -> tuple:
     if _collision_today["date"] != today_str:
         _collision_today["date"] = today_str
         _collision_today["count"] = 0
+        _collision_thought_counts.clear()
     seen_collisions = set()
     for i in range(len(strong)):
         if _collision_today["count"] >= COLLISION_DAILY_MAX:
             break
+        if not _can_collision_touch(strong[i]):
+            continue
         for j in range(i + 1, len(strong)):
             if _collision_today["count"] >= COLLISION_DAILY_MAX:
                 break
+            if not _can_collision_touch(strong[j]):
+                continue
             d1, d2 = strong[i].drive, strong[j].drive
             if d1 == d2:
                 continue
@@ -834,6 +857,7 @@ def tick_thoughts(thoughts: list) -> tuple:
                 source="collision",
             ))
             _last_collision[pair] = now_ts
+            _record_collision_touch(strong[i], strong[j])
             seen_collisions.add(pair)
             _collision_today["count"] += 1
 
@@ -1655,7 +1679,14 @@ class DesireEngine:
         thought = self.store.top_thought(intent["drive_key"])
         result = dict(intent)
         result["thought"] = (
-            {"text": thought.text, "kind": thought.kind, "strength": round(thought.strength, 2)}
+            {
+                "tid": thought.tid,
+                "text": thought.text,
+                "drive": thought.drive,
+                "kind": thought.kind,
+                "strength": round(thought.strength, 2),
+                "source": getattr(thought, "source", "manual"),
+            }
             if thought else None
         )
         return result

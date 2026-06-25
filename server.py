@@ -60,7 +60,7 @@ from decay_engine import DecayEngine
 from embedding_engine import EmbeddingEngine
 from import_memory import ImportEngine
 from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx, now_iso
-from desire_engine import DesireEngine
+from desire_engine import DRIVE_KEYS, DesireEngine
 from speech_event_engine import (
     apply_speech_event_review,
     classify_speech_event_dp,
@@ -226,6 +226,7 @@ LATENT_NOTES_PATH = os.path.join(config["buckets_dir"], "latent_notes.json")
 LATENT_NOTE_POOL_VERSION = 1
 VALID_LATENT_NOTE_STATUSES = {"draft", "approved", "used", "deleted"}
 VALID_LATENT_NOTE_TYPES = {"inward", "outward"}
+VALID_LATENT_NOTE_DRIVES = set(DRIVE_KEYS) | {"general"}
 
 
 def _init_marks_table() -> None:
@@ -545,6 +546,15 @@ def _normalize_latent_note_type(note_type: str) -> str:
     return value if value in VALID_LATENT_NOTE_TYPES else "inward"
 
 
+def _default_latent_drive_tag(note_type: str) -> str:
+    return "curiosity" if _normalize_latent_note_type(note_type) == "outward" else "reflection"
+
+
+def _normalize_latent_drive_tag(drive_tag: str, note_type: str = "") -> str:
+    value = str(drive_tag or "").strip().lower()
+    return value if value in VALID_LATENT_NOTE_DRIVES else _default_latent_drive_tag(note_type)
+
+
 def _latent_note_line(note: dict) -> str:
     return " ".join(str(note.get("dream_line") or note.get("line") or "").split())
 
@@ -572,6 +582,7 @@ def _approved_latent_note_payload(note: dict) -> dict | None:
     return {
         "kind": "latent_pool",
         "note_type": _normalize_latent_note_type(note.get("note_type")),
+        "drive_tag": _normalize_latent_drive_tag(note.get("drive_tag"), note.get("note_type")),
         "note_id": note_id,
         "bucket_id": note_id,
         "source_bucket_id": note.get("source_bucket_id", ""),
@@ -585,9 +596,11 @@ def _approved_latent_note_payload(note: dict) -> dict | None:
     }
 
 
-def _select_approved_latent_note(exclude_ids: set[str]) -> dict | None:
+def _select_approved_latent_note(exclude_ids: set[str], drive_key: str = "") -> dict | None:
     data = _load_latent_notes()
-    pool = []
+    drive_key = str(drive_key or "").strip().lower()
+    matching = []
+    general = []
     for note in data.get("notes", []):
         if note.get("status") != "approved":
             continue
@@ -595,8 +608,14 @@ def _select_approved_latent_note(exclude_ids: set[str]) -> dict | None:
         if not note_id or note_id in exclude_ids:
             continue
         payload = _approved_latent_note_payload(note)
-        if payload:
-            pool.append(payload)
+        if not payload:
+            continue
+        tag = payload.get("drive_tag", "general")
+        if drive_key and tag == drive_key:
+            matching.append(payload)
+        elif tag == "general" or not drive_key:
+            general.append(payload)
+    pool = matching or general
     return random.choice(pool) if pool else None
 
 
@@ -866,6 +885,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
             "id": note_id,
             "status": "draft",
             "note_type": note_type,
+            "drive_tag": _default_latent_drive_tag(note_type),
             "source_bucket_id": bucket_id,
             "source_kind": source.get("kind"),
             "source_title": source.get("title"),
@@ -3691,7 +3711,8 @@ async def api_heartbeat_latent_note(request):
     from starlette.responses import JSONResponse
     raw_exclude = request.query_params.get("exclude", "")
     exclude_ids = {x.strip() for x in raw_exclude.split(",") if x.strip()}
-    approved_note = _select_approved_latent_note(exclude_ids)
+    drive_key = request.query_params.get("drive_key", "")
+    approved_note = _select_approved_latent_note(exclude_ids, drive_key=drive_key)
     if approved_note:
         return JSONResponse(
             {"note": approved_note, "source": "approved_pool", "candidate_count": 1},
@@ -3797,10 +3818,12 @@ async def api_latent_notes_create(request):
         return JSONResponse({"ok": False, "error": "dream_line required"}, status_code=400,
                             headers={"Access-Control-Allow-Origin": "*"})
     ts = _latent_note_ts()
+    note_type = _normalize_latent_note_type(body.get("note_type"))
     note = {
         "id": "latent_manual_" + secrets.token_hex(8),
         "status": _normalize_latent_note_status(body.get("status"), "draft"),
-        "note_type": _normalize_latent_note_type(body.get("note_type")),
+        "note_type": note_type,
+        "drive_tag": _normalize_latent_drive_tag(body.get("drive_tag"), note_type),
         "source_bucket_id": "",
         "source_kind": "manual",
         "source_title": str(body.get("source_title") or "手动便签").strip()[:80],
@@ -3843,6 +3866,10 @@ async def api_latent_notes_update(request):
         note["dream_line"] = dream_line[:120]
     if "note_type" in body:
         note["note_type"] = _normalize_latent_note_type(body.get("note_type"))
+        if "drive_tag" not in body:
+            note["drive_tag"] = _normalize_latent_drive_tag(note.get("drive_tag"), note.get("note_type"))
+    if "drive_tag" in body:
+        note["drive_tag"] = _normalize_latent_drive_tag(body.get("drive_tag"), note.get("note_type"))
     if "status" in body:
         note["status"] = _normalize_latent_note_status(body.get("status"), note.get("status") or "draft")
     note["updated_at"] = _latent_note_ts()
