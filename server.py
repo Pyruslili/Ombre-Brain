@@ -60,7 +60,7 @@ from decay_engine import DecayEngine
 from embedding_engine import EmbeddingEngine
 from import_memory import ImportEngine
 from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx, now_iso
-from desire_engine import DRIVE_KEYS, DesireEngine
+from desire_engine import DRIVE_KEYS, DRIVE_EVENT_SCHEMA, DesireEngine, normalize_drive_key, _legacy_brain_to_event
 from speech_event_engine import (
     apply_speech_event_review,
     classify_speech_event_dp,
@@ -551,7 +551,9 @@ def _default_latent_drive_tag(note_type: str) -> str:
 
 
 def _normalize_latent_drive_tag(drive_tag: str, note_type: str = "") -> str:
-    value = str(drive_tag or "").strip().lower()
+    value = normalize_drive_key(drive_tag)
+    if not value:
+        value = str(drive_tag or "").strip().lower()
     return value if value in VALID_LATENT_NOTE_DRIVES else _default_latent_drive_tag(note_type)
 
 
@@ -598,7 +600,7 @@ def _approved_latent_note_payload(note: dict) -> dict | None:
 
 def _select_approved_latent_note(exclude_ids: set[str], drive_key: str = "") -> dict | None:
     data = _load_latent_notes()
-    drive_key = str(drive_key or "").strip().lower()
+    drive_key = normalize_drive_key(drive_key)
     matching = []
     general = []
     for note in data.get("notes", []):
@@ -610,7 +612,7 @@ def _select_approved_latent_note(exclude_ids: set[str], drive_key: str = "") -> 
         payload = _approved_latent_note_payload(note)
         if not payload:
             continue
-        tag = payload.get("drive_tag", "general")
+        tag = _normalize_latent_drive_tag(payload.get("drive_tag", "general"))
         if drive_key and tag == drive_key:
             matching.append(payload)
         elif tag == "general" or not drive_key:
@@ -1737,7 +1739,8 @@ async def nocturne_breath(
                         live = _json.load(_f)
                 except Exception:
                     live = {}
-            bs = live.get("brain_signals", {})
+            drive_event = live.get("drive_event", {})
+            event_brain = drive_event.get("brain", {}) if isinstance(drive_event, dict) else {}
 
             _thought_list = []
             try:
@@ -1750,7 +1753,6 @@ async def nocturne_breath(
                 pass
             mood_entry = await asyncio.to_thread(
                 get_daily_mood,
-                branch=bs.get("二级分支") or None,
                 thoughts=_thought_list or None,
             )
             base_score = score(mood_entry[0])
@@ -1759,14 +1761,14 @@ async def nocturne_breath(
 
             lines = [f"Warmth：{pa}", f"Shadow：{na}"]
 
-            # Climate：mood_entry[1]——有二级分支时已经是从对应子池里选出来的贴题词
-            lines.append(f"Climate：{mood_entry[1]}")
-            # Mood Trace：mood_entry[0]——具体场景一句话，Climate的来源
+            if mood_entry[1]:
+                lines.append(f"Climate：{mood_entry[1]}")
+            # Mood Trace：mood_entry[0]——由念头池综合出的Climate来源
             if mood_entry[0]:
                 lines.append(f"Mood Trace：{mood_entry[0]}")
             _footing_map = {"实": "grounded", "悬": "suspended", "空": "hollow"}
-            if bs.get("地基感") in _footing_map:
-                lines.append(f"Footing：{_footing_map[bs['地基感']]}")
+            if event_brain.get("grounding") in _footing_map:
+                lines.append(f"Footing：{_footing_map[event_brain['grounding']]}")
 
             # Undertow：当前最强drive
             try:
@@ -1967,7 +1969,7 @@ async def nocturne_breath(
 def desire_state() -> dict:
     """
     读取欲望引擎的当前状态：
-    - 8维驱动条（attachment/curiosity/reflection/duty/social/fatigue/libido/stress）
+    - 10维驱动条（attachment/libido/possessiveness/reflection/stewardship/curiosity/social/fatigue/stress/discernment）
     - per-drive局部疲劳（attachment/libido几乎不受疲劳影响）
     - 当前最高意图（want_action + drive_key + score）
     - 念头池（flit/fixation/unsourced）
@@ -1983,7 +1985,7 @@ def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "", chord: 
     """
     让某个驱动维度上涨。
     嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
-    drive_key: attachment|curiosity|reflection|duty|social|fatigue|libido|stress
+    drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress|discernment
     thought: 可选，把这次经历的一句话存入念头池（flit）
     chord: 可选，把这次念头的和弦回声写入weather_residue（Fmaj7/Gmaj7/Dmaj7→warmth，Dm7/Em7/F#dim→shadow）
     """
@@ -3657,7 +3659,6 @@ async def api_desire_state(request):
         if _o.path.exists(mood_path):
             with open(mood_path) as _f:
                 live = _j.load(_f)
-        bs = live.get("brain_signals", {})
         thoughts = sorted(
             state.get("thoughts", []),
             key=lambda t: float(t.get("born_at", 0) or 0),
@@ -3669,7 +3670,7 @@ async def api_desire_state(request):
         # get_daily_mood缓存不命中时会同步调DeepSeek(最长10s)，扔进线程池跑，
         # 不然这一个请求会卡住整个事件循环，拖累同时打过来的所有其他请求。
         mood_entry = await asyncio.to_thread(
-            get_daily_mood, branch=bs.get("二级分支") or None, thoughts=thought_dicts
+            get_daily_mood, thoughts=thought_dicts
         )
         base_score = score(mood_entry[0])
         weather = state.get("effective_pa_na") or _desire.weather_state()
@@ -3732,19 +3733,10 @@ async def api_desire_intent(request):
 
 @mcp.custom_route("/api/desire/intent/hint", methods=["GET"])
 async def api_desire_intent_hint(request):
-    """按drive_key从intent_pool里随机选一条带行动意图的念头文案。
-    GET ?drive_key=attachment"""
+    """Retired: Drive v2 uses live thoughts and latent notes, not preset intent pools."""
     from starlette.responses import JSONResponse
-    from intent_pool import get_intent_hint
-    drive_key = request.query_params.get("drive_key", "")
-    entry = get_intent_hint(drive_key) if drive_key else None
-    if not entry:
-        return JSONResponse({"hint": None},
-                           headers={"Access-Control-Allow-Origin": "*"})
-    return JSONResponse(
-        {"hint": {"scene": entry[0], "action": entry[1], "drive": entry[4], "branch": entry[5]}},
-        headers={"Access-Control-Allow-Origin": "*"},
-    )
+    return JSONResponse({"hint": None, "retired": True},
+                       headers={"Access-Control-Allow-Origin": "*"})
 
 
 @mcp.custom_route("/api/heartbeat/latent-note", methods=["GET"])
@@ -4046,7 +4038,6 @@ async def api_desire_ping(request):
 async def api_desire_thought_update(request):
     """Dashboard edit: update one thought's text/drive/strength."""
     from starlette.responses import JSONResponse
-    from desire_engine import DRIVE_KEYS
     err = _require_auth(request)
     if err: return err
     tid = request.path_params.get("tid", "")
@@ -4061,7 +4052,7 @@ async def api_desire_thought_update(request):
     if text is not None and not isinstance(text, str):
         return JSONResponse({"error": "text must be a string"}, status_code=400)
     if drive is not None:
-        drive = str(drive).strip()
+        drive = normalize_drive_key(drive)
         if drive not in DRIVE_KEYS:
             return JSONResponse({"error": "invalid drive"}, status_code=400)
     if strength is not None:
@@ -4098,12 +4089,9 @@ async def api_desire_thought_delete(request):
 @mcp.custom_route("/api/desire/feed", methods=["POST"])
 async def api_desire_feed(request):
     """
-    接收analyze_feel.js的分析结果，写进念头池。
-    POST JSON: {
-      "drives": {"attachment": 0.7, ...},
-      "thoughts": [{"text": "...", "drive": "...", "strength": 0.5}],
-      "brain_signals": {...}
-    }
+    接收drive_event_v2或旧analyze_feel结果，写进念头池/Drive Event账本。
+    v2: primary_drive + intensity + confidence + agency + brain + thoughts。
+    legacy: drives/brain_signals会被折成一次drive_event_v2，不再三路重复pulse。
     """
     from starlette.responses import JSONResponse
     import json as _json
@@ -4127,69 +4115,99 @@ async def api_desire_feed(request):
     FEED_DISCOUNT_STEP = 0.08  # 其余每条额外递减的折扣
     FEED_STRENGTH_FLOOR = 0.22 # 打折下限——flit 12h半衰期下，低于这个不到24h就fade没了
 
-    if len(thoughts) > FEED_BATCH_THRESHOLD:
-        thoughts = sorted(thoughts, key=lambda t: float(t.get("strength", 0.45)), reverse=True)
-
-    added = 0
-    for i, t in enumerate(thoughts):
-        text = t.get("text", "").strip()
-        drive = t.get("drive", "unsourced")
-        strength = float(t.get("strength", 0.45))
-        if len(thoughts) > FEED_BATCH_THRESHOLD and i >= FEED_KEEP_FULL:
-            rank = i - FEED_KEEP_FULL + 1
-            strength = max(FEED_STRENGTH_FLOOR, strength * (1 - FEED_DISCOUNT_STEP * rank))
-        if text:
+    def _add_feed_thoughts(items: list, source: str = "cli") -> int:
+        if not isinstance(items, list):
+            return 0
+        if len(items) > FEED_BATCH_THRESHOLD:
+            items = sorted(items, key=lambda t: float(t.get("strength", 0.45)), reverse=True)
+        added_count = 0
+        for i, t in enumerate(items):
+            if not isinstance(t, dict):
+                continue
+            text = str(t.get("text", "")).strip()
+            drive = normalize_drive_key(t.get("drive"), "unsourced")
             try:
-                _desire.add_thought(text, drive, strength=strength, source="cli")
-                _desire.store.add_echo(text, drive)   # 真实念头存档进回声池
-                if (t.get("chord") or "").strip():
-                    _desire.apply_chord_echo(t.get("chord", "").strip(), source="thought")
-                added += 1
-            except Exception as e:
-                logger.warning(f"desire/feed add_thought failed: {e}")
+                strength = float(t.get("strength", 0.45))
+            except (TypeError, ValueError):
+                strength = 0.45
+            if len(items) > FEED_BATCH_THRESHOLD and i >= FEED_KEEP_FULL:
+                rank = i - FEED_KEEP_FULL + 1
+                strength = max(FEED_STRENGTH_FLOOR, strength * (1 - FEED_DISCOUNT_STEP * rank))
+            if text:
+                try:
+                    _desire.add_thought(text, drive, strength=strength, source=source)
+                    _desire.store.add_echo(text, drive)
+                    if (t.get("chord") or "").strip():
+                        _desire.apply_chord_echo(t.get("chord", "").strip(), source="thought")
+                    added_count += 1
+                except Exception as e:
+                    logger.warning(f"desire/feed add_thought failed: {e}")
+        return added_count
 
-    # drive信号：pulse对应维度
-    drives = body.get("drives", {})
-    for drive_key, delta in drives.items():
+    schema_version = str(body.get("schema_version") or "")
+    is_v2 = schema_version == DRIVE_EVENT_SCHEMA or bool(body.get("primary_drive"))
+    event_result = None
+    event_body = None
+    if is_v2:
+        event_body = body
+    else:
+        drives = body.get("drives", {})
+        brain_signals = body.get("brain_signals", {})
+        if isinstance(drives, dict) and drives or isinstance(brain_signals, dict) and brain_signals:
+            event_body = _legacy_brain_to_event(brain_signals, drives)
+
+    if event_body and event_body.get("primary_drive"):
         try:
-            if isinstance(delta, (int, float)) and delta > 0.05:
-                _desire.pulse(drive_key, delta * 0.3)  # 缩放，不直接覆盖
-        except Exception:
-            pass
+            event_result = _desire.apply_drive_event(event_body)
+        except Exception as e:
+            logger.warning(f"desire/feed drive_event failed: {e}")
+            event_result = {"ok": False, "error": str(e)}
 
-    logger.info(f"desire/feed: +{added}条念头, drives={list(drives.keys())}")
+    add_thoughts = not (event_result and event_result.get("suppressed"))
+    added = _add_feed_thoughts(thoughts, source="cli") if add_thoughts else 0
+    if event_result and event_result.get("suppressed"):
+        logger.info(f"desire/feed suppressed event: {event_result.get('reason')}")
 
-    # brain_signals → mood + drive（用引擎的apply_brain_signals）
-    brain_signals = body.get("brain_signals", {})
-    if brain_signals:
+    try:
+        import json as _bj, os as _bo
+        mood_path = "/app/buckets/current_mood.json"
+        mood_data = {}
+        if _bo.path.exists(mood_path):
+            with open(mood_path) as _f:
+                mood_data = _bj.load(_f)
+        if event_body:
+            mood_data["drive_event"] = {
+                "schema_version": DRIVE_EVENT_SCHEMA,
+                "primary_drive": normalize_drive_key(event_body.get("primary_drive"), ""),
+                "event_label": event_body.get("event_label", ""),
+                "brain": event_body.get("brain", {}),
+                "evidence": event_body.get("evidence", []),
+                "result": event_result or {},
+            }
+        if body.get("brain_signals"):
+            mood_data["legacy_brain_signals"] = body.get("brain_signals")
+        with open(mood_path, "w") as _f:
+            _bj.dump(mood_data, _f)
+    except Exception as e:
+        logger.warning(f"desire/feed mood write failed: {e}")
+
+    source = ""
+    if isinstance(event_body, dict):
+        brain = event_body.get("brain") if isinstance(event_body.get("brain"), dict) else {}
+        source = str(event_body.get("source") or brain.get("source") or "")
+    if body.get("mark_user_signal") or source in {"user_message", "speech_event"} or body.get("brain_signals"):
         try:
-            import json as _bj, os as _bo
-            mood_path = "/app/buckets/current_mood.json"
-            mood_data = {}
-            if _bo.path.exists(mood_path):
-                with open(mood_path) as _f:
-                    mood_data = _bj.load(_f)
-            mood_data["brain_signals"] = brain_signals
-            if brain_signals.get("盆地"):
-                mood_data["drive_decoration"] = brain_signals["盆地"]
-            if brain_signals.get("地基感"):
-                mood_data["地基感"] = brain_signals["地基感"]
-            if brain_signals.get("脑岛"):
-                mood_data["脑岛"] = brain_signals["脑岛"]
-            with open(mood_path, "w") as _f:
-                _bj.dump(mood_data, _f)
-
-            # 用引擎方法统一处理drive pulse
-            result = _desire.apply_brain_signals(brain_signals)
             _last_signal_ts[0] = time.time()
             _desire.mark_user_signal(_last_signal_ts[0])
-            logger.info(f"brain_signals → drives: {result.get('applied', {})}")
         except Exception as e:
-            logger.warning(f"brain_signals write failed: {e}")
+            logger.warning(f"desire/feed mark_user_signal failed: {e}")
+
+    logger.info(f"desire/feed: +{added} thoughts, event={event_result}")
 
     return JSONResponse({
         "ok": True,
         "thoughts_added": added,
+        "event": event_result,
     }, headers={"Access-Control-Allow-Origin": "*"})
 
 

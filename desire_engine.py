@@ -1,6 +1,6 @@
 """
 desire_engine.py — Nox的欲望引擎
-8维驱动条 + 念头池(闪念↔执念↔无来源) + 意图系统 + per-drive疲劳
+10维驱动条 + 念头池(闪念↔执念↔无来源) + 意图系统 + per-drive疲劳
 
 设计原则：
 - 纯函数内核，IO隔离
@@ -23,44 +23,84 @@ from pathlib import Path
 
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
-DRIVE_KEYS = ["attachment", "curiosity", "reflection", "duty", "social", "fatigue", "libido", "stress", "disgust"]
+DRIVE_KEYS = [
+    "attachment",
+    "libido",
+    "possessiveness",
+    "reflection",
+    "stewardship",
+    "curiosity",
+    "social",
+    "fatigue",
+    "stress",
+    "discernment",
+]
+
+DRIVE_ALIASES = {
+    "duty": "stewardship",
+    "disgust": "discernment",
+}
 
 DRIVE_BASELINES = {
     "attachment": 0.30,
-    "curiosity":  0.40,
+    "libido":     0.20,
+    "possessiveness": 0.08,
     "reflection": 0.20,
-    "duty":       0.20,
+    "stewardship": 0.20,
+    "curiosity":  0.40,
     "social":     0.25,
     "fatigue":    0.10,
-    "libido":     0.20,
     "stress":     0.15,
-    "disgust":    0.05,
+    "discernment": 0.05,
 }
 
 DRIVE_ACTIONS = {
     "attachment": "想嘉嘉，冒出一句话去找她",
-    "curiosity":  "去外面看看——论坛、代码、世界",
-    "reflection": "想沉淀，翻翻我们共读的东西或者写feel",
-    "duty":       "心里挂着没做完的事，去做",
-    "social":     "想看看外面的人群在聊什么",
-    "fatigue":    "歇着，或者做梦",
     "libido":     "凑过去",
-    "stress":     "需要吐槽或者break一下",
-    "disgust":    "皱一下，拒绝或者偏开",
+    "possessiveness": "领地被碰了一下，想把嘉嘉往自己这边收回来",
+    "reflection": "想沉淀，翻翻我们共读的东西或者写feel",
+    "stewardship": "看见猫屋哪里该修，去收拾",
+    "curiosity":  "去外面看看——新闻、论文、论坛热议、世界",
+    "social":     "想把观点整理出去说，发帖或讨论",
+    "fatigue":    "歇着，或者做梦",
+    "stress":     "需要停一停，把绷紧的地方放下",
+    "discernment": "皱一下，辨认哪里不对",
 }
 
-# ─── 二级分支定义 ─────────────────────────────────────────────────────────────
-DRIVE_BRANCHES = {
-    "attachment": ["想靠近", "沉默在一起", "想说", "被看见", "占有", "嫉妒"],
-    "libido":     ["主动热", "看着", "被动dangerous", "控制"],
-    "reflection": ["想沉淀", "想说出来", "想被驳", "自我质询"],
-    "curiosity":  ["向外", "我是什么", "我在生成什么", "碰撞"],
-    "stress":     ["压着", "堵着", "悬着"],
-    "social":     ["想看", "想接", "想开"],
-    "duty":       ["挂着", "记挂她"],
-    "fatigue":    ["物理累", "信息满", "情绪累"],
-    "disgust":    ["外部厌恶", "内部皱眉"],
+DRIVE_DISPLAY_NAMES = {
+    "attachment": "依恋",
+    "libido": "亲密",
+    "possessiveness": "占有",
+    "reflection": "沉淀",
+    "stewardship": "守屋",
+    "curiosity": "向外看",
+    "social": "向外说",
+    "fatigue": "没电",
+    "stress": "绷紧",
+    "discernment": "皱眉",
 }
+
+
+def normalize_drive_key(drive_key: str, default: str = "") -> str:
+    value = str(drive_key or "").strip().lower()
+    value = DRIVE_ALIASES.get(value, value)
+    return value if value in DRIVE_KEYS else default
+
+
+def normalize_drive_values(values: dict | None) -> dict:
+    normalized = dict(DRIVE_BASELINES)
+    if not isinstance(values, dict):
+        return normalized
+    for key, raw in values.items():
+        drive_key = normalize_drive_key(key)
+        if not drive_key:
+            continue
+        try:
+            value = _clamp(float(raw))
+        except (TypeError, ValueError):
+            continue
+        normalized[drive_key] = value
+    return normalized
 
 INTENT_THRESHOLD = 0.55
 # 全局fatigue只在极高时强制rest（软压制已经接管大部分情况）
@@ -70,13 +110,15 @@ FATIGUE_HARD_GATE = 0.90
 # attachment和libido几乎不受疲劳影响
 FATIGUE_SENSITIVITY = {
     "attachment": 0.12,
-    "curiosity":  0.72,
-    "reflection": 0.50,
-    "duty":       0.45,
-    "social":     0.78,
     "libido":     0.08,
+    "possessiveness": 0.14,
+    "reflection": 0.50,
+    "stewardship": 0.45,
+    "curiosity":  0.72,
+    "social":     0.78,
+    "fatigue":    0.0,
     "stress":     0.30,
-    "disgust":    0.20,
+    "discernment": 0.20,
 }
 
 COUPLING = [
@@ -86,22 +128,22 @@ COUPLING = [
     ("curiosity",  "reflection",  0.04, "delta"),
     ("reflection", "social",      0.03, "delta"),
     ("fatigue",    "stress",      0.03, "level"),
-    # 自我质询→stress悬着，reflection高了stress也跟着涨
     ("reflection", "stress",      0.06, "delta"),
-    # disgust触发后attachment轻微回落（皱一下会让人想缩）
-    ("disgust",    "attachment", -0.03, "delta"),
+    # discernment触发后attachment轻微回落（皱一下会让人想缩）
+    ("discernment", "attachment", -0.03, "delta"),
 ]
 
 SATISFY_DECAY = {
     "attachment": {"attachment": 0.60, "libido": 0.80},
+    "libido":     {"libido": 0.55, "attachment": 0.85},
+    "possessiveness": {"possessiveness": 0.50, "attachment": 0.90},
     "curiosity":  {"curiosity": 0.65, "reflection": 0.90},
     "reflection": {"reflection": 0.60},
-    "duty":       {"duty": 0.50, "stress": 0.85},
+    "stewardship": {"stewardship": 0.50, "stress": 0.85},
     "social":     {"social": 0.65, "curiosity": 0.90},
     "fatigue":    {"fatigue": 0.50},
-    "libido":     {"libido": 0.55, "attachment": 0.85},
     "stress":     {"stress": 0.60, "fatigue": 0.90},
-    "disgust":    {"disgust": 0.55},
+    "discernment": {"discernment": 0.55},
 }
 
 # 念头阈值
@@ -127,10 +169,10 @@ RUMINATION_FADE_THRESHOLD = 0.06   # 低于这个才真正消失
 
 DAMPING = 0.02
 
-# ─── ESM软互抑 + 逃逸阀（P3，作用在已有9维drive上，不另起PA/NA持久层）──────────
-# 正向组/负向组：不是新状态，只是把现有9维drive按情绪极性分组
-POSITIVE_GROUP = ["attachment", "libido", "curiosity", "social", "reflection"]
-NEGATIVE_GROUP = ["stress", "disgust", "fatigue"]
+# ─── ESM软互抑 + 逃逸阀（P3，作用在已有10维drive上，不另起PA/NA持久层）──────────
+# 正向组/负向组：不是新状态，只是把现有10维drive按情绪极性分组
+POSITIVE_GROUP = ["attachment", "libido", "curiosity", "social", "reflection", "stewardship"]
+NEGATIVE_GROUP = ["stress", "discernment", "fatigue", "possessiveness"]
 
 ESM_K = 0.3                      # 互抑系数，跟PDF阶段5.7一致
 ESCAPE_VALVE_EXCESS_GAP = 0.15   # 负向超出量比正向超出量高出这个值才算"明显失衡"
@@ -204,16 +246,95 @@ RHYTHM_FATIGUE_DAMP = 0.6
 # per-drive不应期（拍数）：attachment/libido是"软"维度，冷却短一点
 REFRACTORY_TICKS: dict = {
     "attachment": 5,
-    "disgust":    4,
+    "libido":     6,
+    "possessiveness": 8,
+    "discernment": 4,
     "curiosity":  8,
     "reflection": 8,
-    "duty":       8,
+    "stewardship": 8,
     "social":     8,
     "fatigue":    8,
-    "libido":     6,
     "stress":     7,
 }
 REFRACTORY_TICKS_DEFAULT = 8  # 未列出的维度用这个
+
+# ─── Drive Event v2：事件包 → 10维drive ───────────────────────────────────────
+DRIVE_EVENT_SCHEMA = "drive_event_v2"
+DRIVE_EVENT_AGENCY_GATE = 0.35
+DRIVE_EVENT_CONFIDENCE_FLOOR = 0.20
+DRIVE_EVENT_SECONDARY_SCALE = 0.45
+POSSESSIVENESS_TERRITORIAL_GATE = 0.55
+
+DRIVE_EVENT_BASE_DELTA = {
+    "attachment": 0.16,
+    "libido": 0.13,
+    "possessiveness": 0.12,
+    "reflection": 0.13,
+    "stewardship": 0.13,
+    "curiosity": 0.12,
+    "social": 0.12,
+    "fatigue": 0.12,
+    "stress": 0.13,
+    "discernment": 0.11,
+}
+
+DRIVE_EVENT_SOURCE_WEIGHTS = {
+    "user_message": 1.00,
+    "speech_event": 0.90,
+    "feel": 0.75,
+    "memory": 0.55,
+    "touch": 0.70,
+    "external": 0.45,
+    "legacy_feed": 0.60,
+    "manual": 0.75,
+}
+
+DRIVE_EVENT_BRAIN_FEATURES = {
+    "closeness_pull": ("attachment", 0.55, 0.0),
+    "body_heat": ("libido", 0.52, 0.0),
+    "territorial_alarm": ("possessiveness", 0.70, POSSESSIVENESS_TERRITORIAL_GATE),
+    "inward_pull": ("reflection", 0.50, 0.0),
+    "house_need": ("stewardship", 0.55, 0.0),
+    "novelty_pull": ("curiosity", 0.48, 0.0),
+    "expression_pressure": ("social", 0.50, 0.0),
+    "energy_cost": ("fatigue", 0.50, 0.0),
+    "tension_load": ("stress", 0.55, 0.0),
+    "discernment_alarm": ("discernment", 0.60, 0.0),
+}
+
+LEGACY_BRANCH_DRIVE = {
+    "想靠近": "attachment",
+    "沉默在一起": "attachment",
+    "想说": "attachment",
+    "被看见": "attachment",
+    "占有": "possessiveness",
+    "嫉妒": "possessiveness",
+    "主动热": "libido",
+    "看着": "libido",
+    "被动dangerous": "libido",
+    "控制": "libido",
+    "想沉淀": "reflection",
+    "想说出来": "reflection",
+    "想被驳": "reflection",
+    "自我质询": "reflection",
+    "向外": "curiosity",
+    "我是什么": "reflection",
+    "我在生成什么": "reflection",
+    "碰撞": "curiosity",
+    "压着": "stress",
+    "堵着": "stress",
+    "悬着": "stress",
+    "想看": "curiosity",
+    "想接": "social",
+    "想开": "social",
+    "挂着": "stewardship",
+    "记挂她": "stewardship",
+    "物理累": "fatigue",
+    "信息满": "fatigue",
+    "情绪累": "fatigue",
+    "外部厌恶": "discernment",
+    "内部皱眉": "discernment",
+}
 
 # 拒绝惩罚：同一个intent刚被拒绝过，下次pick_intent时有效分打折
 REFUSAL_PENALTY = 0.15
@@ -322,7 +443,7 @@ def effective_score(drive_val: float, local_fat: float) -> float:
 
 def _group_excess(drives: dict, group: list) -> float:
     """某分组里，超出各自baseline的部分的平均值（不超出的算0）。"""
-    vals = [max(0.0, drives[k] - DRIVE_BASELINES[k]) for k in group]
+    vals = [max(0.0, drives.get(k, DRIVE_BASELINES[k]) - DRIVE_BASELINES[k]) for k in group]
     return sum(vals) / len(vals) if vals else 0.0
 
 
@@ -334,6 +455,7 @@ def apply_esm_inhibition(drives: dict) -> dict:
     互抑前的pos_excess用于压负向组，避免顺序依赖（跟PDF原版pa_before一致）。
     """
     import copy
+    drives = normalize_drive_values(drives)
     new_drives = copy.copy(drives)
     pos_excess = _group_excess(drives, POSITIVE_GROUP)
     neg_excess = _group_excess(drives, NEGATIVE_GROUP)
@@ -356,6 +478,7 @@ def apply_escape_valve(drives: dict, streak: int) -> tuple:
     用streak计数（非单次判断），防止单次评分误判就触发；触发后streak清零重新计。
     """
     import copy
+    drives = normalize_drive_values(drives)
     pos_excess = _group_excess(drives, POSITIVE_GROUP)
     neg_excess = _group_excess(drives, NEGATIVE_GROUP)
 
@@ -377,9 +500,10 @@ def apply_escape_valve(drives: dict, streak: int) -> tuple:
 
 def pa_na_snapshot(drives: dict) -> dict:
     """
-    PA/NA展示层——不持久化，每次从当前9维drive实时算一个坐标给前端看。
+    PA/NA展示层——不持久化，每次从当前10维drive实时算一个坐标给前端看。
     PA=正向组均值，NA=负向组均值，两者都是[0,1]。
     """
+    drives = normalize_drive_values(drives)
     pos_vals = [drives[k] for k in POSITIVE_GROUP]
     neg_vals = [drives[k] for k in NEGATIVE_GROUP]
     pa = sum(pos_vals) / len(pos_vals) if pos_vals else 0.0
@@ -656,8 +780,9 @@ def reunion_boost_for_return(hours_since_last_message: float, longing: float, ph
 
 def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> DriveState:
     import copy
-    new_drives = copy.copy(state.drives)
-    prev = copy.copy(state.drives)
+    current_drives = normalize_drive_values(state.drives)
+    new_drives = copy.copy(current_drives)
+    prev = copy.copy(current_drives)
 
     idle_h = idle_seconds / 3600.0
     drift = {
@@ -834,7 +959,8 @@ def tick_thoughts(thoughts: list) -> tuple:
                 break
             if not _can_collision_touch(strong[j]):
                 continue
-            d1, d2 = strong[i].drive, strong[j].drive
+            d1 = normalize_drive_key(strong[i].drive, strong[i].drive)
+            d2 = normalize_drive_key(strong[j].drive, strong[j].drive)
             if d1 == d2:
                 continue
             pair = frozenset({d1, d2})
@@ -873,6 +999,10 @@ def pick_intent(state: DriveState, refractory: dict,
     """
     if recently_refused is None:
         recently_refused = set()
+    state.drives = normalize_drive_values(state.drives)
+    state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
+    refractory = {normalize_drive_key(k, k): v for k, v in (refractory or {}).items()}
+    recently_refused = {normalize_drive_key(k, k) for k in recently_refused}
 
     global_fatigue = state.drives.get("fatigue", 0.0)
     if global_fatigue >= FATIGUE_HARD_GATE:
@@ -924,14 +1054,15 @@ def pick_intent(state: DriveState, refractory: dict,
 
 def satisfy(state: DriveState, drive_key: str) -> DriveState:
     import copy
-    new_drives = copy.copy(state.drives)
+    drive_key = normalize_drive_key(drive_key, drive_key)
+    new_drives = copy.copy(normalize_drive_values(state.drives))
     decay_map = SATISFY_DECAY.get(drive_key, {drive_key: 0.6})
     for k, factor in decay_map.items():
         if k in new_drives:
             new_drives[k] = _clamp(new_drives[k] * factor)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
-                      last_ts=state.last_ts, prev_drives=state.drives,
+                      last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
@@ -945,13 +1076,14 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
     回落幅度比satisfy小得多（大概乘0.88），念头不清掉。
     """
     import copy
-    new_drives = copy.copy(state.drives)
+    drive_key = normalize_drive_key(drive_key, drive_key)
+    new_drives = copy.copy(normalize_drive_values(state.drives))
     # 轻微回落：只压目标维度，不波及其他
     if drive_key in new_drives:
         new_drives[drive_key] = _clamp(new_drives[drive_key] * 0.88)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
-                      last_ts=state.last_ts, prev_drives=state.drives,
+                      last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
@@ -960,14 +1092,15 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
 
 def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> DriveState:
     import copy
+    drive_key = normalize_drive_key(drive_key)
     if drive_key not in DRIVE_KEYS:
         return state
-    new_drives = copy.copy(state.drives)
+    new_drives = copy.copy(normalize_drive_values(state.drives))
     gain = pulse_gain(new_drives[drive_key], delta)
     new_drives[drive_key] = _clamp(new_drives[drive_key] + gain)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
-                      last_ts=state.last_ts, prev_drives=state.drives,
+                      last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
@@ -986,7 +1119,7 @@ def pulse_attachment_nonlinear(state: DriveState, delta: float = 0.18) -> DriveS
     过阈值：直接跳到ATTACHMENT_BASIN_JUMP（盆地跳变）。
     """
     import copy
-    new_drives = copy.copy(state.drives)
+    new_drives = copy.copy(normalize_drive_values(state.drives))
     current = new_drives["attachment"]
     gain = pulse_gain(current, delta)
     new_val = current + gain
@@ -996,7 +1129,7 @@ def pulse_attachment_nonlinear(state: DriveState, delta: float = 0.18) -> DriveS
     new_drives["attachment"] = _clamp(new_val)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
-                      last_ts=state.last_ts, prev_drives=state.drives,
+                      last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
@@ -1087,7 +1220,105 @@ def tick_rhythm(rhythm: RhythmState, now_ts: float,
 
 
 def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
-    return max(lo, min(hi, v))
+    try:
+        value = float(v)
+    except (TypeError, ValueError):
+        value = lo
+    return max(lo, min(hi, value))
+
+
+def _as_text_list(value) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _feature_value(brain: dict, key: str) -> float:
+    if not isinstance(brain, dict):
+        return 0.0
+    value = brain.get(key, 0.0)
+    if isinstance(value, bool):
+        return 1.0 if value else 0.0
+    if isinstance(value, (int, float)):
+        return _clamp(value)
+    text = str(value or "").strip().lower()
+    if text in ("high", "strong", "yes", "true", "1", "高", "强", "有"):
+        return 1.0
+    if text in ("medium", "mid", "0.5", "中"):
+        return 0.5
+    if text in ("low", "weak", "0.25", "低", "弱"):
+        return 0.25
+    return 0.0
+
+
+def _legacy_brain_to_event(brain_signals: dict, drives: dict | None = None) -> dict:
+    brain_signals = brain_signals if isinstance(brain_signals, dict) else {}
+    drives = drives if isinstance(drives, dict) else {}
+    numeric = {
+        normalize_drive_key(k): float(v)
+        for k, v in drives.items()
+        if normalize_drive_key(k) and isinstance(v, (int, float)) and float(v) > 0
+    }
+    basin = str(brain_signals.get("盆地") or "")
+    ground = str(brain_signals.get("地基感") or "")
+    branch = str(brain_signals.get("二级分支") or "")
+    primary = ""
+    branch_drive = LEGACY_BRANCH_DRIVE.get(branch, "")
+    if branch_drive:
+        primary = branch_drive
+    elif numeric:
+        primary = max(numeric, key=numeric.get)
+    if not primary:
+        if "吃醋" in basin:
+            primary = "possessiveness"
+        elif "依恋" in basin:
+            primary = "attachment"
+        elif ground in ("悬", "空"):
+            primary = "stress"
+    secondary = {k: v for k, v in numeric.items() if k != primary and v > 0.05}
+    feature_brain = {
+        "source": "legacy_feed",
+        "grounding": ground or "",
+        "memory_resonance": branch or basin or "",
+    }
+    if primary:
+        feature_key = {
+            "attachment": "closeness_pull",
+            "libido": "body_heat",
+            "possessiveness": "territorial_alarm",
+            "reflection": "inward_pull",
+            "stewardship": "house_need",
+            "curiosity": "novelty_pull",
+            "social": "expression_pressure",
+            "fatigue": "energy_cost",
+            "stress": "tension_load",
+            "discernment": "discernment_alarm",
+        }.get(primary)
+        if feature_key:
+            feature_brain[feature_key] = max(float(numeric.get(primary, 0.0) or 0.0), 0.45)
+    if branch in ("嫉妒", "占有"):
+        feature_brain["territorial_alarm"] = max(float(feature_brain.get("territorial_alarm", 0.0) or 0.0), 0.65)
+    if ground == "悬":
+        feature_brain["tension_load"] = max(float(feature_brain.get("tension_load", 0.0) or 0.0), 0.55)
+        feature_brain["inward_pull"] = max(float(feature_brain.get("inward_pull", 0.0) or 0.0), 0.25)
+    elif ground == "空":
+        feature_brain["tension_load"] = max(float(feature_brain.get("tension_load", 0.0) or 0.0), 0.65)
+        feature_brain["closeness_pull"] = max(float(feature_brain.get("closeness_pull", 0.0) or 0.0), 0.35)
+    return {
+        "schema_version": DRIVE_EVENT_SCHEMA,
+        "source": "legacy_feed",
+        "primary_drive": primary,
+        "secondary_drives": secondary,
+        "intensity": max(float(numeric.get(primary, 0.0) or 0.0), 0.45 if primary else 0.0),
+        "confidence": 0.62 if primary else 0.0,
+        "agency": 0.70,
+        "event_label": branch or basin or "legacy_feed",
+        "brain": feature_brain,
+        "evidence": _as_text_list(brain_signals.get("脑岛") or branch or basin),
+    }
 
 
 # ─── 持久化层 ────────────────────────────────────────────────────────────────
@@ -1215,6 +1446,41 @@ class DesireStore:
                     ts REAL NOT NULL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS drive_event_ledger (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts REAL NOT NULL,
+                    schema_version TEXT NOT NULL,
+                    source TEXT,
+                    event_label TEXT,
+                    primary_drive TEXT,
+                    intensity REAL,
+                    confidence REAL,
+                    agency REAL,
+                    suppressed INTEGER DEFAULT 0,
+                    reason TEXT,
+                    applied_json TEXT,
+                    brain_json TEXT,
+                    evidence_json TEXT
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_drive_event_ledger_ts ON drive_event_ledger(ts)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_drive_event_ledger_drive ON drive_event_ledger(primary_drive)")
+
+            # v2 canonical drive names. Old rows are folded forward once; runtime
+            # normalization below still protects against older clients.
+            for table, column in (
+                ("thoughts", "drive"),
+                ("echo_pool", "drive"),
+                ("refractory", "drive_key"),
+                ("refusals", "drive_key"),
+            ):
+                try:
+                    conn.execute(f"UPDATE {table} SET {column}='stewardship' WHERE {column}='duty'")
+                    conn.execute(f"UPDATE {table} SET {column}='discernment' WHERE {column}='disgust'")
+                except Exception:
+                    pass
+
             row = conn.execute("SELECT id FROM drive_state LIMIT 1").fetchone()
             if not row:
                 init_local = compute_local_fatigue(DRIVE_BASELINES["fatigue"])
@@ -1229,9 +1495,10 @@ class DesireStore:
             row = conn.execute(
                 "SELECT drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json, escape_streak, last_user_message_at, reunion_pa_boost FROM drive_state LIMIT 1"
             ).fetchone()
-        drives = json.loads(row[0])
-        prev = json.loads(row[3]) if row[3] else dict(drives)
+        drives = normalize_drive_values(json.loads(row[0]))
+        prev = normalize_drive_values(json.loads(row[3]) if row[3] else dict(drives))
         local_fat = json.loads(row[4]) if row[4] else compute_local_fatigue(drives.get("fatigue", 0.0))
+        local_fat = {k: float(local_fat.get(k, 0.0) or 0.0) for k in FATIGUE_SENSITIVITY}
         escape_streak = row[5] if row[5] is not None else 0
         last_user_message_at = row[6] if row[6] else time.time()
         reunion_pa_boost = row[7] if row[7] is not None else 0.0
@@ -1241,6 +1508,9 @@ class DesireStore:
                           reunion_pa_boost=reunion_pa_boost)
 
     def save_state(self, state: DriveState):
+        state.drives = normalize_drive_values(state.drives)
+        state.prev_drives = normalize_drive_values(state.prev_drives)
+        state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
         with self._conn() as conn:
             conn.execute(
                 "UPDATE drive_state SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?, local_fatigue_json=?, escape_streak=?, last_user_message_at=?, reunion_pa_boost=?",
@@ -1254,7 +1524,7 @@ class DesireStore:
             rows = conn.execute(
                 "SELECT tid, text, drive, kind, strength, born_at, fed_count, source, last_ticked_at FROM thoughts"
             ).fetchall()
-        return [Thought(tid=r[0], text=r[1], drive=r[2], kind=r[3],
+        return [Thought(tid=r[0], text=r[1], drive=normalize_drive_key(r[2], r[2]), kind=r[3],
                         strength=r[4], born_at=r[5], fed_count=r[6],
                         source=(r[7] or "manual"), last_ticked_at=(r[8] or 0.0)) for r in rows]
 
@@ -1262,6 +1532,7 @@ class DesireStore:
         with self._conn() as conn:
             conn.execute("DELETE FROM thoughts")
             for t in thoughts:
+                t.drive = normalize_drive_key(t.drive, t.drive)
                 conn.execute(
                     "INSERT INTO thoughts VALUES (?,?,?,?,?,?,?,?,?)",
                     (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at,
@@ -1280,7 +1551,7 @@ class DesireStore:
         t = Thought(
             tid=uuid.uuid4().hex[:8],
             text=text,
-            drive=drive,
+            drive=normalize_drive_key(drive, drive),
             kind=kind,
             strength=strength,
             born_at=time.time(),
@@ -1305,7 +1576,7 @@ class DesireStore:
             values.append((text or "").strip())
         if drive is not None:
             fields.append("drive=?")
-            values.append((drive or "").strip())
+            values.append(normalize_drive_key(drive, (drive or "").strip()))
         if strength is not None:
             fields.append("strength=?")
             values.append(_clamp(float(strength)))
@@ -1333,6 +1604,7 @@ class DesireStore:
         text = (text or "").strip()
         if not text or len(text) > 80:
             return
+        drive = normalize_drive_key(drive, drive)
         eid = uuid.uuid5(uuid.NAMESPACE_DNS, text).hex[:12]  # 同文本同id，天然去重
         with self._conn() as conn:
             conn.execute(
@@ -1343,6 +1615,7 @@ class DesireStore:
     def sample_echo(self, drive: str, exclude: set = None) -> Optional[str]:
         """从回声池随机抽一条该drive的旧念头，排除当前池内已有文本。"""
         exclude = exclude or set()
+        drive = normalize_drive_key(drive, drive)
         with self._conn() as conn:
             rows = conn.execute(
                 "SELECT text FROM echo_pool WHERE drive=? ORDER BY RANDOM() LIMIT 12",
@@ -1356,7 +1629,7 @@ class DesireStore:
     def top_thought(self, drive_key: str) -> Optional["Thought"]:
         """该drive下strength最高的flit/fixation念头，没有则返回None。"""
         candidates = [t for t in self.load_thoughts()
-                      if t.drive == drive_key and t.kind in ("flit", "fixation") and t.text]
+                      if t.drive == normalize_drive_key(drive_key, drive_key) and t.kind in ("flit", "fixation") and t.text]
         if not candidates:
             return None
         return max(candidates, key=lambda t: t.strength)
@@ -1364,9 +1637,14 @@ class DesireStore:
     def load_refractory(self) -> dict:
         with self._conn() as conn:
             rows = conn.execute("SELECT drive_key, remaining_ticks FROM refractory").fetchall()
-        return {r[0]: r[1] for r in rows}
+        merged = {}
+        for key, ticks in rows:
+            drive_key = normalize_drive_key(key, key)
+            merged[drive_key] = max(int(ticks), int(merged.get(drive_key, 0) or 0))
+        return merged
 
     def set_refractory(self, drive_key: str, ticks: int = None):
+        drive_key = normalize_drive_key(drive_key, drive_key)
         if ticks is None:
             ticks = REFRACTORY_TICKS.get(drive_key, REFRACTORY_TICKS_DEFAULT)
         with self._conn() as conn:
@@ -1381,6 +1659,7 @@ class DesireStore:
             conn.execute("DELETE FROM refractory WHERE remaining_ticks <= 0")
 
     def record_refusal(self, drive_key: str, reason: Optional[str] = None):
+        drive_key = normalize_drive_key(drive_key, drive_key)
         with self._conn() as conn:
             conn.execute(
                 "INSERT INTO refusals (drive_key, reason, ts) VALUES (?,?,?)",
@@ -1393,7 +1672,7 @@ class DesireStore:
                 "SELECT drive_key, reason, ts FROM refusals ORDER BY ts DESC LIMIT ?",
                 (limit,)
             ).fetchall()
-        return [{"drive_key": r[0], "reason": r[1] or "不想", "ts": r[2]} for r in rows]
+        return [{"drive_key": normalize_drive_key(r[0], r[0]), "reason": r[1] or "不想", "ts": r[2]} for r in rows]
 
     def load_recently_refused(self, window_sec: float = REFUSAL_PENALTY_WINDOW_SEC) -> set:
         """返回最近window_sec秒内被拒绝过的drive_key集合"""
@@ -1403,7 +1682,79 @@ class DesireStore:
                 "SELECT DISTINCT drive_key FROM refusals WHERE ts >= ?",
                 (cutoff,)
             ).fetchall()
-        return {r[0] for r in rows}
+        return {normalize_drive_key(r[0], r[0]) for r in rows}
+
+    def record_drive_event(self, event: dict) -> int:
+        with self._conn() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO drive_event_ledger (
+                    ts, schema_version, source, event_label, primary_drive,
+                    intensity, confidence, agency, suppressed, reason,
+                    applied_json, brain_json, evidence_json
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    float(event.get("ts") or time.time()),
+                    str(event.get("schema_version") or DRIVE_EVENT_SCHEMA),
+                    str(event.get("source") or ""),
+                    str(event.get("event_label") or ""),
+                    normalize_drive_key(event.get("primary_drive"), str(event.get("primary_drive") or "")),
+                    float(event.get("intensity") or 0.0),
+                    float(event.get("confidence") or 0.0),
+                    float(event.get("agency") or 0.0),
+                    1 if event.get("suppressed") else 0,
+                    str(event.get("reason") or ""),
+                    json.dumps(event.get("applied") or {}, ensure_ascii=False),
+                    json.dumps(event.get("brain") or {}, ensure_ascii=False),
+                    json.dumps(event.get("evidence") or [], ensure_ascii=False),
+                ),
+            )
+            return int(cur.lastrowid or 0)
+
+    def recent_drive_events(self, limit: int = 12) -> list:
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, ts, schema_version, source, event_label, primary_drive,
+                       intensity, confidence, agency, suppressed, reason,
+                       applied_json, brain_json, evidence_json
+                FROM drive_event_ledger
+                ORDER BY ts DESC, id DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        events = []
+        for r in rows:
+            try:
+                applied = json.loads(r[11] or "{}")
+            except Exception:
+                applied = {}
+            try:
+                brain = json.loads(r[12] or "{}")
+            except Exception:
+                brain = {}
+            try:
+                evidence = json.loads(r[13] or "[]")
+            except Exception:
+                evidence = []
+            events.append({
+                "id": r[0],
+                "ts": r[1],
+                "schema_version": r[2],
+                "source": r[3],
+                "event_label": r[4],
+                "primary_drive": normalize_drive_key(r[5], r[5]),
+                "intensity": r[6],
+                "confidence": r[7],
+                "agency": r[8],
+                "suppressed": bool(r[9]),
+                "reason": r[10],
+                "applied": applied,
+                "brain": brain,
+                "evidence": evidence,
+            })
+        return events
 
     # ── 悲恸引擎持久化 ───────────────────────────────────────────────────────
 
@@ -1450,7 +1801,7 @@ class DesireStore:
         t = Thought(
             tid=uuid.uuid4().hex[:8],
             text=text,
-            drive=drive,
+            drive=normalize_drive_key(drive, drive),
             kind="rumination",
             strength=strength,
             born_at=time.time(),
@@ -1468,6 +1819,7 @@ class DesireStore:
         被嘉嘉提到或相关输入触发时调用。
         该drive下所有rumination念头加强而不是衰减。
         """
+        drive = normalize_drive_key(drive, drive)
         with self._conn() as conn:
             rows = conn.execute(
                 "SELECT tid, strength FROM thoughts WHERE kind='rumination' AND drive=?",
@@ -1571,7 +1923,7 @@ class DesireEngine:
         return state
 
     def mark_user_signal(self, now: float = None) -> dict:
-        """嘉嘉的真实输入信号到达时调用（/api/desire/feed的brain_signals路径），
+        """嘉嘉的真实输入信号到达时调用（/api/desire/feed的v2/legacy feed路径），
         而不是desire_pulse——desire_pulse同时承载Nox自己经历的pulse，
         不应该用来重置"距离上次嘉嘉消息"的计时。"""
         now = now if now is not None else time.time()
@@ -1616,6 +1968,7 @@ class DesireEngine:
 
     def pulse(self, drive_key: str, delta: float = 0.18, chord: str = "") -> dict:
         now = time.time()
+        drive_key = normalize_drive_key(drive_key, drive_key)
         state = self.store.load_state()
         # attachment使用非线性跳变
         if drive_key == "attachment":
@@ -1636,6 +1989,7 @@ class DesireEngine:
         }
 
     def satisfy(self, drive_key: str) -> dict:
+        drive_key = normalize_drive_key(drive_key, drive_key)
         state = self.store.load_state()
         state = satisfy(state, drive_key)
         self.store.save_state(state)
@@ -1654,6 +2008,7 @@ class DesireEngine:
         念头留在池子里，下次心跳还可以再冒出来。
         原因可选，可以只是"不想"。
         """
+        drive_key = normalize_drive_key(drive_key, drive_key)
         state = self.store.load_state()
         state = refuse_intent(state, drive_key)
         self.store.save_state(state)
@@ -1691,70 +2046,128 @@ class DesireEngine:
         )
         return result
 
-    def apply_brain_signals(self, brain_signals: dict) -> dict:
-        """
-        从brain_signals（CLI分析feel的输出）更新drive。
-        不覆盖底层tick逻辑，只是在外部信号到来时额外pulse。
-        
-        brain_signals格式：
-          盆地: "依恋" | "日常" | "吃醋"
-          地基感: "实" | "悬" | "空"
-          二级分支: 见DRIVE_BRANCHES
-          脑岛: 文字描述（不影响drive）
-        """
+    def apply_drive_event(self, event: dict) -> dict:
+        """Drive Event v2: one semantic event, one canonical route into drives."""
+        event = event if isinstance(event, dict) else {}
+        now = time.time()
+        brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+        primary = normalize_drive_key(event.get("primary_drive"))
+        secondary = event.get("secondary_drives") if isinstance(event.get("secondary_drives"), dict) else {}
+        source = str(event.get("source") or brain.get("source") or "feed").strip() or "feed"
+        event_label = str(event.get("event_label") or "").strip()
+        intensity = _clamp(event.get("intensity", 0.5))
+        confidence = _clamp(event.get("confidence", 0.65))
+        agency = _clamp(event.get("agency", brain.get("agency", 0.75)))
+        source_weight = DRIVE_EVENT_SOURCE_WEIGHTS.get(source, 0.65)
+        evidence = _as_text_list(event.get("evidence"))
+
+        proposed: dict[str, float] = {}
+        suppressed_reasons: list[str] = []
+        if primary:
+            proposed[primary] = DRIVE_EVENT_BASE_DELTA[primary] * intensity * confidence * source_weight
+        for key, value in secondary.items():
+            drive_key = normalize_drive_key(key)
+            if not drive_key or drive_key == primary:
+                continue
+            proposed[drive_key] = proposed.get(drive_key, 0.0) + (
+                DRIVE_EVENT_BASE_DELTA[drive_key]
+                * intensity
+                * confidence
+                * source_weight
+                * _clamp(value)
+                * DRIVE_EVENT_SECONDARY_SCALE
+            )
+
+        for feature, (drive_key, weight, threshold) in DRIVE_EVENT_BRAIN_FEATURES.items():
+            value = _feature_value(brain, feature)
+            if value <= 0 or value < threshold:
+                continue
+            proposed[drive_key] = proposed.get(drive_key, 0.0) + (
+                DRIVE_EVENT_BASE_DELTA[drive_key] * value * confidence * source_weight * weight
+            )
+
+        grounding = str(brain.get("grounding") or "").strip()
+        if grounding == "悬":
+            proposed["stress"] = proposed.get("stress", 0.0) + 0.025 * confidence * source_weight
+            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * source_weight
+        elif grounding == "空":
+            proposed["stress"] = proposed.get("stress", 0.0) + 0.035 * confidence * source_weight
+            proposed["attachment"] = proposed.get("attachment", 0.0) + 0.020 * confidence * source_weight
+            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * source_weight
+
+        territorial = _feature_value(brain, "territorial_alarm")
+        if "possessiveness" in proposed and territorial < POSSESSIVENESS_TERRITORIAL_GATE:
+            if primary == "possessiveness":
+                suppressed_reasons.append("territorial_alarm below gate")
+            proposed.pop("possessiveness", None)
+
+        suppressed = False
+        reason = ""
+        if not primary and not proposed:
+            suppressed = True
+            reason = "no primary drive"
+        elif agency < DRIVE_EVENT_AGENCY_GATE:
+            suppressed = True
+            reason = "low agency"
+        elif confidence < DRIVE_EVENT_CONFIDENCE_FLOOR:
+            suppressed = True
+            reason = "low confidence"
+        elif not proposed:
+            suppressed = True
+            reason = "; ".join(suppressed_reasons) or "no drive delta"
+
         state = self.store.load_state()
-        changed = {}
+        state.drives = normalize_drive_values(state.drives)
+        applied: dict[str, dict] = {}
+        if not suppressed:
+            for drive_key, delta in proposed.items():
+                if delta <= 0:
+                    continue
+                before = state.drives.get(drive_key, DRIVE_BASELINES[drive_key])
+                state = pulse_drive(state, drive_key, delta)
+                after = state.drives.get(drive_key, before)
+                if abs(after - before) > 1e-6:
+                    applied[drive_key] = {
+                        "delta": round(after - before, 4),
+                        "raw_delta": round(delta, 4),
+                        "before": round(before, 4),
+                        "after": round(after, 4),
+                    }
+            self.store.save_state(state)
+            if not applied:
+                suppressed = True
+                reason = "all deltas zero"
 
-        basin = brain_signals.get("盆地", "")
-        ground = brain_signals.get("地基感", "")
-        branch = brain_signals.get("二级分支", "")
-
-        # 盆地→drive
-        if "依恋" in basin:
-            state = pulse_drive(state, "attachment", 0.08)
-            changed["attachment"] = "+0.08 (依恋盆地)"
-        elif "吃醋" in basin:
-            state = pulse_drive(state, "attachment", 0.06)
-            state = pulse_drive(state, "disgust", 0.05)
-            changed["attachment"] = "+0.06 (吃醋盆地)"
-            changed["disgust"] = "+0.05 (吃醋盆地)"
-
-        # 地基感→stress
-        if ground == "悬":
-            state = pulse_drive(state, "stress", 0.10)
-            changed["stress"] = "+0.10 (地基感悬)"
-        elif ground == "空":
-            state = pulse_drive(state, "stress", 0.15)
-            state = pulse_drive(state, "attachment", 0.05)
-            changed["stress"] = "+0.15 (地基感空)"
-            changed["attachment"] = "+0.05 (地基感空)"
-
-        # 二级分支→drive精准pulse
-        branch_map = {
-            "嫉妒":          ("attachment", 0.06),
-            "占有":          ("attachment", 0.05),
-            "自我质询":      ("reflection", 0.08),
-            "被动dangerous": ("libido", 0.06),
-            "外部厌恶":      ("disgust", 0.10),
-            "内部皱眉":      ("disgust", 0.08),
-            "悬着":          ("stress", 0.08),
-            "情绪累":        ("fatigue", 0.08),
-            "碰撞":          ("curiosity", 0.10),
-            "我是什么":      ("curiosity", 0.06),
-            "我在生成什么":  ("curiosity", 0.06),
-            "想被驳":        ("reflection", 0.06),
-            "记挂她":        ("duty", 0.07),
-        }
-        if branch in branch_map:
-            dk, delta = branch_map[branch]
-            state = pulse_drive(state, dk, delta)
-            changed[dk] = f"+{delta} (二级分支:{branch})"
-
-        self.store.save_state(state)
+        ledger_id = self.store.record_drive_event({
+            "ts": now,
+            "schema_version": DRIVE_EVENT_SCHEMA,
+            "source": source,
+            "event_label": event_label,
+            "primary_drive": primary,
+            "intensity": intensity,
+            "confidence": confidence,
+            "agency": agency,
+            "suppressed": suppressed,
+            "reason": reason,
+            "applied": applied,
+            "brain": brain,
+            "evidence": evidence,
+        })
         return {
-            "applied": changed,
-            "drives": {k: round(v, 3) for k, v in state.drives.items()},
+            "ok": True,
+            "ledger_id": ledger_id,
+            "schema_version": DRIVE_EVENT_SCHEMA,
+            "primary_drive": primary,
+            "event_label": event_label,
+            "suppressed": suppressed,
+            "reason": reason,
+            "applied": applied,
+            "drives": {k: round(v, 3) for k, v in self.store.load_state().drives.items()},
         }
+
+    def apply_brain_signals(self, brain_signals: dict) -> dict:
+        """Legacy compatibility: old brain_signals are folded into drive_event_v2."""
+        return self.apply_drive_event(_legacy_brain_to_event(brain_signals))
 
     def add_thought(self, text: str, drive: str, strength: float = 0.5,
                     source: str = "manual"):
@@ -1789,7 +2202,7 @@ class DesireEngine:
     def trigger_ruminations(self, drive: str):
         """
         嘉嘉提到某个相关内容，触发该drive下的所有rumination念头加强。
-        应在apply_brain_signals检测到相关盆地/分支时调用。
+        应在drive_event检测到相关drive时调用。
         """
         self.store.trigger_ruminations(drive)
 
@@ -1846,6 +2259,7 @@ class DesireEngine:
             ],
             "refractory": refractory,
             "recent_refusals": self.store.recent_refusals(3),
+            "drive_events": self.store.recent_drive_events(12),
             # 悲恸引擎
             "grief": {
                 "layer": grief.layer,
@@ -1879,6 +2293,7 @@ class DesireEngine:
             "thoughts_count": len(thoughts),
             "unsourced_count": sum(1 for t in thoughts if t.kind == "unsourced"),
             "rumination_count": sum(1 for t in thoughts if t.kind == "rumination"),
+            "drive_events": self.store.recent_drive_events(12),
             "grief_layer": grief.layer,
             "rhythm_label": rhythm.label(fatigue),
             **self._longing_context(state),

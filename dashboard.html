@@ -2321,14 +2321,15 @@ const ICONS = {
 
 const DRIVE_LABELS = {
   attachment: '想嘉嘉',
-  curiosity: '好奇',
+  libido: '亲密',
+  possessiveness: '占有',
   reflection: '沉淀',
-  duty: '记挂',
+  stewardship: '守屋',
+  curiosity: '向外看',
   social: '社交',
   fatigue: '疲劳',
-  libido: '亲密',
   stress: '压力',
-  disgust: '皱眉'
+  discernment: '皱眉'
 };
 const DRIVE_KEYS = Object.keys(DRIVE_LABELS);
 
@@ -4830,7 +4831,7 @@ let latentNoteTab = 'draft';
 let latentDriveTab = 'all';
 let latentEditingId = '';
 let latentCreating = false;
-const LATENT_DRIVE_OPTIONS = ['general','attachment','curiosity','reflection','duty','social','fatigue','libido','stress','disgust'];
+const LATENT_DRIVE_OPTIONS = ['general','attachment','libido','possessiveness','reflection','stewardship','curiosity','social','fatigue','stress','discernment'];
 const LATENT_DRIVE_FILTERS = ['all', ...LATENT_DRIVE_OPTIONS];
 
 function latentTypeLabel(type) {
@@ -4842,7 +4843,9 @@ function latentStatusLabel(status) {
 }
 
 function latentDriveLabel(drive) {
-  return LATENT_DRIVE_OPTIONS.includes(drive) ? drive : 'general';
+  const aliases = { duty: 'stewardship', disgust: 'discernment' };
+  const value = aliases[drive] || drive;
+  return LATENT_DRIVE_OPTIONS.includes(value) ? value : 'general';
 }
 
 async function loadLatentNotes() {
