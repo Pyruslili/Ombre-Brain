@@ -1032,38 +1032,6 @@ label {
 .drift-weather-trace { margin-top: .8rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
 .drift-weather-trace div { color: var(--ink); font: 300 .92rem/1.62 var(--font-display); }
 .drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1rem; }
-.speech-event-panel .speech-event-meta {
-  margin-top: .38rem;
-  color: var(--mute);
-  font: 300 .58rem/1.45 var(--font-mono);
-  letter-spacing: .04em;
-}
-.speech-review-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .42rem;
-  margin-top: .62rem;
-}
-.speech-review-actions button {
-  min-width: 44px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  background: rgba(255,224,186,.035);
-  color: var(--ink-soft);
-  padding: .32rem .58rem;
-  font: 300 .66rem/1 var(--font-body);
-  cursor: pointer;
-}
-.speech-review-actions button:hover,
-.speech-review-actions button.active {
-  border-color: rgba(232,149,79,.38);
-  color: var(--accent-deep);
-  background: rgba(232,149,79,.08);
-}
-.speech-review-actions button:disabled {
-  cursor: default;
-  opacity: .48;
-}
 .drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
 .drive-row:first-child { border-top: 0; }
 .drive-name { min-width: 0; color: var(--ink-soft); font-size: .8rem; }
@@ -1105,6 +1073,87 @@ label {
 .thought-actions button:hover { color: var(--accent-deep); }
 .thought-actions .danger:hover { color: var(--negative); border-color: rgba(199,121,112,.36); }
 .thought-editor { grid-column: 2 / -1; display: grid; gap: .7rem; padding: .1rem 0 .3rem; }
+.drive-event-row { display: grid; gap: .28rem; padding: .82rem 0; border-top: 1px solid var(--line-soft); }
+.drive-event-row:first-child { border-top: 0; }
+.drive-event-head { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .6rem; }
+.drive-event-source {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .16rem .5rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255,224,186,.035);
+  color: var(--mute);
+  font: 300 .56rem/1.35 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.drive-event-source strong { color: var(--ink); font-weight: 400; }
+.drive-event-label { color: var(--accent-deep); font-size: .8rem; line-height: 1.45; }
+.drive-event-meta { color: var(--mute); font: 300 .58rem/1.45 var(--font-mono); }
+.drive-event-reason { color: var(--ink-soft); font-size: .78rem; line-height: 1.55; }
+.drive-event-deltas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem .5rem;
+  color: var(--mute);
+  font: 300 .58rem/1.45 var(--font-mono);
+}
+.drive-event-delta {
+  padding: .12rem .42rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255,224,186,.03);
+}
+.drive-event-delta strong { color: var(--ink); font-weight: 400; }
+.drive-event-delta.positive strong { color: var(--accent-deep); }
+.drive-event-delta.suppressed strong { color: var(--negative); }
+.drive-event-empty { color: var(--ink-soft); font-size: .78rem; }
+.drive-readout-row {
+  display: grid;
+  grid-template-columns: minmax(120px,.8fr) minmax(0,1.7fr);
+  gap: .7rem 1rem;
+  align-items: start;
+  padding: .8rem 0;
+  border-top: 1px solid var(--line-soft);
+}
+.drive-readout-row:first-child { border-top: 0; padding-top: 0; }
+.drive-readout-head { min-width: 0; }
+.drive-readout-name { color: var(--ink); font-size: .9rem; line-height: 1.2; }
+.drive-readout-key { margin-top: .12rem; color: var(--mute); font: 300 .58rem/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+.drive-readout-values { min-width: 0; display: grid; gap: .42rem; }
+.drive-readout-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem .8rem;
+  align-items: baseline;
+  color: var(--ink-soft);
+  font-size: .82rem;
+}
+.drive-readout-main strong { color: var(--ink); font: 300 1.26rem/1 var(--font-number); }
+.drive-readout-main em { color: var(--mute); font: 300 .64rem/1.3 var(--font-mono); font-style: normal; letter-spacing: .08em; text-transform: uppercase; }
+.drive-readout-chips { display: flex; flex-wrap: wrap; gap: .32rem; }
+.drive-readout-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  min-height: 22px;
+  padding: .1rem .42rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255,224,186,.03);
+  color: var(--ink-soft);
+  font: 300 .58rem/1.2 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.drive-readout-chip strong { color: var(--ink); font-weight: 400; }
+.drive-readout-chip.positive { color: var(--accent-deep); border-color: rgba(232,149,79,.28); background: rgba(232,149,79,.06); }
+.drive-readout-chip.suppressed { color: var(--negative); border-color: rgba(215,114,114,.26); background: rgba(215,114,114,.06); }
+.drive-readout-chip.neutral { color: var(--mute); }
+.drive-readout-reason { color: var(--mute); font-size: .74rem; line-height: 1.55; }
+.drive-readout-empty { color: var(--ink-soft); font-size: .78rem; }
 .thought-editor textarea {
   min-height: 76px;
   padding: .72rem .8rem;
@@ -1777,6 +1826,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .thought-editor { grid-column: 2; }
   .thought-editor-grid { grid-template-columns: 1fr; }
   .thought-editor-buttons { justify-content: flex-start; }
+  .drive-readout-row { grid-template-columns: 1fr; gap: .45rem; }
+  .drive-event-head { align-items: flex-start; }
   .content { padding-top: 5rem; }
   .content::before { margin-bottom: 3rem; }
   .bucket-row { grid-template-columns: 30px minmax(0,1fr); min-height: auto; padding: 1rem 0; }
@@ -2050,26 +2101,24 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       </div>
       <div class="drift-weather-line"><span>Climate</span><strong id="desire-now">—</strong></div>
       <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
-      <div class="drift-weather-trace speech-event-panel" id="desire-speech-wrap" style="display:none">
-        <span>Speech Trace</span>
-        <div id="desire-speech-trace"></div>
-        <div class="speech-event-meta" id="desire-speech-meta"></div>
-        <div class="speech-review-actions" id="desire-speech-actions" aria-label="Speech event review">
-          <button type="button" data-speech-review="认">认</button>
-          <button type="button" data-speech-review="不认">不认</button>
-          <button type="button" data-speech-review="悬置">悬置</button>
-        </div>
-      </div>
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
     </div>
-    <div class="drift-card">
-      <div class="drift-card-label">Drives</div>
-      <div id="desire-drives"></div>
-    </div>
-    <div class="drift-card">
-      <div class="drift-card-label">Thought Pool</div>
-      <div id="desire-thoughts"><span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span></div>
-    </div>
+      <div class="drift-card">
+        <div class="drift-card-label">Drive Readouts</div>
+        <div id="desire-drive-readouts"><span class="drive-readout-empty">No drive readouts yet.</span></div>
+      </div>
+      <div class="drift-card">
+        <div class="drift-card-label">Drives</div>
+        <div id="desire-drives"></div>
+      </div>
+      <div class="drift-card">
+        <div class="drift-card-label">Drive Ledger</div>
+        <div id="desire-drive-events"><span class="drive-event-empty">No drive events yet.</span></div>
+      </div>
+      <div class="drift-card">
+        <div class="drift-card-label">Thought Pool</div>
+        <div id="desire-thoughts"><span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span></div>
+      </div>
   </div>
 </div>   
 
@@ -2299,7 +2348,6 @@ let echoProgressRaf = null;
 let echoPlayToken = 0;
 let openingGate = null;
 let desireThoughts = [];
-let currentSpeechEventId = null;
 let editingThoughtId = null;
 const mouse = { x: -1000, y: -1000 };
 const RETIRED_SPEECH_SOMA_LINES = new Set([
@@ -2335,8 +2383,7 @@ const DRIVE_LABELS = {
   curiosity: '向外看',
   social: '社交',
   fatigue: '疲劳',
-  stress: '压力',
-  discernment: '皱眉'
+  stress: '压力'
 };
 const DRIVE_KEYS = Object.keys(DRIVE_LABELS);
 
@@ -2591,12 +2638,16 @@ async function loadDesire(button) {
 
     const driveEntries = Object.entries(d.drives || {});
     const topDrive = [...driveEntries].sort((a, b) => finiteNumber(b[1]) - finiteNumber(a[1]))[0] || ['—', 0];
+    const effectiveDrives = d.effective_drives || {};
+    const driveOutputs = d.drive_outputs || {};
     const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
+    const driveEvents = [...(d.drive_events || [])];
     desireThoughts = thoughts;
 
     const weather = d.pulse_weather || {};
     const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
-    const latestTrace = latestThought || weather.mood_trace || d.mood_trace || 'No recent thought.';
+    const speechTrace = String(d.speech_event?.trace || '').trim();
+    const latestTrace = speechTrace || latestThought || weather.mood_trace || d.mood_trace || 'No recent thought.';
     const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
     const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
     const warmthNow = finiteNumber(weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);
@@ -2618,21 +2669,27 @@ async function loadDesire(button) {
     document.getElementById('desire-current-chord').textContent = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
     document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
-    renderSpeechEvent(d.speech_event);
     renderSomaTrace(soma);
+    renderDiscernment(d.discernment);
+    renderDriveReadouts(driveOutputs, d.discernment, d.possessiveness_channels, d.attachment_rebound, d.effective_drives, d.drives);
+    renderDriveEvents(driveEvents);
 
     // drives
     const drivesEl = document.getElementById('desire-drives');
     drivesEl.innerHTML = driveEntries.map(([k, v]) => {
       const lf = d.local_fatigue?.[k] || 0;
-      const eff = Math.max(0, v * (1 - lf));
+      const eff = finiteNumber(effectiveDrives[k], Math.max(0, v * (1 - lf)));
+      const output = driveOutputs[k] || {};
       const pct = Math.round(v * 100);
       const effPct = Math.round(eff * 100);
       const isHigh = k === topDrive[0];
+      const extra = k === 'possessiveness' && Number.isFinite(Number(output.event_spike))
+        ? ` · spike ${Math.round(finiteNumber(output.event_spike) * 100)} / base ${Math.round(finiteNumber(output.territorial_baseline) * 100)}`
+        : (k === 'attachment' && output.rebound?.active ? ` · rebound ${esc(output.rebound.phase || 'active')}` : '');
       return `<div class="drive-row${isHigh ? ' high' : ''}">
         <div class="drive-name">${esc(DRIVE_LABELS[k] || k)}<small>${esc(k)}</small></div>
         <div class="drive-track"><div class="drive-fill" style="width:${Math.min(100, effPct)}%"></div></div>
-        <div class="drive-value">${pct}%${lf > .1 ? '<small>fatigue −' + Math.round(lf * 100) + '%</small>' : ''}</div>
+        <div class="drive-value">${pct}%<small>eff ${effPct}%${lf > 0 ? ' · fatigue −' + Math.round(lf * 100) + '%' : ''}${extra}</small></div>
       </div>`;
     }).join('');
 
@@ -2640,6 +2697,8 @@ async function loadDesire(button) {
   } catch(e) {
     document.getElementById('desire-undertow').textContent = 'Out of reach';
     document.getElementById('desire-mood-trace').textContent = 'The drift is out of reach.';
+    const driveEventsEl = document.getElementById('desire-drive-events');
+    if (driveEventsEl) driveEventsEl.innerHTML = '<span class="drive-event-empty">The ledger is out of reach.</span>';
   } finally {
     if (refresh) { refresh.disabled = false; refresh.classList.remove('loading'); }
   }
@@ -2671,73 +2730,157 @@ function renderSomaTrace(soma) {
   wrap.style.display = '';
 }
 
-function renderSpeechEvent(event) {
-  const wrap = document.getElementById('desire-speech-wrap');
-  const target = document.getElementById('desire-speech-trace');
-  const meta = document.getElementById('desire-speech-meta');
-  const actions = document.getElementById('desire-speech-actions');
-  if (!wrap || !target || !meta || !actions) return;
-  const review = event?.review || {};
-  const label = String(event?.label || '').trim();
-  const trace = String(event?.trace || '').trim();
-  const chord = String(event?.chord_hint || '').trim();
-  const hidden = !event?.event_id || !trace || label === 'neutral' || event.recent === false || review.mark === '不认';
-  if (hidden) {
-    currentSpeechEventId = null;
-    wrap.style.display = 'none';
-    target.textContent = '';
-    meta.textContent = '';
-    actions.querySelectorAll('button').forEach(btn => {
-      btn.disabled = true;
-      btn.classList.remove('active');
-    });
+function formatDriveEventTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000);
+  if (Number.isNaN(d.getTime())) return String(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}.${pad(d.getDate())} · ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderDriveEvents(events = []) {
+  const wrap = document.getElementById('desire-drive-events');
+  if (!wrap) return;
+  const rows = Array.isArray(events) ? events.slice(0, 6) : [];
+  if (!rows.length) {
+    wrap.innerHTML = '<span class="drive-event-empty">No drive events yet.</span>';
     return;
   }
-  currentSpeechEventId = event.event_id;
-  target.textContent = chord ? `${chord} · ${trace}` : trace;
-  const confidence = Number.isFinite(Number(event.confidence)) ? Number(event.confidence).toFixed(2) : '—';
-  const parts = [
-    label,
-    `confidence ${confidence}`,
-    event.status || event.source || '',
-    event.rubric_version || '',
-    review.mark && review.mark !== 'unreviewed' ? `review ${review.mark}` : 'unreviewed',
-  ].filter(Boolean);
-  meta.textContent = parts.join(' · ');
-  actions.querySelectorAll('button').forEach(btn => {
-    const mark = btn.dataset.speechReview;
-    btn.disabled = false;
-    btn.classList.toggle('active', mark === review.mark);
-  });
-  wrap.style.display = '';
+  wrap.innerHTML = rows.map(event => {
+    const brain = event?.brain || {};
+    const source = String(event?.source || brain?.source || 'feed').trim() || 'feed';
+    const bucket = String(brain?.source_bucket || event?.source_bucket || '').trim();
+    const sourceType = String(brain?.source_type || event?.source_type || '').trim();
+    const label = String(event?.event_label || event?.primary_drive || 'drive_event').trim();
+    const reason = String(event?.reason || '').trim();
+    const time = formatDriveEventTime(event?.ts);
+    const intensity = Number.isFinite(Number(event?.intensity)) ? Number(event.intensity).toFixed(2) : '—';
+    const confidence = Number.isFinite(Number(event?.confidence)) ? Number(event.confidence).toFixed(2) : '—';
+    const agency = Number.isFinite(Number(event?.agency)) ? Number(event.agency).toFixed(2) : '—';
+    const applied = event?.applied && typeof event.applied === 'object' ? Object.entries(event.applied) : [];
+    const forwardArchival = brain?.forward_archival && typeof brain.forward_archival === 'object' ? brain.forward_archival : null;
+    const discernment = brain?.discernment && typeof brain.discernment === 'object' ? brain.discernment : null;
+    const deltaText = applied.length
+      ? applied.map(([k, v]) => {
+          const delta = Number(v?.delta || 0);
+          const sign = delta >= 0 ? '+' : '−';
+          return `<span class="drive-event-delta${event?.suppressed ? ' suppressed' : ' positive'}"><strong>${esc(k)}</strong> ${sign}${Math.abs(delta).toFixed(3)}</span>`;
+        }).join('')
+      : `<span class="drive-event-delta${event?.suppressed ? ' suppressed' : ''}"><strong>${event?.suppressed ? 'suppressed' : 'no delta'}</strong></span>`;
+    const archivalText = forwardArchival?.archive_candidate
+      ? `<span class="drive-event-delta positive"><strong>${esc(forwardArchival.display || '留痕')}</strong> ${esc(forwardArchival.reason || 'archive candidate')}</span>`
+      : '';
+    const discernmentText = discernment?.state && discernment.state !== 'clear'
+      ? `<span class="drive-event-delta suppressed"><strong>${esc(discernment.display || '皱眉，先不认')}</strong> ${esc((discernment.flags || []).join(', '))}</span>`
+      : '';
+    return `<div class="drive-event-row">
+      <div class="drive-event-head">
+        <span class="drive-event-source"><strong>${esc(source)}</strong>${bucket ? ` · ${esc(sourceType || 'entry')} ${esc(bucket)}` : ''}</span>
+        <span class="drive-event-label">${esc(label)}</span>
+      </div>
+      <div class="drive-event-meta">${esc(time)} · intensity ${intensity} · confidence ${confidence} · agency ${agency}${event?.suppressed ? ' · suppressed' : ''}</div>
+      <div class="drive-event-deltas">${deltaText}${archivalText}${discernmentText}</div>
+      ${reason ? `<div class="drive-event-reason">${esc(reason)}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
-async function reviewSpeechEvent(mark) {
-  if (!currentSpeechEventId || !mark) return;
-  const buttons = document.querySelectorAll('[data-speech-review]');
-  buttons.forEach(btn => { btn.disabled = true; });
-  try {
-    const res = await fetch(BASE + '/api/speech-event/review', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ event_id: currentSpeechEventId, mark })
-    });
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}));
-      return alert('复核失败：' + (error.error || res.status));
-    }
-    await loadDesire();
-  } finally {
-    buttons.forEach(btn => { btn.disabled = false; });
+function renderDiscernment(discernment) {
+  const drives = document.getElementById('desire-drives');
+  if (!drives) return;
+  let el = document.getElementById('desire-discernment-readout');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'desire-discernment-readout';
+    el.className = 'drive-event-empty';
+    drives.parentNode?.insertBefore(el, drives);
   }
+  if (!discernment || !discernment.state || discernment.state === 'clear') {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  const flags = Array.isArray(discernment.flags) && discernment.flags.length ? ` · ${discernment.flags.join(', ')}` : '';
+  el.style.display = '';
+  el.textContent = `${discernment.display || '皱眉，先不认'}${flags}`;
 }
 
-document.addEventListener('click', event => {
-  const button = event.target.closest?.('[data-speech-review]');
-  if (!button) return;
-  reviewSpeechEvent(button.dataset.speechReview);
-});
+function renderDriveReadouts(driveOutputs = {}, discernment = null, possessivenessChannels = null, attachmentRebound = null, effectiveDrives = {}, drives = {}) {
+  const wrap = document.getElementById('desire-drive-readouts');
+  if (!wrap) return;
+  const discernmentState = discernment && typeof discernment === 'object' ? String(discernment.state || '').trim() : '';
+  const discernmentFlags = Array.isArray(discernment?.flags) && discernment.flags.length ? discernment.flags.join(' · ') : '';
+  const discernmentBlock = discernmentState && discernmentState !== 'clear'
+    ? `<div class="drive-readout-row">
+        <div class="drive-readout-head">
+          <div class="drive-readout-name">discernment</div>
+          <div class="drive-readout-key">cross-cut</div>
+        </div>
+        <div class="drive-readout-values">
+          <div class="drive-readout-main">
+            <strong>${esc(discernment.display || '皱眉，先不认')}</strong>
+            <span>state ${esc(discernmentState)}</span>
+            <em>${discernmentFlags ? esc(discernmentFlags) : 'no flags'}</em>
+          </div>
+        </div>
+      </div>`
+    : '';
+  const rows = DRIVE_KEYS.map(key => {
+    const output = driveOutputs[key] || {};
+    const rawValue = finiteNumber(drives?.[key]);
+    const effectiveValue = finiteNumber(output.effective_value, finiteNumber(effectiveDrives?.[key], rawValue));
+    const confidence = Number.isFinite(Number(output.confidence)) ? Number(output.confidence).toFixed(2) : '—';
+    const valueText = Number.isFinite(rawValue) ? rawValue.toFixed(2) : '—';
+    const effText = Number.isFinite(effectiveValue) ? effectiveValue.toFixed(2) : '—';
+    const chips = [];
+    if (output.source) chips.push(`<span class="drive-readout-chip neutral"><strong>source</strong> ${esc(output.source)}</span>`);
+    if (output.mode) chips.push(`<span class="drive-readout-chip neutral"><strong>mode</strong> ${esc(output.mode)}</span>`);
+    if (output.reason) chips.push(`<span class="drive-readout-chip neutral">${esc(output.reason)}</span>`);
+    if (key === 'possessiveness') {
+      const spike = Number.isFinite(Number(output.event_spike)) ? Number(output.event_spike).toFixed(2) : null;
+      const base = Number.isFinite(Number(output.territorial_baseline)) ? Number(output.territorial_baseline).toFixed(2) : null;
+      const channels = possessivenessChannels && typeof possessivenessChannels === 'object' ? possessivenessChannels : {};
+      if (spike !== null) chips.push(`<span class="drive-readout-chip positive"><strong>spike</strong> ${spike}</span>`);
+      if (base !== null) chips.push(`<span class="drive-readout-chip neutral"><strong>base</strong> ${base}</span>`);
+      if (Number.isFinite(Number(channels.event_spike)) || Number.isFinite(Number(channels.territorial_baseline))) {
+        const chSpike = Number.isFinite(Number(channels.event_spike)) ? Number(channels.event_spike).toFixed(2) : '—';
+        const chBase = Number.isFinite(Number(channels.territorial_baseline)) ? Number(channels.territorial_baseline).toFixed(2) : '—';
+        chips.push(`<span class="drive-readout-chip neutral"><strong>channels</strong> ${chSpike} / ${chBase}</span>`);
+      }
+    }
+    const rebound = key === 'attachment' ? (output.rebound && typeof output.rebound === 'object' ? output.rebound : (attachmentRebound && typeof attachmentRebound === 'object' ? attachmentRebound : null)) : null;
+    if (rebound) {
+      chips.push(`<span class="drive-readout-chip ${rebound.active ? 'positive' : 'neutral'}"><strong>rebound</strong> ${esc(rebound.phase || '—')}</span>`);
+      if (Number.isFinite(Number(rebound.hours_since_absence))) {
+        chips.push(`<span class="drive-readout-chip neutral"><strong>absence</strong> ${Number(rebound.hours_since_absence).toFixed(1)}h</span>`);
+      }
+      if (Number.isFinite(Number(rebound.overshoot))) {
+        chips.push(`<span class="drive-readout-chip neutral"><strong>overshoot</strong> ${Number(rebound.overshoot).toFixed(2)}</span>`);
+      }
+    }
+    if (key === 'reflection' && output.reflection_mode) {
+      chips.push(`<span class="drive-readout-chip ${output.reflection_mode === 'forward_archival' ? 'positive' : 'neutral'}"><strong>reflection</strong> ${esc(output.reflection_mode)}</span>`);
+      if (output.forward_archival && typeof output.forward_archival === 'object' && output.forward_archival.archive_candidate) {
+        chips.push(`<span class="drive-readout-chip positive"><strong>archival</strong> ${esc(output.forward_archival.display || '留痕')}</span>`);
+      }
+    }
+    return `<div class="drive-readout-row">
+      <div class="drive-readout-head">
+        <div class="drive-readout-name">${esc(DRIVE_LABELS[key] || key)}</div>
+        <div class="drive-readout-key">${esc(key)}</div>
+      </div>
+      <div class="drive-readout-values">
+        <div class="drive-readout-main">
+          <strong>${valueText}</strong>
+          <span>effective ${effText}</span>
+          <em>confidence ${confidence}</em>
+        </div>
+        <div class="drive-readout-chips">${chips.join('') || '<span class="drive-readout-chip neutral">no extra output</span>'}</div>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.innerHTML = `${discernmentBlock}${rows || '<span class="drive-readout-empty">No drive readouts yet.</span>'}`;
+}
 
 function renderThoughtPool(thoughts = desireThoughts) {
   const thoughtsEl = document.getElementById('desire-thoughts');
@@ -4839,7 +4982,7 @@ let latentNoteTab = 'draft';
 let latentDriveTab = 'all';
 let latentEditingId = '';
 let latentCreating = false;
-const LATENT_DRIVE_OPTIONS = ['general','attachment','libido','possessiveness','reflection','stewardship','curiosity','social','fatigue','stress','discernment'];
+const LATENT_DRIVE_OPTIONS = ['general','attachment','libido','possessiveness','reflection','stewardship','curiosity','social','fatigue','stress'];
 const LATENT_DRIVE_FILTERS = ['all', ...LATENT_DRIVE_OPTIONS];
 
 function latentTypeLabel(type) {
@@ -4857,7 +5000,7 @@ function latentPinnedLabel(note) {
 }
 
 function latentDriveLabel(drive) {
-  const aliases = { duty: 'stewardship', disgust: 'discernment' };
+  const aliases = { duty: 'stewardship', disgust: 'reflection', discernment: 'reflection' };
   const value = aliases[drive] || drive;
   return LATENT_DRIVE_OPTIONS.includes(value) ? value : 'general';
 }

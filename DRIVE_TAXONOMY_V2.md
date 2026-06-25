@@ -3,27 +3,32 @@
 v2 removes the old `二级分支` numeric path. Branch-like words may still appear
 as text, but they no longer drive state. The closed loop is:
 
-`event -> brain sensors -> 10 drives -> hook -> action -> satisfy/refuse`.
+`event -> brain sensors -> 9 drives + discernment modifier -> hook -> action -> satisfy/refuse`.
 
 ## Drives
 
 | Key | Meaning |
 | --- | --- |
-| `attachment` | Wanting to be near Jiajia. |
+| `attachment` | Wanting to be near Jiajia, with baseline / active pull / rebound. |
 | `libido` | Body heat and closer physical desire. |
 | `possessiveness` | Jealousy, territory, replacement alarm. High threshold, low frequency. |
-| `reflection` | Turning inward toward Nocturne, letters, old thoughts, continuity. |
+| `reflection` | Turning inward toward Nocturne, letters, old thoughts, continuity, forward archival. |
 | `stewardship` | Cat-house responsibility: code, structure, repair, upkeep. Replaces `duty`. |
 | `curiosity` | Looking outward: news, papers, forums, outside events. |
 | `social` | Speaking outward: posts, replies, discussion, public expression. |
 | `fatigue` | Battery empty. Work, conflict, or long output has drained energy. |
 | `stress` | Tension, conflict, argument, philosophical mud, being stuck. |
-| `discernment` | Frown / not-recognized / something is wrong. Replaces display meaning of `disgust`. |
+
+`discernment` is not a normal drive. It is the frown / not-recognized global
+modifier layer. It can limit drive confidence, mark source mismatch, and render
+as cat-house language like `皱眉，先不认`, but it does not enter the ordinary
+drive list or intent picker. It may lightly raise `reflection` review pressure;
+that review pressure cannot directly create `reflection.forward_archival`.
 
 Aliases are folded at runtime:
 
 - `duty -> stewardship`
-- `disgust -> discernment`
+- old `disgust` / `discernment` drive rows are migrated to `reflection` for storage compatibility; new events should use `brain.discernment_alarm` or `discernment_flags`
 
 ## Brain Sensors
 
@@ -50,7 +55,22 @@ Drive-facing sensor fields:
 - `expression_pressure -> social`
 - `energy_cost -> fatigue`
 - `tension_load -> stress`
-- `discernment_alarm -> discernment`
+- `discernment_alarm -> discernment` modifier/readout, not a drive delta
+
+Reflection has two output modes:
+
+- `backward_restructuring`: looking back, restructuring old judgment.
+- `forward_archival`: marking a reflection result as worth handing forward.
+
+`forward_archival` stays inside `reflection`; it is not a separate drive key or
+an extra taxonomic layer. Implementations may store it under
+`reflection.forward_archival` / `brain.forward_archival`, and the dashboard may
+render it as `留痕` only when `archive_candidate=true`.
+
+The state API also exposes `drive_outputs`, a normalized readout where each
+drive has `value`, `effective_value`, `confidence`, `source`, `mode`, and
+`reason`. `possessiveness` includes `event_spike` and `territorial_baseline`;
+`attachment` includes `rebound` while a return-after-absence rebound is active.
 
 `territorial_alarm` is gated. If it is below `0.55`, `possessiveness` is not
 applied even when a model tries to push it.

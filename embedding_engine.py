@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # ============================================================
 # Module: Embedding Engine (embedding_engine.py)
 # 模块：向量化引擎

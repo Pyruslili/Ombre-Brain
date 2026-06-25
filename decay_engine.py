@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # ============================================================
 # Module: Memory Decay Engine (decay_engine.py)
 # 模块：记忆衰减引擎

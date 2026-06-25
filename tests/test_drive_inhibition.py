@@ -1,6 +1,6 @@
 # ============================================================
 # Test: ESM软互抑 + 逃逸阀 + PA/NA展示层（P3）
-# 作用在已有10维drive上，不另起PA/NA持久状态。
+# 作用在已有9维drive上，不另起PA/NA持久状态。
 # ============================================================
 
 from desire_engine import (
@@ -67,7 +67,6 @@ def test_esm_inhibition_never_below_baseline():
     drives = _baseline_drives()
     drives["attachment"] = 0.90
     drives["stress"] = 0.90
-    drives["discernment"] = 0.90
     drives["fatigue"] = 0.90
     result = apply_esm_inhibition(drives)
     for k in POSITIVE_GROUP + NEGATIVE_GROUP:
@@ -80,20 +79,20 @@ def test_escape_valve_single_imbalance_does_not_trigger():
     """单次失衡不触发——逃逸阀用streak计数，防止单次评分误判。"""
     drives = _baseline_drives()
     drives["stress"] = 0.80
-    drives["discernment"] = 0.70
+    drives["fatigue"] = 0.70
 
     result, streak = apply_escape_valve(drives, streak=0)
     assert streak == 1
     # 没触发，负向组没被拉回
     assert result["stress"] == drives["stress"]
-    assert result["discernment"] == drives["discernment"]
+    assert result["fatigue"] == drives["fatigue"]
 
 
 def test_escape_valve_triggers_after_streak():
     """连续ESCAPE_VALVE_STREAK_TRIGGER拍失衡 → 负向组超出baseline部分拉回50%。"""
     drives = _baseline_drives()
     drives["stress"] = 0.80
-    drives["discernment"] = 0.70
+    drives["fatigue"] = 0.70
     # 正向组保持baseline（excess=0），负向组excess明显>正向组excess
 
     streak = 0
@@ -110,23 +109,23 @@ def test_escape_valve_triggers_after_streak():
     assert stress_excess_after == round(stress_excess_before * 0.5, 10) or \
         abs(stress_excess_after - stress_excess_before * 0.5) < 1e-6
 
-    discernment_excess_before = 0.70 - DRIVE_BASELINES["discernment"]
-    discernment_excess_after = result["discernment"] - DRIVE_BASELINES["discernment"]
-    assert abs(discernment_excess_after - discernment_excess_before * 0.5) < 1e-6
+    fatigue_excess_before = 0.70 - DRIVE_BASELINES["fatigue"]
+    fatigue_excess_after = result["fatigue"] - DRIVE_BASELINES["fatigue"]
+    assert abs(fatigue_excess_after - fatigue_excess_before * 0.5) < 1e-6
 
 
 def test_escape_valve_resets_when_balanced():
     """正向组也跟上了（不再明显失衡）→ streak清零，不会"攒着"突然触发。"""
     drives = _baseline_drives()
     drives["stress"] = 0.80
-    drives["discernment"] = 0.70
+    drives["fatigue"] = 0.70
 
     _, streak = apply_escape_valve(drives, streak=0)
     assert streak == 1
 
     balanced = _baseline_drives()
     balanced["stress"] = 0.20   # excess 0.05
-    balanced["discernment"] = 0.10  # excess 0.05
+    balanced["fatigue"] = 0.15  # excess 0.05
     balanced["attachment"] = 0.35  # excess 0.05，正负两组excess差距很小
 
     _, streak2 = apply_escape_valve(balanced, streak)
@@ -163,7 +162,7 @@ def test_pa_na_snapshot_reflects_drive_changes():
 def test_tick_drives_carries_escape_streak():
     state = DriveState(drives=_baseline_drives())
     state.drives["stress"] = 0.80
-    state.drives["discernment"] = 0.70
+    state.drives["fatigue"] = 0.70
     assert state.escape_streak == 0
 
     s1 = tick_drives(state, now_ts=1000.0)
@@ -243,3 +242,23 @@ def test_reunion_boost_is_one_shot_on_next_state(tmp_path):
 
     second_read = engine.state()
     assert second_read["pa_na"]["PA"] <= first_read["pa_na"]["PA"]
+
+
+def test_attachment_rebound_after_absence(tmp_path):
+    import time
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    now = time.time()
+    state = engine.store.load_state()
+    state.drives["attachment"] = 0.55
+    state.last_user_message_at = now - 8 * 3600
+    engine.store.save_state(state)
+
+    engine.mark_user_signal(now)
+    rebound_state = engine.state()
+    rebound = rebound_state["attachment_rebound"]
+
+    assert rebound["active"] is True
+    assert rebound["phase"] == "overshoot"
+    assert rebound_state["drives"]["attachment"] > rebound["baseline"]
+    assert rebound_state["drive_outputs"]["attachment"]["rebound"]["active"] is True

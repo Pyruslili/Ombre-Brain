@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # ============================================================
 # Module: Dehydration & Auto-tagging (dehydrator.py)
 # 模块：数据脱水压缩 + 自动打标

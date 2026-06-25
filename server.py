@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # ============================================================
 # Module: MCP Server Entry Point (server.py)
 # 模块：MCP 服务器主入口
@@ -43,7 +45,7 @@ import secrets
 import time
 import json as _json_lib
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import httpx
 import os as _os
 
@@ -116,9 +118,14 @@ bucket_mgr = BucketManager(config, embedding_engine=embedding_engine)  # Bucket 
 dehydrator = Dehydrator(config)                      # Dehydrator / 脱水器
 decay_engine = DecayEngine(config, bucket_mgr)       # Decay engine / 衰减引擎
 import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)
+BUCKETS_DIR = config["buckets_dir"]
+
+
+def _bucket_path(*parts: str) -> str:
+    return os.path.join(BUCKETS_DIR, *parts)
 
 _desire_db = os.path.join(
-    os.environ.get("OMBRE_BUCKETS_DIR", "./buckets"),
+    BUCKETS_DIR,
     "desire.db"
 )
 _desire = DesireEngine(db_path=_desire_db)
@@ -401,6 +408,71 @@ def _bucket_created_datetime(bucket: dict) -> datetime | None:
         return datetime.fromisoformat(raw[:19])
     except (TypeError, ValueError):
         return None
+
+
+ANALYZER_DEFAULT_SINCE_UTC = datetime(2026, 6, 24, 16, 0, 0, tzinfo=timezone.utc)
+ANALYZER_LOCAL_TZ = timezone(timedelta(hours=8))
+
+
+def _parse_analyzer_since(raw: str | None) -> datetime:
+    value = str(raw or "").strip()
+    if not value:
+        return ANALYZER_DEFAULT_SINCE_UTC
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        raise ValueError("since must be ISO datetime")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _bucket_created_utc(bucket: dict) -> datetime | None:
+    raw = str(bucket.get("metadata", {}).get("created", "") or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        try:
+            dt = datetime.fromisoformat(raw[:19])
+        except (TypeError, ValueError):
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ANALYZER_LOCAL_TZ)
+    return dt.astimezone(timezone.utc)
+
+
+def _analyzer_entry_type(bucket: dict, mark_rows: list[dict]) -> str:
+    meta = bucket.get("metadata", {})
+    btype = str(meta.get("type", "") or "").strip().lower()
+    if btype == "feel":
+        return "feel"
+    if btype in {"breath", "dream"}:
+        return ""
+    domains = _bucket_domains(meta)
+    tags = _bucket_tags(meta)
+    labels = domains | tags
+    if labels & {"letter", "letter_jiajia"}:
+        return "letter"
+    if "writing" in labels:
+        return "writing"
+    if "window" in labels:
+        return "window"
+    if _mark_counts(mark_rows)["悬置"] > 0:
+        return "unresolved"
+    if btype == "archived":
+        return ""
+    if not _is_settled_bucket(bucket) and _guess_wander_domain(bucket, mark_rows) == "memory":
+        return "memory"
+    return ""
+
+
+def _analyzer_preview(content: str, limit: int = 1000) -> str:
+    text = " ".join(strip_wikilinks(content or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "..."
 
 
 def _short_text(text: str, limit: int = 36) -> str:
@@ -1153,7 +1225,7 @@ async def mood_endpoint(request):
     from starlette.responses import JSONResponse
     data = {}
     try:
-        mood_path = "/app/buckets/current_mood.json"
+        mood_path = _bucket_path("current_mood.json")
         if os.path.exists(mood_path):
             with open(mood_path) as f:
                 data["mood"] = json.load(f)
@@ -1165,7 +1237,7 @@ async def dream_latest_endpoint(request):
     import json, os
     from starlette.responses import JSONResponse
     try:
-        dream_path = "/app/buckets/latest_dream.json"
+        dream_path = _bucket_path("latest_dream.json")
         if os.path.exists(dream_path):
             with open(dream_path) as f:
                 data = json.load(f)
@@ -1443,7 +1515,7 @@ def _strip_bucket_prefix(text: str) -> str:
     return "\n".join(cleaned).strip()
 
 
-HANDOFF_NOTE_PATH = "/app/buckets/handoff_note.json"
+HANDOFF_NOTE_PATH = _bucket_path("handoff_note.json")
 HANDOFF_NOTE_MAX_CHARS = 2000
 
 
@@ -1484,7 +1556,7 @@ def handoff_note(content: str = "", clear: bool = False) -> str:
         return f"读取失败: {e}"
 
 
-MARGINALIA_PATH = "/app/buckets/marginalia.json"
+MARGINALIA_PATH = _bucket_path("marginalia.json")
 MARGINALIA_MAX_CHARS = 6000
 
 
@@ -1545,7 +1617,7 @@ async def nocturne_breath(
         )
         _decoration = body_state_speak(_ds.drives, _top_drive)
         if _decoration:
-            _mood_path = "/app/buckets/current_mood.json"
+            _mood_path = _bucket_path("current_mood.json")
             _mood_data = {}
             if _osd.path.exists(_mood_path):
                 with open(_mood_path) as _f:
@@ -1707,7 +1779,7 @@ async def nocturne_breath(
         dream_section = ""
         try:
             import json as _jdream, os as _osdream
-            dream_path = "/app/buckets/latest_dream.json"
+            dream_path = _bucket_path("latest_dream.json")
             if _osdream.path.exists(dream_path):
                 with open(dream_path) as _f:
                     _dream_data = _jdream.load(_f)
@@ -1737,7 +1809,7 @@ async def nocturne_breath(
         marginalia_section = ""
         try:
             import json as _jmarg, os as _osmarg
-            marginalia_path = "/app/buckets/marginalia.json"
+            marginalia_path = _bucket_path("marginalia.json")
             if _osmarg.path.exists(marginalia_path):
                 with open(marginalia_path) as _f:
                     _marg_data = _jmarg.load(_f)
@@ -1756,7 +1828,7 @@ async def nocturne_breath(
             from mood_pool import get_daily_mood
             import json as _json, os as _os
 
-            mood_path = "/app/buckets/current_mood.json"
+            mood_path = _bucket_path("current_mood.json")
             live = {}
             if _os.path.exists(mood_path):
                 try:
@@ -2001,7 +2073,8 @@ async def nocturne_breath(
 def desire_state() -> dict:
     """
     读取欲望引擎的当前状态：
-    - 10维驱动条（attachment/libido/possessiveness/reflection/stewardship/curiosity/social/fatigue/stress/discernment）
+    - 9维驱动条（attachment/libido/possessiveness/reflection/stewardship/curiosity/social/fatigue/stress）
+    - discernment皱眉层（全局修正/读出，不是普通drive）
     - per-drive局部疲劳（attachment/libido几乎不受疲劳影响）
     - 当前最高意图（want_action + drive_key + score）
     - 念头池（flit/fixation/unsourced）
@@ -2017,7 +2090,7 @@ def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "", chord: 
     """
     让某个驱动维度上涨。
     嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
-    drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress|discernment
+    drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress
     thought: 可选，把这次经历的一句话存入念头池（flit）
     chord: 可选，把这次念头的和弦回声写入weather_residue（Fmaj7/Gmaj7/Dmaj7→warmth，Dm7/Em7/F#dim→shadow）
     """
@@ -2742,7 +2815,7 @@ async def _refresh_dream_cache():
     if not recent:
         try:
             import json as _j, time as _t
-            with open("/app/buckets/latest_dream.json", "w") as _f:
+            with open(_bucket_path("latest_dream.json"), "w") as _f:
                 _j.dump({"dream": "", "ts": _t.time()}, _f)
         except Exception:
             pass
@@ -2794,7 +2867,7 @@ async def _refresh_dream_cache():
     if dream_text:
         try:
             import json as _j, time as _t
-            with open("/app/buckets/latest_dream.json", "w") as _f:
+            with open(_bucket_path("latest_dream.json"), "w") as _f:
                 _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
         except Exception:
             pass
@@ -3666,7 +3739,7 @@ async def api_desire_state(request):
     try:
         from mood_pool import get_daily_mood
         import json as _j, os as _o
-        mood_path = "/app/buckets/current_mood.json"
+        mood_path = _bucket_path("current_mood.json")
         live = {}
         if _o.path.exists(mood_path):
             with open(mood_path) as _f:
@@ -4155,7 +4228,15 @@ async def api_desire_feed(request):
                 strength = max(FEED_STRENGTH_FLOOR, strength * (1 - FEED_DISCOUNT_STEP * rank))
             if text:
                 try:
-                    _desire.add_thought(text, drive, strength=strength, source=source)
+                    thought_source = str(t.get("source") or source or "cli").strip()[:80]
+                    source_bucket = str(t.get("source_bucket") or body.get("source_bucket") or "").strip()[:120]
+                    source_type = str(t.get("source_type") or body.get("source_type") or "").strip()[:40]
+                    source_created = str(t.get("source_created") or body.get("source_created") or "").strip()[:80]
+                    _desire.add_thought(
+                        text, drive, strength=strength, source=thought_source,
+                        source_bucket=source_bucket, source_type=source_type,
+                        source_created=source_created,
+                    )
                     _desire.store.add_echo(text, drive)
                     if (t.get("chord") or "").strip():
                         _desire.apply_chord_echo(t.get("chord", "").strip(), source="thought")
@@ -4183,14 +4264,18 @@ async def api_desire_feed(request):
             logger.warning(f"desire/feed drive_event failed: {e}")
             event_result = {"ok": False, "error": str(e)}
 
-    add_thoughts = not (event_result and event_result.get("suppressed"))
-    added = _add_feed_thoughts(thoughts, source="cli") if add_thoughts else 0
+    feed_source = str(body.get("source") or (event_body or {}).get("source") or "cli").strip()[:80] or "cli"
+    add_thoughts = (
+        not (event_result and event_result.get("suppressed"))
+        or feed_source == "analyze_nocturne_entry"
+    )
+    added = _add_feed_thoughts(thoughts, source=feed_source) if add_thoughts else 0
     if event_result and event_result.get("suppressed"):
         logger.info(f"desire/feed suppressed event: {event_result.get('reason')}")
 
     try:
         import json as _bj, os as _bo
-        mood_path = "/app/buckets/current_mood.json"
+        mood_path = _bucket_path("current_mood.json")
         mood_data = {}
         if _bo.path.exists(mood_path):
             with open(mood_path) as _f:
@@ -4238,7 +4323,7 @@ async def api_desire_feed(request):
 # 本地hook每次算完，主动POST一份上来；dashboard用GET读最新的。
 # 1小时没人上报就当过期，不强行维持一个早就不新鲜的状态。
 # =============================================================
-_SOMA_STATE_PATH = "/app/buckets/soma_state.json"
+_SOMA_STATE_PATH = _bucket_path("soma_state.json")
 _SOMA_STALE_SECONDS = 3600
 
 
@@ -4286,6 +4371,60 @@ async def api_soma_state(request):
         return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
     except Exception:
         return JSONResponse({"line": None, "chord": None, "source": None},
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/analyzer/entries", methods=["GET"])
+async def api_analyzer_entries(request):
+    """
+    Analyzer-only read view for new Nocturne entries.
+    Defaults to 2026-06-25 00:00 Asia/Shanghai (2026-06-24T16:00:00Z).
+    """
+    from starlette.responses import JSONResponse
+    try:
+        since = _parse_analyzer_since(request.query_params.get("since"))
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+    try:
+        all_buckets = await bucket_mgr.list_all(include_archive=True)
+        marks_by_bucket = _load_all_marks()
+        entries = []
+        for b in all_buckets:
+            bid = str(b.get("id") or "").strip()
+            if not bid:
+                continue
+            mark_rows = marks_by_bucket.get(bid, [])
+            if _is_private_bucket(b, mark_rows):
+                continue
+            created_dt = _bucket_created_utc(b)
+            if not created_dt or created_dt < since:
+                continue
+            entry_type = _analyzer_entry_type(b, mark_rows)
+            if not entry_type:
+                continue
+            meta = b.get("metadata", {})
+            entries.append({
+                "id": bid,
+                "type": entry_type,
+                "created": meta.get("created", ""),
+                "content_preview": _analyzer_preview(b.get("content", "")),
+                "chord": meta.get("chord", ""),
+                "tags": meta.get("tags", []),
+                "domain": meta.get("domain", []),
+                "source": "analyze_nocturne_entry",
+                "source_bucket": bid,
+                "source_type": entry_type,
+                "source_created": meta.get("created", ""),
+                "_created_sort": created_dt.isoformat(),
+            })
+        entries.sort(key=lambda x: x["_created_sort"], reverse=True)
+        for entry in entries:
+            entry.pop("_created_sort", None)
+        return JSONResponse(entries, headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500,
                            headers={"Access-Control-Allow-Origin": "*"})
 
 

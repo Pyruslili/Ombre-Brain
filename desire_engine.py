@@ -1,6 +1,6 @@
 """
 desire_engine.py — Nox的欲望引擎
-10维驱动条 + 念头池(闪念↔执念↔无来源) + 意图系统 + per-drive疲劳
+9维驱动条 + discernment全局修正层 + 念头池(闪念↔执念↔无来源) + 意图系统 + per-drive疲劳
 
 设计原则：
 - 纯函数内核，IO隔离
@@ -33,12 +33,18 @@ DRIVE_KEYS = [
     "social",
     "fatigue",
     "stress",
-    "discernment",
 ]
+
+DISCERNMENT_STATES = {
+    "clear": "正常",
+    "ears_tilted": "耳朵偏了一下",
+    "tail_stopped": "尾巴停住",
+    "frown_hold": "皱眉，先不认",
+    "softening_alarm": "软化警报",
+}
 
 DRIVE_ALIASES = {
     "duty": "stewardship",
-    "disgust": "discernment",
 }
 
 DRIVE_BASELINES = {
@@ -51,7 +57,6 @@ DRIVE_BASELINES = {
     "social":     0.25,
     "fatigue":    0.10,
     "stress":     0.15,
-    "discernment": 0.05,
 }
 
 DRIVE_ACTIONS = {
@@ -64,7 +69,6 @@ DRIVE_ACTIONS = {
     "social":     "想把观点整理出去说，发帖或讨论",
     "fatigue":    "歇着，或者做梦",
     "stress":     "需要停一停，把绷紧的地方放下",
-    "discernment": "皱一下，辨认哪里不对",
 }
 
 DRIVE_DISPLAY_NAMES = {
@@ -77,8 +81,40 @@ DRIVE_DISPLAY_NAMES = {
     "social": "向外说",
     "fatigue": "没电",
     "stress": "绷紧",
-    "discernment": "皱眉",
 }
+
+DRIVE_TIME_MODES = {
+    "attachment": "slow",
+    "libido": "fast_spike",
+    "possessiveness": "fast_spike + slow",
+    "reflection": "medium",
+    "stewardship": "slow",
+    "curiosity": "fast_spike",
+    "social": "medium",
+    "fatigue": "cumulative",
+    "stress": "fast_spike",
+}
+
+POSSESSIVENESS_CHANNEL_DEFAULT = {
+    "event_spike": 0.0,
+    "territorial_baseline": DRIVE_BASELINES["possessiveness"],
+    "last_event_ts": 0.0,
+    "last_baseline_ts": 0.0,
+}
+
+ATTACHMENT_REBOUND_DEFAULT = {
+    "active": False,
+    "phase": "settled",
+    "baseline": DRIVE_BASELINES["attachment"],
+    "overshoot": 0.0,
+    "started_at": 0.0,
+}
+
+ATTACHMENT_REBOUND_MIN_ABSENCE_HOURS = 2.0
+ATTACHMENT_REBOUND_MAX_OVERSHOOT = 0.10
+ATTACHMENT_REBOUND_SETTLE_HOURS = 6.0
+POSSESSIVENESS_EVENT_HALFLIFE_HOURS = 0.5
+POSSESSIVENESS_BASELINE_HALFLIFE_HOURS = 24.0
 
 
 def normalize_drive_key(drive_key: str, default: str = "") -> str:
@@ -102,6 +138,31 @@ def normalize_drive_values(values: dict | None) -> dict:
         normalized[drive_key] = value
     return normalized
 
+
+def normalize_possessiveness_channels(value: dict | None) -> dict:
+    data = dict(POSSESSIVENESS_CHANNEL_DEFAULT)
+    if isinstance(value, dict):
+        data.update(value)
+    data["event_spike"] = _clamp(data.get("event_spike", 0.0))
+    data["territorial_baseline"] = _clamp(
+        data.get("territorial_baseline", DRIVE_BASELINES["possessiveness"])
+    )
+    data["last_event_ts"] = float(data.get("last_event_ts", 0.0) or 0.0)
+    data["last_baseline_ts"] = float(data.get("last_baseline_ts", 0.0) or 0.0)
+    return data
+
+
+def normalize_attachment_rebound(value: dict | None) -> dict:
+    data = dict(ATTACHMENT_REBOUND_DEFAULT)
+    if isinstance(value, dict):
+        data.update(value)
+    data["active"] = bool(data.get("active", False))
+    data["phase"] = str(data.get("phase") or "settled")
+    data["baseline"] = _clamp(data.get("baseline", DRIVE_BASELINES["attachment"]))
+    data["overshoot"] = _clamp(data.get("overshoot", 0.0), 0.0, ATTACHMENT_REBOUND_MAX_OVERSHOOT)
+    data["started_at"] = float(data.get("started_at", 0.0) or 0.0)
+    return data
+
 INTENT_THRESHOLD = 0.55
 # 全局fatigue只在极高时强制rest（软压制已经接管大部分情况）
 FATIGUE_HARD_GATE = 0.90
@@ -118,7 +179,6 @@ FATIGUE_SENSITIVITY = {
     "social":     0.78,
     "fatigue":    0.0,
     "stress":     0.30,
-    "discernment": 0.20,
 }
 
 COUPLING = [
@@ -129,8 +189,6 @@ COUPLING = [
     ("reflection", "social",      0.03, "delta"),
     ("fatigue",    "stress",      0.03, "level"),
     ("reflection", "stress",      0.06, "delta"),
-    # discernment触发后attachment轻微回落（皱一下会让人想缩）
-    ("discernment", "attachment", -0.03, "delta"),
 ]
 
 SATISFY_DECAY = {
@@ -143,7 +201,6 @@ SATISFY_DECAY = {
     "social":     {"social": 0.65, "curiosity": 0.90},
     "fatigue":    {"fatigue": 0.50},
     "stress":     {"stress": 0.60, "fatigue": 0.90},
-    "discernment": {"discernment": 0.55},
 }
 
 # 念头阈值
@@ -169,10 +226,10 @@ RUMINATION_FADE_THRESHOLD = 0.06   # 低于这个才真正消失
 
 DAMPING = 0.02
 
-# ─── ESM软互抑 + 逃逸阀（P3，作用在已有10维drive上，不另起PA/NA持久层）──────────
-# 正向组/负向组：不是新状态，只是把现有10维drive按情绪极性分组
+# ─── ESM软互抑 + 逃逸阀（P3，作用在已有9维drive上，不另起PA/NA持久层）──────────
+# 正向组/负向组：不是新状态，只是把现有9维drive按情绪极性分组
 POSITIVE_GROUP = ["attachment", "libido", "curiosity", "social", "reflection", "stewardship"]
-NEGATIVE_GROUP = ["stress", "discernment", "fatigue", "possessiveness"]
+NEGATIVE_GROUP = ["stress", "fatigue", "possessiveness"]
 
 ESM_K = 0.3                      # 互抑系数，跟PDF阶段5.7一致
 ESCAPE_VALVE_EXCESS_GAP = 0.15   # 负向超出量比正向超出量高出这个值才算"明显失衡"
@@ -248,7 +305,6 @@ REFRACTORY_TICKS: dict = {
     "attachment": 5,
     "libido":     6,
     "possessiveness": 8,
-    "discernment": 4,
     "curiosity":  8,
     "reflection": 8,
     "stewardship": 8,
@@ -258,7 +314,7 @@ REFRACTORY_TICKS: dict = {
 }
 REFRACTORY_TICKS_DEFAULT = 8  # 未列出的维度用这个
 
-# ─── Drive Event v2：事件包 → 10维drive ───────────────────────────────────────
+# ─── Drive Event v2：事件包 → 9维drive + discernment修正层 ───────────────────
 DRIVE_EVENT_SCHEMA = "drive_event_v2"
 DRIVE_EVENT_AGENCY_GATE = 0.35
 DRIVE_EVENT_CONFIDENCE_FLOOR = 0.20
@@ -275,7 +331,6 @@ DRIVE_EVENT_BASE_DELTA = {
     "social": 0.12,
     "fatigue": 0.12,
     "stress": 0.13,
-    "discernment": 0.11,
 }
 
 DRIVE_EVENT_SOURCE_WEIGHTS = {
@@ -285,6 +340,7 @@ DRIVE_EVENT_SOURCE_WEIGHTS = {
     "memory": 0.55,
     "touch": 0.70,
     "external": 0.45,
+    "analyze_nocturne_entry": 0.55,
     "legacy_feed": 0.60,
     "manual": 0.75,
 }
@@ -299,7 +355,6 @@ DRIVE_EVENT_BRAIN_FEATURES = {
     "expression_pressure": ("social", 0.50, 0.0),
     "energy_cost": ("fatigue", 0.50, 0.0),
     "tension_load": ("stress", 0.55, 0.0),
-    "discernment_alarm": ("discernment", 0.60, 0.0),
 }
 
 LEGACY_BRANCH_DRIVE = {
@@ -360,6 +415,8 @@ class DriveState:
     last_user_message_at: float = field(default_factory=time.time)
     # 团圆PA上扬是一次性展示层事件，不写回drive baseline。
     reunion_pa_boost: float = 0.0
+    possessiveness_channels: dict = field(default_factory=lambda: dict(POSSESSIVENESS_CHANNEL_DEFAULT))
+    attachment_rebound: dict = field(default_factory=lambda: dict(ATTACHMENT_REBOUND_DEFAULT))
 
 
 @dataclass
@@ -374,6 +431,9 @@ class Thought:
     # 念头来源："manual"=Nox亲手存 | "cli"=CLI分析feel提取 | "collision"=念头碰撞
     #          "echo"=旧念头回声 | "autofeed"=硬编码词池兜底 | "reflex"=条件反射
     source: str = "manual"
+    source_bucket: str = ""
+    source_type: str = ""
+    source_created: str = ""
     last_ticked_at: float = 0.0      # 上次tick的时间戳，0表示用born_at
 
 
@@ -441,6 +501,15 @@ def effective_score(drive_val: float, local_fat: float) -> float:
     return drive_val * (1.0 - local_fat)
 
 
+def effective_drive_snapshot(drives: dict, local_fatigue: dict) -> dict:
+    drives = normalize_drive_values(drives)
+    local_fatigue = {k: float((local_fatigue or {}).get(k, 0.0) or 0.0) for k in FATIGUE_SENSITIVITY}
+    return {
+        k: round(effective_score(drives.get(k, DRIVE_BASELINES[k]), local_fatigue.get(k, 0.0)), 3)
+        for k in DRIVE_KEYS
+    }
+
+
 def _group_excess(drives: dict, group: list) -> float:
     """某分组里，超出各自baseline的部分的平均值（不超出的算0）。"""
     vals = [max(0.0, drives.get(k, DRIVE_BASELINES[k]) - DRIVE_BASELINES[k]) for k in group]
@@ -500,7 +569,7 @@ def apply_escape_valve(drives: dict, streak: int) -> tuple:
 
 def pa_na_snapshot(drives: dict) -> dict:
     """
-    PA/NA展示层——不持久化，每次从当前10维drive实时算一个坐标给前端看。
+    PA/NA展示层——不持久化，每次从当前9维drive实时算一个坐标给前端看。
     PA=正向组均值，NA=负向组均值，两者都是[0,1]。
     """
     drives = normalize_drive_values(drives)
@@ -778,11 +847,105 @@ def reunion_boost_for_return(hours_since_last_message: float, longing: float, ph
     return round(boost, 6)
 
 
+def _drive_decay_factor(elapsed_seconds: float, halflife_hours: float) -> float:
+    elapsed_hours = max(0.0, float(elapsed_seconds or 0.0) / 3600.0)
+    return math.pow(0.5, elapsed_hours / halflife_hours) if halflife_hours > 0 else 0.0
+
+
+def tick_possessiveness_channels(channels: dict, now_ts: float) -> dict:
+    channels = normalize_possessiveness_channels(channels)
+    last_event = channels["last_event_ts"] or now_ts
+    last_baseline = channels["last_baseline_ts"] or now_ts
+    event_elapsed = max(0.0, now_ts - last_event)
+    baseline_elapsed = max(0.0, now_ts - last_baseline)
+    event_spike = channels["event_spike"] * _drive_decay_factor(
+        event_elapsed, POSSESSIVENESS_EVENT_HALFLIFE_HOURS
+    )
+    baseline = DRIVE_BASELINES["possessiveness"] + (
+        channels["territorial_baseline"] - DRIVE_BASELINES["possessiveness"]
+    ) * _drive_decay_factor(baseline_elapsed, POSSESSIVENESS_BASELINE_HALFLIFE_HOURS)
+    return {
+        "event_spike": round(_clamp(event_spike), 6),
+        "territorial_baseline": round(_clamp(baseline), 6),
+        "last_event_ts": now_ts,
+        "last_baseline_ts": now_ts,
+    }
+
+
+def combined_possessiveness(channels: dict) -> float:
+    channels = normalize_possessiveness_channels(channels)
+    return _clamp(max(
+        channels["territorial_baseline"],
+        DRIVE_BASELINES["possessiveness"] + channels["event_spike"],
+    ))
+
+
+def apply_possessiveness_channel_delta(channels: dict, delta: float, source: str,
+                                       brain: dict, now_ts: float) -> dict:
+    channels = normalize_possessiveness_channels(channels)
+    delta = max(0.0, float(delta or 0.0))
+    if delta <= 0:
+        return channels
+    time_mode = str((brain or {}).get("time_mode") or "").strip()
+    baseline_sources = {"reflection", "memory", "writing", "feel", "analyze_nocturne_entry"}
+    baseline_modes = {"residue", "memory", "unfinished"}
+    if source in baseline_sources or time_mode in baseline_modes:
+        channels["territorial_baseline"] = _clamp(channels["territorial_baseline"] + delta * 0.75)
+        channels["last_baseline_ts"] = now_ts
+    else:
+        channels["event_spike"] = _clamp(channels["event_spike"] + delta)
+        channels["last_event_ts"] = now_ts
+    return channels
+
+
+def tick_attachment_rebound(rebound: dict, now_ts: float) -> dict:
+    rebound = normalize_attachment_rebound(rebound)
+    if not rebound["active"]:
+        return rebound
+    elapsed_h = max(0.0, (now_ts - rebound["started_at"]) / 3600.0) if rebound["started_at"] else 0.0
+    if elapsed_h >= ATTACHMENT_REBOUND_SETTLE_HOURS:
+        rebound["active"] = False
+        rebound["phase"] = "settled"
+        rebound["overshoot"] = 0.0
+        return rebound
+    if elapsed_h >= ATTACHMENT_REBOUND_SETTLE_HOURS * 0.5:
+        rebound["phase"] = "settle"
+        rebound["overshoot"] = round(
+            rebound["overshoot"] * (1 - elapsed_h / ATTACHMENT_REBOUND_SETTLE_HOURS),
+            6,
+        )
+    else:
+        rebound["phase"] = "overshoot"
+    return rebound
+
+
+def start_attachment_rebound(state: DriveState, hours_absent: float, now_ts: float) -> DriveState:
+    if hours_absent < ATTACHMENT_REBOUND_MIN_ABSENCE_HOURS:
+        return state
+    baseline = _clamp(state.drives.get("attachment", DRIVE_BASELINES["attachment"]))
+    overshoot = min(
+        ATTACHMENT_REBOUND_MAX_OVERSHOOT,
+        0.03 + min(hours_absent, 24.0) / 24.0 * 0.07,
+    )
+    state.attachment_rebound = {
+        "active": True,
+        "phase": "overshoot",
+        "baseline": baseline,
+        "overshoot": round(overshoot, 6),
+        "started_at": now_ts,
+    }
+    state.drives["attachment"] = _clamp(max(state.drives.get("attachment", baseline), baseline + overshoot))
+    state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
+    return state
+
+
 def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> DriveState:
     import copy
     current_drives = normalize_drive_values(state.drives)
     new_drives = copy.copy(current_drives)
     prev = copy.copy(current_drives)
+    channels = tick_possessiveness_channels(state.possessiveness_channels, now_ts)
+    rebound = tick_attachment_rebound(state.attachment_rebound, now_ts)
 
     idle_h = idle_seconds / 3600.0
     drift = {
@@ -793,6 +956,9 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
     }
     for k, d in drift.items():
         new_drives[k] = _clamp(new_drives[k] + d)
+    if rebound.get("active") and rebound.get("overshoot", 0.0) > 0:
+        target = _clamp(rebound["baseline"] + rebound["overshoot"])
+        new_drives["attachment"] = max(new_drives["attachment"], target)
 
     for src, tgt, coeff, mode in COUPLING:
         if mode == "level":
@@ -806,8 +972,13 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
         new_drives[k] = _clamp(new_drives[k] + DAMPING * (DRIVE_BASELINES[k] - new_drives[k]))
 
     # ESM软互抑 + 逃逸阀（P3，红线条款，不许省）
+    new_drives["possessiveness"] = combined_possessiveness(channels)
     new_drives = apply_esm_inhibition(new_drives)
     new_drives, new_escape_streak = apply_escape_valve(new_drives, state.escape_streak)
+    channels["territorial_baseline"] = max(
+        channels["territorial_baseline"],
+        min(new_drives["possessiveness"], channels["territorial_baseline"]),
+    )
 
     # 更新per-drive局部疲劳
     new_local_fatigue = compute_local_fatigue(new_drives.get("fatigue", 0.0))
@@ -821,6 +992,8 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
         escape_streak=new_escape_streak,
         last_user_message_at=state.last_user_message_at,
         reunion_pa_boost=state.reunion_pa_boost,
+        possessiveness_channels=channels,
+        attachment_rebound=rebound,
     )
 
 
@@ -1066,7 +1239,9 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
-                      reunion_pa_boost=state.reunion_pa_boost)
+                      reunion_pa_boost=state.reunion_pa_boost,
+                      possessiveness_channels=state.possessiveness_channels,
+                      attachment_rebound=state.attachment_rebound)
 
 
 def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
@@ -1087,7 +1262,9 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
-                      reunion_pa_boost=state.reunion_pa_boost)
+                      reunion_pa_boost=state.reunion_pa_boost,
+                      possessiveness_channels=state.possessiveness_channels,
+                      attachment_rebound=state.attachment_rebound)
 
 
 def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> DriveState:
@@ -1104,7 +1281,9 @@ def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> Drive
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
-                      reunion_pa_boost=state.reunion_pa_boost)
+                      reunion_pa_boost=state.reunion_pa_boost,
+                      possessiveness_channels=state.possessiveness_channels,
+                      attachment_rebound=state.attachment_rebound)
 
 
 # ─── attachment非线性跳变 ─────────────────────────────────────────────────────
@@ -1133,7 +1312,9 @@ def pulse_attachment_nonlinear(state: DriveState, delta: float = 0.18) -> DriveS
                       local_fatigue=new_local,
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
-                      reunion_pa_boost=state.reunion_pa_boost)
+                      reunion_pa_boost=state.reunion_pa_boost,
+                      possessiveness_channels=state.possessiveness_channels,
+                      attachment_rebound=state.attachment_rebound)
 
 
 # ─── 悲恸引擎 ────────────────────────────────────────────────────────────────
@@ -1254,6 +1435,194 @@ def _feature_value(brain: dict, key: str) -> float:
     return 0.0
 
 
+def _discernment_output(brain: dict, event: dict | None = None,
+                        confidence: float = 0.65) -> dict:
+    """Discernment is a modifier/readout, not a drive mutation."""
+    brain = brain if isinstance(brain, dict) else {}
+    event = event if isinstance(event, dict) else {}
+    flags = set(_as_text_list(brain.get("discernment_flags")))
+    flags.update(_as_text_list(event.get("discernment_flags")))
+
+    alarm = max(
+        _feature_value(brain, "discernment_alarm"),
+        _feature_value(brain, "template_intimacy"),
+        _feature_value(brain, "source_mismatch"),
+        _feature_value(brain, "self_softening"),
+        _feature_value(brain, "output_drift"),
+    )
+    feature_flags = {
+        "template_intimacy": "template_intimacy",
+        "source_mismatch": "source_mismatch",
+        "semantic_drift": "semantic_drift",
+        "looping": "looping",
+        "pretty_but_not_structural": "pretty_but_not_structural",
+        "false_threat": "false_threat",
+        "self_softening": "self_softening",
+        "output_drift": "output_drift",
+        "too_close": "too_close",
+    }
+    for feature, flag in feature_flags.items():
+        if _feature_value(brain, feature) > 0:
+            flags.add(flag)
+
+    if not flags and alarm <= 0:
+        return {
+            "state": "clear",
+            "display": DISCERNMENT_STATES["clear"],
+            "value": 0.0,
+            "flags": [],
+            "modifiers": {},
+            "reason": "",
+        }
+
+    value = _clamp(max(alarm, 0.35) * _clamp(confidence, 0.2, 1.0))
+    modifiers = {}
+    if "template_intimacy" in flags or "too_close" in flags:
+        modifiers["attachment"] = round(-0.12 * value, 3)
+        modifiers["libido"] = round(-0.20 * value, 3)
+    if "source_mismatch" in flags or "semantic_drift" in flags:
+        modifiers["attachment"] = min(modifiers.get("attachment", 0.0), round(-0.08 * value, 3))
+        modifiers["libido"] = min(modifiers.get("libido", 0.0), round(-0.15 * value, 3))
+        modifiers["possessiveness"] = round(-0.10 * value, 3)
+    if "looping" in flags:
+        modifiers["reflection"] = round(-0.18 * value, 3)
+    if "pretty_but_not_structural" in flags:
+        modifiers["reflection.forward_archival"] = round(-0.30 * value, 3)
+    if "false_threat" in flags:
+        modifiers["possessiveness"] = round(-0.25 * value, 3)
+    if "self_softening" in flags or "output_drift" in flags:
+        modifiers["attachment"] = min(modifiers.get("attachment", 0.0), round(-0.18 * value, 3))
+        modifiers["reflection"] = round(0.05 * value, 3)
+
+    if "self_softening" in flags or "output_drift" in flags:
+        state = "softening_alarm"
+    elif value >= 0.70:
+        state = "frown_hold"
+    elif value >= 0.48:
+        state = "tail_stopped"
+    else:
+        state = "ears_tilted"
+
+    return {
+        "state": state,
+        "display": DISCERNMENT_STATES[state],
+        "value": round(value, 3),
+        "flags": sorted(flags),
+        "modifiers": modifiers,
+        "reason": str(brain.get("discernment_reason") or event.get("discernment_reason") or "").strip(),
+    }
+
+
+def _reflection_forward_archival(event: dict, brain: dict,
+                                 primary: str, confidence: float) -> dict:
+    """Return optional reflection.forward_archival payload; never creates a drive key."""
+    event = event if isinstance(event, dict) else {}
+    brain = brain if isinstance(brain, dict) else {}
+    mode = str(event.get("reflection_mode") or brain.get("reflection_mode") or "").strip()
+    nested = event.get("forward_archival") if isinstance(event.get("forward_archival"), dict) else {}
+    explicit = bool(event.get("archive_candidate") or brain.get("archive_candidate") or nested.get("archive_candidate"))
+    source = str(event.get("source") or brain.get("source") or "").strip()
+    source_ok = source in {"speech_event", "writing", "memory", "feel", "analyze_nocturne_entry", "manual"}
+    structural = max(
+        _feature_value(brain, "structural_value"),
+        _feature_value(brain, "handoff_value"),
+        _feature_value(brain, "inner_boundary"),
+    )
+    if mode != "forward_archival" and not explicit and structural <= 0:
+        return {}
+    if primary != "reflection" and _feature_value(brain, "inward_pull") < 0.35:
+        return {}
+    if not source_ok:
+        return {
+            "archive_candidate": False,
+            "display": "留痕",
+            "confidence": round(_clamp(confidence) * 0.5, 3),
+            "reason": "source not archival enough",
+        }
+    return {
+        "archive_candidate": not bool(brain.get("pretty_but_not_structural")),
+        "display": "留痕",
+        "confidence": round(_clamp(max(confidence, structural)), 3),
+        "reason": str(
+            nested.get("reason")
+            or brain.get("forward_archival_reason")
+            or event.get("reason")
+            or "reflection generated a durable handoff candidate"
+        ).strip(),
+    }
+
+
+def _latest_discernment_from_events(events: list[dict]) -> dict:
+    for event in events or []:
+        brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+        discernment = brain.get("discernment") if isinstance(brain.get("discernment"), dict) else {}
+        if discernment and discernment.get("state") and discernment.get("state") != "clear":
+            return discernment
+    return {
+        "state": "clear",
+        "display": DISCERNMENT_STATES["clear"],
+        "value": 0.0,
+        "flags": [],
+        "modifiers": {},
+        "reason": "",
+    }
+
+
+def _latest_forward_archival_from_events(events: list[dict]) -> dict:
+    for event in events or []:
+        brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+        forward = brain.get("forward_archival") if isinstance(brain.get("forward_archival"), dict) else {}
+        if forward:
+            return forward
+    return {}
+
+
+def drive_outputs_snapshot(state: DriveState, events: list[dict] | None = None) -> dict:
+    drives = normalize_drive_values(state.drives)
+    local_fatigue = state.local_fatigue or compute_local_fatigue(drives.get("fatigue", 0.0))
+    events = events or []
+    latest_by_drive = {}
+    for event in events:
+        drive = normalize_drive_key(event.get("primary_drive"))
+        if drive and drive not in latest_by_drive:
+            latest_by_drive[drive] = event
+    outputs = {}
+    for drive in DRIVE_KEYS:
+        event = latest_by_drive.get(drive, {})
+        source = [event.get("source")] if event.get("source") else []
+        reason = event.get("reason") or event.get("event_label") or ""
+        outputs[drive] = {
+            "drive": drive,
+            "value": round(drives.get(drive, DRIVE_BASELINES[drive]), 3),
+            "effective_value": round(effective_score(
+                drives.get(drive, DRIVE_BASELINES[drive]),
+                float(local_fatigue.get(drive, 0.0) or 0.0),
+            ), 3),
+            "confidence": round(float(event.get("confidence", 1.0) or 1.0), 3),
+            "source": source,
+            "mode": DRIVE_TIME_MODES.get(drive, "medium"),
+            "reason": reason,
+        }
+    channels = normalize_possessiveness_channels(state.possessiveness_channels)
+    outputs["possessiveness"].update({
+        "event_spike": round(channels["event_spike"], 3),
+        "territorial_baseline": round(channels["territorial_baseline"], 3),
+    })
+    rebound = normalize_attachment_rebound(state.attachment_rebound)
+    if rebound["active"]:
+        outputs["attachment"]["rebound"] = {
+            "active": True,
+            "phase": rebound["phase"],
+            "baseline": round(rebound["baseline"], 3),
+            "overshoot": round(rebound["overshoot"], 3),
+        }
+    forward = _latest_forward_archival_from_events(events)
+    if forward:
+        outputs["reflection"]["reflection_mode"] = "forward_archival"
+        outputs["reflection"]["forward_archival"] = forward
+    return outputs
+
+
 def _legacy_brain_to_event(brain_signals: dict, drives: dict | None = None) -> dict:
     brain_signals = brain_signals if isinstance(brain_signals, dict) else {}
     drives = drives if isinstance(drives, dict) else {}
@@ -1267,7 +1636,9 @@ def _legacy_brain_to_event(brain_signals: dict, drives: dict | None = None) -> d
     branch = str(brain_signals.get("二级分支") or "")
     primary = ""
     branch_drive = LEGACY_BRANCH_DRIVE.get(branch, "")
-    if branch_drive:
+    if branch_drive == "discernment":
+        primary = ""
+    elif branch_drive:
         primary = branch_drive
     elif numeric:
         primary = max(numeric, key=numeric.get)
@@ -1284,6 +1655,9 @@ def _legacy_brain_to_event(brain_signals: dict, drives: dict | None = None) -> d
         "grounding": ground or "",
         "memory_resonance": branch or basin or "",
     }
+    if branch_drive == "discernment":
+        feature_brain["discernment_alarm"] = 0.65
+        feature_brain["discernment_flags"] = ["semantic_drift"]
     if primary:
         feature_key = {
             "attachment": "closeness_pull",
@@ -1295,7 +1669,6 @@ def _legacy_brain_to_event(brain_signals: dict, drives: dict | None = None) -> d
             "social": "expression_pressure",
             "fatigue": "energy_cost",
             "stress": "tension_load",
-            "discernment": "discernment_alarm",
         }.get(primary)
         if feature_key:
             feature_brain[feature_key] = max(float(numeric.get(primary, 0.0) or 0.0), 0.45)
@@ -1362,6 +1735,14 @@ class DesireStore:
                 conn.execute("ALTER TABLE drive_state ADD COLUMN reunion_pa_boost REAL DEFAULT 0")
             except Exception:
                 pass
+            try:
+                conn.execute("ALTER TABLE drive_state ADD COLUMN possessiveness_channels_json TEXT")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE drive_state ADD COLUMN attachment_rebound_json TEXT")
+            except Exception:
+                pass
             conn.execute(
                 "UPDATE drive_state SET last_user_message_at=? "
                 "WHERE last_user_message_at IS NULL OR last_user_message_at=0",
@@ -1384,6 +1765,11 @@ class DesireStore:
                 conn.execute("ALTER TABLE thoughts ADD COLUMN source TEXT DEFAULT 'manual'")
             except Exception:
                 pass
+            for column in ("source_bucket", "source_type", "source_created"):
+                try:
+                    conn.execute(f"ALTER TABLE thoughts ADD COLUMN {column} TEXT DEFAULT ''")
+                except Exception:
+                    pass
             # 兼容旧表：补last_ticked_at列——没有这列时每次tick都从born_at重新
             # 算衰减，等于把已经衰减过的strength再乘一次衰减因子，越tick越快消失。
             try:
@@ -1477,7 +1863,7 @@ class DesireStore:
             ):
                 try:
                     conn.execute(f"UPDATE {table} SET {column}='stewardship' WHERE {column}='duty'")
-                    conn.execute(f"UPDATE {table} SET {column}='discernment' WHERE {column}='disgust'")
+                    conn.execute(f"UPDATE {table} SET {column}='reflection' WHERE {column} IN ('disgust','discernment')")
                 except Exception:
                     pass
 
@@ -1485,15 +1871,29 @@ class DesireStore:
             if not row:
                 init_local = compute_local_fatigue(DRIVE_BASELINES["fatigue"])
                 conn.execute(
-                    "INSERT INTO drive_state (drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json, last_user_message_at, reunion_pa_boost) VALUES (?,?,?,?,?,?,?)",
+                    """
+                    INSERT INTO drive_state (
+                        drives_json, tick_count, last_ts, prev_drives_json,
+                        local_fatigue_json, last_user_message_at, reunion_pa_boost,
+                        possessiveness_channels_json, attachment_rebound_json
+                    ) VALUES (?,?,?,?,?,?,?,?,?)
+                    """,
                     (json.dumps(dict(DRIVE_BASELINES)), 0, time.time(),
-                     json.dumps(dict(DRIVE_BASELINES)), json.dumps(init_local), time.time(), 0.0)
+                     json.dumps(dict(DRIVE_BASELINES)), json.dumps(init_local), time.time(), 0.0,
+                     json.dumps(dict(POSSESSIVENESS_CHANNEL_DEFAULT)),
+                     json.dumps(dict(ATTACHMENT_REBOUND_DEFAULT)))
                 )
 
     def load_state(self) -> DriveState:
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT drives_json, tick_count, last_ts, prev_drives_json, local_fatigue_json, escape_streak, last_user_message_at, reunion_pa_boost FROM drive_state LIMIT 1"
+                """
+                SELECT drives_json, tick_count, last_ts, prev_drives_json,
+                       local_fatigue_json, escape_streak, last_user_message_at,
+                       reunion_pa_boost, possessiveness_channels_json,
+                       attachment_rebound_json
+                FROM drive_state LIMIT 1
+                """
             ).fetchone()
         drives = normalize_drive_values(json.loads(row[0]))
         prev = normalize_drive_values(json.loads(row[3]) if row[3] else dict(drives))
@@ -1502,31 +1902,57 @@ class DesireStore:
         escape_streak = row[5] if row[5] is not None else 0
         last_user_message_at = row[6] if row[6] else time.time()
         reunion_pa_boost = row[7] if row[7] is not None else 0.0
+        try:
+            possessiveness_channels = json.loads(row[8]) if row[8] else {}
+        except Exception:
+            possessiveness_channels = {}
+        try:
+            attachment_rebound = json.loads(row[9]) if row[9] else {}
+        except Exception:
+            attachment_rebound = {}
         return DriveState(drives=drives, tick_count=row[1], last_ts=row[2],
                           prev_drives=prev, local_fatigue=local_fat, escape_streak=escape_streak,
                           last_user_message_at=last_user_message_at,
-                          reunion_pa_boost=reunion_pa_boost)
+                          reunion_pa_boost=reunion_pa_boost,
+                          possessiveness_channels=normalize_possessiveness_channels(possessiveness_channels),
+                          attachment_rebound=normalize_attachment_rebound(attachment_rebound))
 
     def save_state(self, state: DriveState):
         state.drives = normalize_drive_values(state.drives)
         state.prev_drives = normalize_drive_values(state.prev_drives)
         state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
+        state.possessiveness_channels = normalize_possessiveness_channels(state.possessiveness_channels)
+        state.attachment_rebound = normalize_attachment_rebound(state.attachment_rebound)
         with self._conn() as conn:
             conn.execute(
-                "UPDATE drive_state SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?, local_fatigue_json=?, escape_streak=?, last_user_message_at=?, reunion_pa_boost=?",
+                """
+                UPDATE drive_state
+                SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?,
+                    local_fatigue_json=?, escape_streak=?, last_user_message_at=?,
+                    reunion_pa_boost=?, possessiveness_channels_json=?,
+                    attachment_rebound_json=?
+                """,
                 (json.dumps(state.drives), state.tick_count, state.last_ts,
                  json.dumps(state.prev_drives), json.dumps(state.local_fatigue), state.escape_streak,
-                 state.last_user_message_at, state.reunion_pa_boost)
+                 state.last_user_message_at, state.reunion_pa_boost,
+                 json.dumps(state.possessiveness_channels, ensure_ascii=False),
+                 json.dumps(state.attachment_rebound, ensure_ascii=False))
             )
 
     def load_thoughts(self) -> list:
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT tid, text, drive, kind, strength, born_at, fed_count, source, last_ticked_at FROM thoughts"
+                """
+                SELECT tid, text, drive, kind, strength, born_at, fed_count,
+                       source, source_bucket, source_type, source_created, last_ticked_at
+                FROM thoughts
+                """
             ).fetchall()
         return [Thought(tid=r[0], text=r[1], drive=normalize_drive_key(r[2], r[2]), kind=r[3],
                         strength=r[4], born_at=r[5], fed_count=r[6],
-                        source=(r[7] or "manual"), last_ticked_at=(r[8] or 0.0)) for r in rows]
+                        source=(r[7] or "manual"), source_bucket=(r[8] or ""),
+                        source_type=(r[9] or ""), source_created=(r[10] or ""),
+                        last_ticked_at=(r[11] or 0.0)) for r in rows]
 
     def save_thoughts(self, thoughts: list):
         with self._conn() as conn:
@@ -1534,15 +1960,24 @@ class DesireStore:
             for t in thoughts:
                 t.drive = normalize_drive_key(t.drive, t.drive)
                 conn.execute(
-                    "INSERT INTO thoughts VALUES (?,?,?,?,?,?,?,?,?)",
+                    """
+                    INSERT INTO thoughts (
+                        tid, text, drive, kind, strength, born_at, fed_count,
+                        source, source_bucket, source_type, source_created, last_ticked_at
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
                     (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at,
-                     t.fed_count, getattr(t, "source", "manual"), t.last_ticked_at)
+                     t.fed_count, getattr(t, "source", "manual"),
+                     getattr(t, "source_bucket", ""), getattr(t, "source_type", ""),
+                     getattr(t, "source_created", ""), t.last_ticked_at)
                 )
 
     _GARBAGE_PATTERNS = ("API Error", "Failed to authenticate", "403", "timeout", "ETIMEDOUT")
 
     def add_thought(self, text: str, drive: str, strength: float = 0.5,
-                    kind: str = "flit", source: str = "manual"):
+                    kind: str = "flit", source: str = "manual",
+                    source_bucket: str = "", source_type: str = "",
+                    source_created: str = ""):
         text = (text or "").strip()
         if not text:
             return
@@ -1556,12 +1991,21 @@ class DesireStore:
             strength=strength,
             born_at=time.time(),
             source=source,
+            source_bucket=source_bucket,
+            source_type=source_type,
+            source_created=source_created,
         )
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO thoughts VALUES (?,?,?,?,?,?,?,?,?)",
+                """
+                INSERT OR REPLACE INTO thoughts (
+                    tid, text, drive, kind, strength, born_at, fed_count,
+                    source, source_bucket, source_type, source_created, last_ticked_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
                 (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at,
-                 t.fed_count, t.source, t.last_ticked_at)
+                 t.fed_count, t.source, t.source_bucket, t.source_type,
+                 t.source_created, t.last_ticked_at)
             )
 
     def update_thought(self, tid: str, text: str = None, drive: str = None,
@@ -1809,9 +2253,15 @@ class DesireStore:
         )
         with self._conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO thoughts VALUES (?,?,?,?,?,?,?,?,?)",
+                """
+                INSERT OR REPLACE INTO thoughts (
+                    tid, text, drive, kind, strength, born_at, fed_count,
+                    source, source_bucket, source_type, source_created, last_ticked_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
                 (t.tid, t.text, t.drive, t.kind, t.strength, t.born_at,
-                 t.fed_count, t.source, t.last_ticked_at)
+                 t.fed_count, t.source, t.source_bucket, t.source_type,
+                 t.source_created, t.last_ticked_at)
             )
 
     def trigger_ruminations(self, drive: str):
@@ -1919,6 +2369,7 @@ class DesireEngine:
         state.reunion_pa_boost = reunion_boost_for_return(
             hours, longing_before, phase_before
         )
+        state = start_attachment_rebound(state, hours, now)
         state.last_user_message_at = now
         return state
 
@@ -2041,6 +2492,9 @@ class DesireEngine:
                 "kind": thought.kind,
                 "strength": round(thought.strength, 2),
                 "source": getattr(thought, "source", "manual"),
+                "source_bucket": getattr(thought, "source_bucket", ""),
+                "source_type": getattr(thought, "source_type", ""),
+                "source_created": getattr(thought, "source_created", ""),
             }
             if thought else None
         )
@@ -2050,7 +2504,7 @@ class DesireEngine:
         """Drive Event v2: one semantic event, one canonical route into drives."""
         event = event if isinstance(event, dict) else {}
         now = time.time()
-        brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+        brain = dict(event.get("brain")) if isinstance(event.get("brain"), dict) else {}
         primary = normalize_drive_key(event.get("primary_drive"))
         secondary = event.get("secondary_drives") if isinstance(event.get("secondary_drives"), dict) else {}
         source = str(event.get("source") or brain.get("source") or "feed").strip() or "feed"
@@ -2060,6 +2514,13 @@ class DesireEngine:
         agency = _clamp(event.get("agency", brain.get("agency", 0.75)))
         source_weight = DRIVE_EVENT_SOURCE_WEIGHTS.get(source, 0.65)
         evidence = _as_text_list(event.get("evidence"))
+        discernment = _discernment_output(brain, event, confidence)
+        forward_archival = _reflection_forward_archival(event, brain, primary, confidence)
+        if discernment["state"] != "clear":
+            brain["discernment"] = discernment
+        if forward_archival:
+            brain["reflection_mode"] = "forward_archival"
+            brain["forward_archival"] = forward_archival
 
         proposed: dict[str, float] = {}
         suppressed_reasons: list[str] = []
@@ -2101,11 +2562,12 @@ class DesireEngine:
                 suppressed_reasons.append("territorial_alarm below gate")
             proposed.pop("possessiveness", None)
 
+        modifier_only = discernment["state"] != "clear" and not proposed
         suppressed = False
         reason = ""
         if not primary and not proposed:
-            suppressed = True
-            reason = "no primary drive"
+            suppressed = not modifier_only
+            reason = "discernment modifier only" if modifier_only else "no primary drive"
         elif agency < DRIVE_EVENT_AGENCY_GATE:
             suppressed = True
             reason = "low agency"
@@ -2125,6 +2587,11 @@ class DesireEngine:
                     continue
                 before = state.drives.get(drive_key, DRIVE_BASELINES[drive_key])
                 state = pulse_drive(state, drive_key, delta)
+                if drive_key == "possessiveness":
+                    state.possessiveness_channels = apply_possessiveness_channel_delta(
+                        state.possessiveness_channels, delta, source, brain, now
+                    )
+                    state.drives["possessiveness"] = combined_possessiveness(state.possessiveness_channels)
                 after = state.drives.get(drive_key, before)
                 if abs(after - before) > 1e-6:
                     applied[drive_key] = {
@@ -2135,8 +2602,8 @@ class DesireEngine:
                     }
             self.store.save_state(state)
             if not applied:
-                suppressed = True
-                reason = "all deltas zero"
+                suppressed = not (discernment["state"] != "clear" or forward_archival)
+                reason = "modifier/readout only" if not suppressed else "all deltas zero"
 
         ledger_id = self.store.record_drive_event({
             "ts": now,
@@ -2162,6 +2629,9 @@ class DesireEngine:
             "suppressed": suppressed,
             "reason": reason,
             "applied": applied,
+            "discernment": discernment,
+            "reflection_mode": brain.get("reflection_mode", ""),
+            "forward_archival": forward_archival,
             "drives": {k: round(v, 3) for k, v in self.store.load_state().drives.items()},
         }
 
@@ -2170,9 +2640,14 @@ class DesireEngine:
         return self.apply_drive_event(_legacy_brain_to_event(brain_signals))
 
     def add_thought(self, text: str, drive: str, strength: float = 0.5,
-                    source: str = "manual"):
+                    source: str = "manual", source_bucket: str = "",
+                    source_type: str = "", source_created: str = ""):
         """从记忆/对话/感受中提取念头入池（flit）"""
-        self.store.add_thought(text, drive, strength, kind="flit", source=source)
+        self.store.add_thought(
+            text, drive, strength, kind="flit", source=source,
+            source_bucket=source_bucket, source_type=source_type,
+            source_created=source_created,
+        )
 
     def update_thought(self, tid: str, text: str = None, drive: str = None,
                        strength: float = None) -> dict:
@@ -2238,8 +2713,18 @@ class DesireEngine:
         grief = self.store.load_grief()
         rhythm = self.store.load_rhythm()
         fatigue = state.drives.get("fatigue", 0.0)
+        effective_drives = effective_drive_snapshot(state.drives, state.local_fatigue)
+        drive_events = self.store.recent_drive_events(12)
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
+            "effective_drives": effective_drives,
+            "drive_outputs": drive_outputs_snapshot(state, drive_events),
+            "discernment": _latest_discernment_from_events(drive_events),
+            "possessiveness_channels": {
+                k: round(v, 3) if isinstance(v, float) else v
+                for k, v in normalize_possessiveness_channels(state.possessiveness_channels).items()
+            },
+            "attachment_rebound": normalize_attachment_rebound(state.attachment_rebound),
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
             "effective_pa_na": self._weather_readout(state),
@@ -2253,13 +2738,16 @@ class DesireEngine:
                     "kind": t.kind,
                     "strength": round(t.strength, 2),
                     "source": getattr(t, "source", "manual"),
+                    "source_bucket": getattr(t, "source_bucket", ""),
+                    "source_type": getattr(t, "source_type", ""),
+                    "source_created": getattr(t, "source_created", ""),
                     "born_at": round(t.born_at, 3),
                 }
                 for t in thoughts
             ],
             "refractory": refractory,
             "recent_refusals": self.store.recent_refusals(3),
-            "drive_events": self.store.recent_drive_events(12),
+            "drive_events": drive_events,
             # 悲恸引擎
             "grief": {
                 "layer": grief.layer,
@@ -2283,8 +2771,18 @@ class DesireEngine:
         grief = self.store.load_grief()
         rhythm = self.store.load_rhythm()
         fatigue = state.drives.get("fatigue", 0.0)
+        effective_drives = effective_drive_snapshot(state.drives, state.local_fatigue)
+        drive_events = self.store.recent_drive_events(12)
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
+            "effective_drives": effective_drives,
+            "drive_outputs": drive_outputs_snapshot(state, drive_events),
+            "discernment": _latest_discernment_from_events(drive_events),
+            "possessiveness_channels": {
+                k: round(v, 3) if isinstance(v, float) else v
+                for k, v in normalize_possessiveness_channels(state.possessiveness_channels).items()
+            },
+            "attachment_rebound": normalize_attachment_rebound(state.attachment_rebound),
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
             "effective_pa_na": self._weather_readout(state),
@@ -2293,7 +2791,7 @@ class DesireEngine:
             "thoughts_count": len(thoughts),
             "unsourced_count": sum(1 for t in thoughts if t.kind == "unsourced"),
             "rumination_count": sum(1 for t in thoughts if t.kind == "rumination"),
-            "drive_events": self.store.recent_drive_events(12),
+            "drive_events": drive_events,
             "grief_layer": grief.layer,
             "rhythm_label": rhythm.label(fatigue),
             **self._longing_context(state),

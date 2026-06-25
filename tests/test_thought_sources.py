@@ -1,6 +1,7 @@
 import time
 
 from desire_engine import Thought, _collision_thought_counts, _collision_today, _last_collision, tick_thoughts
+from desire_engine import DesireEngine
 
 
 def test_collision_thought_source_is_marked_collision(monkeypatch):
@@ -52,3 +53,22 @@ def test_collision_generated_thought_does_not_chain(monkeypatch):
     new_thoughts, _ = tick_thoughts(thoughts)
 
     assert sum(1 for t in new_thoughts if t.source == "collision") == 1
+
+
+def test_thought_source_metadata_roundtrips(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    engine.add_thought(
+        "source-aware thought",
+        "reflection",
+        strength=0.6,
+        source="analyze_nocturne_entry",
+        source_bucket="bucket-123",
+        source_type="writing",
+        source_created="2026-06-25T01:02:03Z",
+    )
+
+    thought = next(t for t in engine.store.load_thoughts() if t.text == "source-aware thought")
+    assert thought.source == "analyze_nocturne_entry"
+    assert thought.source_bucket == "bucket-123"
+    assert thought.source_type == "writing"
+    assert thought.source_created == "2026-06-25T01:02:03Z"
