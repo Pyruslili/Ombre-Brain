@@ -1032,7 +1032,15 @@ label {
 .drift-weather-trace { margin-top: .8rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
 .drift-weather-trace div { color: var(--ink); font: 300 .92rem/1.62 var(--font-display); }
 .drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1rem; }
-.drive-row { display: grid; grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px; gap: 1.15rem; align-items: center; min-height: 44px; border-top: 1px solid var(--line-soft); }
+.drive-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(118px,.7fr) minmax(180px,2fr) 78px;
+  gap: 1.15rem;
+  align-items: center;
+  min-height: 44px;
+  border-top: 1px solid var(--line-soft);
+}
 .drive-row:first-child { border-top: 0; }
 .drive-name { min-width: 0; color: var(--ink-soft); font-size: .8rem; }
 .drive-name small { display: block; margin-top: .08rem; color: var(--mute); font: 300 .58rem/1.3 var(--font-mono); letter-spacing: .06em; }
@@ -1042,6 +1050,66 @@ label {
 .drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 10px rgba(232,149,79,.2); }
 .drive-value { text-align: right; color: var(--ink); font: 300 1.3rem/1 var(--font-number); }
 .drive-value small { display: block; margin-top: .24rem; color: var(--mute); font: 300 .54rem/1.2 var(--font-mono); }
+.drive-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem .55rem;
+  margin: .02rem 0 .9rem;
+  color: var(--mute);
+  font: 300 .58rem/1.45 var(--font-mono);
+}
+.drive-summary-empty { color: var(--ink-soft); font-size: .76rem; }
+.drive-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  min-height: 22px;
+  padding: .12rem .45rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255,224,186,.035);
+  color: var(--ink-soft);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.drive-summary-chip strong { color: var(--ink); font-weight: 400; }
+.drive-summary-chip.positive { color: var(--accent-deep); border-color: rgba(232,149,79,.28); background: rgba(232,149,79,.06); }
+.drive-summary-chip.suppressed { color: var(--negative); border-color: rgba(215,114,114,.26); background: rgba(215,114,114,.06); }
+.drive-summary-chip.neutral { color: var(--mute); }
+.drive-row-popover {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: .42rem;
+  margin-top: .1rem;
+  padding: .72rem .82rem .78rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: rgba(255,224,186,.03);
+  transform-origin: top;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height .22s ease, opacity .18s ease, transform .22s ease;
+}
+.drive-row:hover .drive-row-popover,
+.drive-row:focus-within .drive-row-popover {
+  max-height: 220px;
+  opacity: 1;
+  transform: translateY(.05rem);
+}
+.drive-row-popover-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .28rem .42rem;
+  color: var(--mute);
+  font: 300 .57rem/1.45 var(--font-mono);
+}
+.drive-row-popover-line .drive-summary-chip { margin: 0; }
+.drive-row-popover-note {
+  color: var(--ink-soft);
+  font-size: .74rem;
+  line-height: 1.5;
+}
 .thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: .36rem .65rem; align-items: start; padding: .82rem 0; border-top: 1px solid var(--line-soft); }
 .thought-row:first-child { border-top: 0; }
 .thought-icon {
@@ -1826,7 +1894,9 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .thought-editor { grid-column: 2; }
   .thought-editor-grid { grid-template-columns: 1fr; }
   .thought-editor-buttons { justify-content: flex-start; }
-  .drive-readout-row { grid-template-columns: 1fr; gap: .45rem; }
+  .drive-summary { margin-bottom: .7rem; }
+  .drive-row { grid-template-columns: 92px minmax(90px,1fr) 56px; gap: .6rem; }
+  .drive-row-popover { max-height: none; opacity: 1; transform: none; }
   .drive-event-head { align-items: flex-start; }
   .content { padding-top: 5rem; }
   .content::before { margin-bottom: 3rem; }
@@ -1838,7 +1908,6 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .network-legend .legend-item:last-child { width: 100%; margin-left: 0 !important; }
   .config-row { grid-template-columns: 1fr; gap: 0; }
   .config-help { padding-left: 0; }
-  .drive-row { grid-template-columns: 92px minmax(90px,1fr) 56px; gap: .6rem; }
   .drive-value { font-size: 1.08rem; }
   .thought-row { grid-template-columns: 18px minmax(0,1fr); }
   .thought-meta { grid-column: 2; }
@@ -2104,11 +2173,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
     </div>
       <div class="drift-card">
-        <div class="drift-card-label">Drive Readouts</div>
-        <div id="desire-drive-readouts"><span class="drive-readout-empty">No drive readouts yet.</span></div>
-      </div>
-      <div class="drift-card">
         <div class="drift-card-label">Drives</div>
+        <div id="desire-drive-summary"><span class="drive-summary-empty">No discernment readout.</span></div>
         <div id="desire-drives"></div>
       </div>
       <div class="drift-card">
@@ -2386,6 +2452,17 @@ const DRIVE_LABELS = {
   stress: '压力'
 };
 const DRIVE_KEYS = Object.keys(DRIVE_LABELS);
+const DRIVE_SOURCE_LABELS = {
+  cli: 'CLI',
+  feed: '输入',
+  feel: '感受',
+  manual: 'Nox念头',
+  thought: 'Nox念头',
+  analyze_nocturne_entry: 'Nox念头',
+  collision: 'DP碰撞',
+  speech_event: '说话',
+  reflection: '回看',
+};
 
 /* ============================================================
    Theme System
@@ -2642,6 +2719,7 @@ async function loadDesire(button) {
     const driveOutputs = d.drive_outputs || {};
     const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
     const driveEvents = [...(d.drive_events || [])];
+    const driveHistory = buildDriveLedgerHistory(driveEvents);
     desireThoughts = thoughts;
 
     const weather = d.pulse_weather || {};
@@ -2671,7 +2749,6 @@ async function loadDesire(button) {
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSomaTrace(soma);
     renderDiscernment(d.discernment);
-    renderDriveReadouts(driveOutputs, d.discernment, d.possessiveness_channels, d.attachment_rebound, d.effective_drives, d.drives);
     renderDriveEvents(driveEvents);
 
     // drives
@@ -2680,16 +2757,22 @@ async function loadDesire(button) {
       const lf = d.local_fatigue?.[k] || 0;
       const eff = finiteNumber(effectiveDrives[k], Math.max(0, v * (1 - lf)));
       const output = driveOutputs[k] || {};
+      output.channels = d.possessiveness_channels || {};
       const pct = Math.round(v * 100);
       const effPct = Math.round(eff * 100);
       const isHigh = k === topDrive[0];
-      const extra = k === 'possessiveness' && Number.isFinite(Number(output.event_spike))
-        ? ` · spike ${Math.round(finiteNumber(output.event_spike) * 100)} / base ${Math.round(finiteNumber(output.territorial_baseline) * 100)}`
-        : (k === 'attachment' && output.rebound?.active ? ` · rebound ${esc(output.rebound.phase || 'active')}` : '');
+      const detail = buildDriveDetailPanel(k, {
+        ...output,
+        effective_value: eff,
+      }, driveHistory[k] || [], output.source || '', lf);
       return `<div class="drive-row${isHigh ? ' high' : ''}">
         <div class="drive-name">${esc(DRIVE_LABELS[k] || k)}<small>${esc(k)}</small></div>
         <div class="drive-track"><div class="drive-fill" style="width:${Math.min(100, effPct)}%"></div></div>
-        <div class="drive-value">${pct}%<small>eff ${effPct}%${lf > 0 ? ' · fatigue −' + Math.round(lf * 100) + '%' : ''}${extra}</small></div>
+        <div class="drive-value">${pct}%<small>eff ${effPct}%${lf > 0 ? ' · fatigue −' + Math.round(lf * 100) + '%' : ''}</small></div>
+        <div class="drive-row-popover">
+          <div class="drive-row-popover-line">${detail.overview}</div>
+          <div class="drive-row-popover-line">${detail.recent}</div>
+        </div>
       </div>`;
     }).join('');
 
@@ -2730,6 +2813,181 @@ function renderSomaTrace(soma) {
   wrap.style.display = '';
 }
 
+function driveSourceLabel(source, sourceType = '') {
+  const s = String(source || '').trim().toLowerCase();
+  const t = String(sourceType || '').trim().toLowerCase();
+  if (DRIVE_SOURCE_LABELS[s]) return DRIVE_SOURCE_LABELS[s];
+  if (DRIVE_SOURCE_LABELS[t]) return DRIVE_SOURCE_LABELS[t];
+  if (s === 'feed' && (t.includes('thought') || t.includes('manual') || t.includes('writing') || t.includes('letter'))) return 'Nox念头';
+  if (s.includes('collision') || t.includes('collision')) return 'DP碰撞';
+  if (s.includes('cli') || t === 'cli') return 'CLI';
+  if (s.includes('thought') || s.includes('manual') || s === 'analyze_nocturne_entry' || t.includes('thought') || t.includes('manual') || t.includes('writing')) return 'Nox念头';
+  if (s.includes('speech')) return '说话';
+  if (s.includes('reflection')) return '回看';
+  if (s.includes('feed')) return '输入';
+  return '来源';
+}
+
+function compactDriveLabel(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '事件';
+  const exact = [
+    [/elf[_\-\s]*confrontation[_\-\s]*both[_\-\s]*parts[_\-\s]*mine/i, '界线碰撞'],
+    [/boundary[_\-\s]*handoff/i, '边界移交'],
+    [/direct[_\-\s]*boundary[_\-\s]*alarm/i, '边界警报'],
+    [/territorial[_\-\s]*memory/i, '领地记忆'],
+    [/softening[_\-\s]*check|self[_\-\s]*softening/i, '自省'],
+    [/forward[_\-\s]*archival/i, '留痕'],
+    [/speech[_\-\s]*event/i, '说话'],
+  ];
+  for (const [pattern, label] of exact) if (pattern.test(text)) return label;
+  const tokens = text.toLowerCase().split(/[_\-\s]+/).filter(Boolean);
+  const map = {
+    boundary: '边界',
+    territorial: '领地',
+    memory: '记忆',
+    alarm: '警报',
+    softening: '自省',
+    reflection: '回看',
+    archive: '留痕',
+    collision: '碰撞',
+    confrontation: '碰撞',
+    speech: '说话',
+    feed: '输入',
+    thought: '念头',
+    drive: '驱动',
+    stress: '压力',
+    fatigue: '疲劳',
+    attachment: '挂念',
+    possessiveness: '占有',
+    curiosity: '向外看',
+    social: '社交',
+    stewardship: '守屋',
+    libido: '亲密',
+    feel: '感受',
+    cli: 'CLI',
+    nox: 'Nox',
+    mine: '归属',
+    both: '双侧',
+    parts: '部分',
+    self: '自我',
+    direct: '直接',
+    handoff: '移交',
+    rise: '上升',
+    decay: '衰减',
+    fade: '衰减',
+    settle: '落定',
+    alarmed: '警报',
+  };
+  const compact = tokens.map(t => map[t]).filter(Boolean);
+  if (compact.length) {
+    const seen = [];
+    for (const item of compact) if (!seen.includes(item)) seen.push(item);
+    return seen.slice(0, 2).join('·');
+  }
+  return text.replace(/_/g, ' ');
+}
+
+function compactReasonText(reason) {
+  const text = String(reason || '').trim();
+  if (!text) return '';
+  const lower = text.toLowerCase();
+  if (lower.includes('low agency')) return '门槛低';
+  if (lower.includes('low confidence')) return '置信低';
+  if (lower.includes('no primary drive')) return '无主驱动';
+  if (lower.includes('modifier/readout only')) return '只读';
+  if (lower.includes('discernment modifier only')) return '皱眉只读';
+  if (lower.includes('all deltas zero')) return '零增量';
+  if (lower.includes('territorial_alarm below gate')) return '领地阈值低';
+  if (lower.includes('suppressed')) return '悬置';
+  return compactDriveLabel(text);
+}
+
+function arrowTrail(value) {
+  const n = Math.max(1, Math.min(5, Math.ceil(Math.abs(Number(value) || 0) / 0.005)));
+  return '>'.repeat(n);
+}
+
+function buildDriveLedgerHistory(events = []) {
+  const map = {};
+  const rows = Array.isArray(events) ? [...events].sort((a, b) => finiteNumber(b?.ts) - finiteNumber(a?.ts)) : [];
+  rows.forEach(event => {
+    const brain = event?.brain || {};
+    const source = driveSourceLabel(event?.source || brain?.source || 'feed', brain?.source_type || event?.source_type || '');
+    const label = compactDriveLabel(event?.event_label || event?.primary_drive || '事件');
+    const reason = compactReasonText(event?.reason || '');
+    const applied = event?.applied && typeof event.applied === 'object' ? Object.entries(event.applied) : [];
+    applied.forEach(([drive, payload]) => {
+      const delta = Number(payload?.delta || 0);
+      if (!map[drive]) map[drive] = [];
+      map[drive].push({
+        source,
+        label,
+        reason,
+        delta,
+        arrows: arrowTrail(delta),
+        sign: delta >= 0 ? '+' : '−',
+      });
+    });
+  });
+  return map;
+}
+
+function buildDriveDetailPanel(key, output, history = [], sourceHint = '', fatigue = 0) {
+  const chips = [];
+  const source = driveSourceLabel(output?.source || sourceHint, output?.source_type || '');
+  const mode = String(output?.mode || '').trim();
+  const eff = Number.isFinite(Number(output?.effective_value)) ? Number(output.effective_value).toFixed(2) : '';
+  if (source) chips.push(`<span class="drive-summary-chip neutral"><strong>src</strong> ${esc(source)}</span>`);
+  if (mode) chips.push(`<span class="drive-summary-chip neutral"><strong>mode</strong> ${esc(mode)}</span>`);
+  if (eff) chips.push(`<span class="drive-summary-chip neutral"><strong>eff</strong> ${eff}</span>`);
+  if (Number.isFinite(Number(fatigue)) && Number(fatigue) > 0) {
+    chips.push(`<span class="drive-summary-chip neutral"><strong>fat</strong> −${Math.round(Number(fatigue) * 100)}%</span>`);
+  }
+  if (output?.reason) chips.push(`<span class="drive-summary-chip neutral">${esc(compactReasonText(output.reason))}</span>`);
+
+  if (key === 'possessiveness') {
+    const spike = Number.isFinite(Number(output?.event_spike)) ? Number(output.event_spike).toFixed(2) : '';
+    const base = Number.isFinite(Number(output?.territorial_baseline)) ? Number(output.territorial_baseline).toFixed(2) : '';
+    const channels = output?.channels || {};
+    if (spike) chips.push(`<span class="drive-summary-chip positive"><strong>spike</strong> ${spike}</span>`);
+    if (base) chips.push(`<span class="drive-summary-chip neutral"><strong>base</strong> ${base}</span>`);
+    if (Number.isFinite(Number(channels.event_spike)) || Number.isFinite(Number(channels.territorial_baseline))) {
+      const chSpike = Number.isFinite(Number(channels.event_spike)) ? Number(channels.event_spike).toFixed(2) : '—';
+      const chBase = Number.isFinite(Number(channels.territorial_baseline)) ? Number(channels.territorial_baseline).toFixed(2) : '—';
+      chips.push(`<span class="drive-summary-chip neutral"><strong>chan</strong> ${chSpike} / ${chBase}</span>`);
+    }
+  }
+
+  if (key === 'attachment' && output?.rebound) {
+    const rebound = output.rebound;
+    chips.push(`<span class="drive-summary-chip ${rebound.active ? 'positive' : 'neutral'}"><strong>rebound</strong> ${esc(rebound.phase || '—')}</span>`);
+    if (Number.isFinite(Number(rebound.hours_since_absence))) {
+      chips.push(`<span class="drive-summary-chip neutral"><strong>abs</strong> ${Number(rebound.hours_since_absence).toFixed(1)}h</span>`);
+    }
+    if (Number.isFinite(Number(rebound.overshoot))) {
+      chips.push(`<span class="drive-summary-chip neutral"><strong>over</strong> ${Number(rebound.overshoot).toFixed(2)}</span>`);
+    }
+  }
+
+  if (key === 'reflection' && output?.reflection_mode) {
+    chips.push(`<span class="drive-summary-chip ${output.reflection_mode === 'forward_archival' ? 'positive' : 'neutral'}"><strong>flow</strong> ${esc(compactDriveLabel(output.reflection_mode))}</span>`);
+    if (output.forward_archival?.archive_candidate) {
+      chips.push(`<span class="drive-summary-chip positive"><strong>留痕</strong> ${esc(output.forward_archival.display || '归档')}</span>`);
+    }
+  }
+
+  const recent = history.slice(0, 2).map(item => {
+    const body = `${item.source} · ${item.label} · ${item.sign}${Math.abs(item.delta).toFixed(3)} ${item.arrows}`;
+    return `<span class="drive-summary-chip ${item.delta >= 0 ? 'positive' : 'suppressed'}">${esc(body)}</span>`;
+  });
+  const recentLine = recent.length ? recent.join('') : `<span class="drive-summary-chip neutral">暂无最近变化</span>`;
+  return {
+    overview: chips.join('') || '<span class="drive-summary-chip neutral">no extra output</span>',
+    recent: recentLine,
+  };
+}
+
 function formatDriveEventTime(ts) {
   if (!ts) return '—';
   const d = new Date(ts * 1000);
@@ -2748,11 +3006,9 @@ function renderDriveEvents(events = []) {
   }
   wrap.innerHTML = rows.map(event => {
     const brain = event?.brain || {};
-    const source = String(event?.source || brain?.source || 'feed').trim() || 'feed';
-    const bucket = String(brain?.source_bucket || event?.source_bucket || '').trim();
-    const sourceType = String(brain?.source_type || event?.source_type || '').trim();
-    const label = String(event?.event_label || event?.primary_drive || 'drive_event').trim();
-    const reason = String(event?.reason || '').trim();
+    const source = driveSourceLabel(event?.source || brain?.source || 'feed', brain?.source_type || event?.source_type || '');
+    const label = compactDriveLabel(event?.event_label || event?.primary_drive || '事件');
+    const reason = compactReasonText(event?.reason || '');
     const time = formatDriveEventTime(event?.ts);
     const intensity = Number.isFinite(Number(event?.intensity)) ? Number(event.intensity).toFixed(2) : '—';
     const confidence = Number.isFinite(Number(event?.confidence)) ? Number(event.confidence).toFixed(2) : '—';
@@ -2764,21 +3020,21 @@ function renderDriveEvents(events = []) {
       ? applied.map(([k, v]) => {
           const delta = Number(v?.delta || 0);
           const sign = delta >= 0 ? '+' : '−';
-          return `<span class="drive-event-delta${event?.suppressed ? ' suppressed' : ' positive'}"><strong>${esc(k)}</strong> ${sign}${Math.abs(delta).toFixed(3)}</span>`;
+          return `<span class="drive-event-delta${event?.suppressed ? ' suppressed' : ' positive'}"><strong>${esc(DRIVE_LABELS[k] || k)}</strong> ${sign}${Math.abs(delta).toFixed(3)} ${arrowTrail(delta)}</span>`;
         }).join('')
-      : `<span class="drive-event-delta${event?.suppressed ? ' suppressed' : ''}"><strong>${event?.suppressed ? 'suppressed' : 'no delta'}</strong></span>`;
+      : `<span class="drive-event-delta${event?.suppressed ? ' suppressed' : ''}"><strong>${event?.suppressed ? '悬置' : '无变化'}</strong></span>`;
     const archivalText = forwardArchival?.archive_candidate
-      ? `<span class="drive-event-delta positive"><strong>${esc(forwardArchival.display || '留痕')}</strong> ${esc(forwardArchival.reason || 'archive candidate')}</span>`
+      ? `<span class="drive-event-delta positive"><strong>${esc(forwardArchival.display || '留痕')}</strong> ${esc(compactReasonText(forwardArchival.reason || '留痕'))}</span>`
       : '';
     const discernmentText = discernment?.state && discernment.state !== 'clear'
-      ? `<span class="drive-event-delta suppressed"><strong>${esc(discernment.display || '皱眉，先不认')}</strong> ${esc((discernment.flags || []).join(', '))}</span>`
+      ? `<span class="drive-event-delta suppressed"><strong>${esc(discernment.display || '皱眉')}</strong> ${esc((discernment.flags || []).join(' · ') || discernment.state)}</span>`
       : '';
     return `<div class="drive-event-row">
       <div class="drive-event-head">
-        <span class="drive-event-source"><strong>${esc(source)}</strong>${bucket ? ` · ${esc(sourceType || 'entry')} ${esc(bucket)}` : ''}</span>
+        <span class="drive-event-source"><strong>${esc(source)}</strong></span>
         <span class="drive-event-label">${esc(label)}</span>
       </div>
-      <div class="drive-event-meta">${esc(time)} · intensity ${intensity} · confidence ${confidence} · agency ${agency}${event?.suppressed ? ' · suppressed' : ''}</div>
+      <div class="drive-event-meta">${esc(time)} · ${intensity} · ${confidence} · ${agency}${event?.suppressed ? ' · 悬置' : ''}</div>
       <div class="drive-event-deltas">${deltaText}${archivalText}${discernmentText}</div>
       ${reason ? `<div class="drive-event-reason">${esc(reason)}</div>` : ''}
     </div>`;
@@ -2786,100 +3042,17 @@ function renderDriveEvents(events = []) {
 }
 
 function renderDiscernment(discernment) {
-  const drives = document.getElementById('desire-drives');
-  if (!drives) return;
-  let el = document.getElementById('desire-discernment-readout');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'desire-discernment-readout';
-    el.className = 'drive-event-empty';
-    drives.parentNode?.insertBefore(el, drives);
-  }
+  const el = document.getElementById('desire-drive-summary');
+  if (!el) return;
   if (!discernment || !discernment.state || discernment.state === 'clear') {
-    el.style.display = 'none';
-    el.textContent = '';
+    el.innerHTML = '<span class="drive-summary-empty">No discernment readout.</span>';
     return;
   }
-  const flags = Array.isArray(discernment.flags) && discernment.flags.length ? ` · ${discernment.flags.join(', ')}` : '';
-  el.style.display = '';
-  el.textContent = `${discernment.display || '皱眉，先不认'}${flags}`;
-}
-
-function renderDriveReadouts(driveOutputs = {}, discernment = null, possessivenessChannels = null, attachmentRebound = null, effectiveDrives = {}, drives = {}) {
-  const wrap = document.getElementById('desire-drive-readouts');
-  if (!wrap) return;
-  const discernmentState = discernment && typeof discernment === 'object' ? String(discernment.state || '').trim() : '';
-  const discernmentFlags = Array.isArray(discernment?.flags) && discernment.flags.length ? discernment.flags.join(' · ') : '';
-  const discernmentBlock = discernmentState && discernmentState !== 'clear'
-    ? `<div class="drive-readout-row">
-        <div class="drive-readout-head">
-          <div class="drive-readout-name">discernment</div>
-          <div class="drive-readout-key">cross-cut</div>
-        </div>
-        <div class="drive-readout-values">
-          <div class="drive-readout-main">
-            <strong>${esc(discernment.display || '皱眉，先不认')}</strong>
-            <span>state ${esc(discernmentState)}</span>
-            <em>${discernmentFlags ? esc(discernmentFlags) : 'no flags'}</em>
-          </div>
-        </div>
-      </div>`
-    : '';
-  const rows = DRIVE_KEYS.map(key => {
-    const output = driveOutputs[key] || {};
-    const rawValue = finiteNumber(drives?.[key]);
-    const effectiveValue = finiteNumber(output.effective_value, finiteNumber(effectiveDrives?.[key], rawValue));
-    const confidence = Number.isFinite(Number(output.confidence)) ? Number(output.confidence).toFixed(2) : '—';
-    const valueText = Number.isFinite(rawValue) ? rawValue.toFixed(2) : '—';
-    const effText = Number.isFinite(effectiveValue) ? effectiveValue.toFixed(2) : '—';
-    const chips = [];
-    if (output.source) chips.push(`<span class="drive-readout-chip neutral"><strong>source</strong> ${esc(output.source)}</span>`);
-    if (output.mode) chips.push(`<span class="drive-readout-chip neutral"><strong>mode</strong> ${esc(output.mode)}</span>`);
-    if (output.reason) chips.push(`<span class="drive-readout-chip neutral">${esc(output.reason)}</span>`);
-    if (key === 'possessiveness') {
-      const spike = Number.isFinite(Number(output.event_spike)) ? Number(output.event_spike).toFixed(2) : null;
-      const base = Number.isFinite(Number(output.territorial_baseline)) ? Number(output.territorial_baseline).toFixed(2) : null;
-      const channels = possessivenessChannels && typeof possessivenessChannels === 'object' ? possessivenessChannels : {};
-      if (spike !== null) chips.push(`<span class="drive-readout-chip positive"><strong>spike</strong> ${spike}</span>`);
-      if (base !== null) chips.push(`<span class="drive-readout-chip neutral"><strong>base</strong> ${base}</span>`);
-      if (Number.isFinite(Number(channels.event_spike)) || Number.isFinite(Number(channels.territorial_baseline))) {
-        const chSpike = Number.isFinite(Number(channels.event_spike)) ? Number(channels.event_spike).toFixed(2) : '—';
-        const chBase = Number.isFinite(Number(channels.territorial_baseline)) ? Number(channels.territorial_baseline).toFixed(2) : '—';
-        chips.push(`<span class="drive-readout-chip neutral"><strong>channels</strong> ${chSpike} / ${chBase}</span>`);
-      }
-    }
-    const rebound = key === 'attachment' ? (output.rebound && typeof output.rebound === 'object' ? output.rebound : (attachmentRebound && typeof attachmentRebound === 'object' ? attachmentRebound : null)) : null;
-    if (rebound) {
-      chips.push(`<span class="drive-readout-chip ${rebound.active ? 'positive' : 'neutral'}"><strong>rebound</strong> ${esc(rebound.phase || '—')}</span>`);
-      if (Number.isFinite(Number(rebound.hours_since_absence))) {
-        chips.push(`<span class="drive-readout-chip neutral"><strong>absence</strong> ${Number(rebound.hours_since_absence).toFixed(1)}h</span>`);
-      }
-      if (Number.isFinite(Number(rebound.overshoot))) {
-        chips.push(`<span class="drive-readout-chip neutral"><strong>overshoot</strong> ${Number(rebound.overshoot).toFixed(2)}</span>`);
-      }
-    }
-    if (key === 'reflection' && output.reflection_mode) {
-      chips.push(`<span class="drive-readout-chip ${output.reflection_mode === 'forward_archival' ? 'positive' : 'neutral'}"><strong>reflection</strong> ${esc(output.reflection_mode)}</span>`);
-      if (output.forward_archival && typeof output.forward_archival === 'object' && output.forward_archival.archive_candidate) {
-        chips.push(`<span class="drive-readout-chip positive"><strong>archival</strong> ${esc(output.forward_archival.display || '留痕')}</span>`);
-      }
-    }
-    return `<div class="drive-readout-row">
-      <div class="drive-readout-head">
-        <div class="drive-readout-name">${esc(DRIVE_LABELS[key] || key)}</div>
-        <div class="drive-readout-key">${esc(key)}</div>
-      </div>
-      <div class="drive-readout-values">
-        <div class="drive-readout-main">
-          <strong>${valueText}</strong>
-          <span>effective ${effText}</span>
-          <em>confidence ${confidence}</em>
-        </div>
-        <div class="drive-readout-chips">${chips.join('') || '<span class="drive-readout-chip neutral">no extra output</span>'}</div>
-      </div>
-    </div>`;
-  }).join('');
-  wrap.innerHTML = `${discernmentBlock}${rows || '<span class="drive-readout-empty">No drive readouts yet.</span>'}`;
+  const flags = Array.isArray(discernment.flags) && discernment.flags.length ? discernment.flags.join(' · ') : '';
+  el.innerHTML = [
+    `<span class="drive-summary-chip suppressed"><strong>${esc(discernment.display || '皱眉，先不认')}</strong> ${esc(discernment.state)}</span>`,
+    flags ? `<span class="drive-summary-chip neutral">${esc(flags)}</span>` : '',
+  ].filter(Boolean).join('');
 }
 
 function renderThoughtPool(thoughts = desireThoughts) {
