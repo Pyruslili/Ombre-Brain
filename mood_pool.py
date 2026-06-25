@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 import time
 
 
@@ -14,7 +15,7 @@ FALLBACK_MOOD_TRACE = "窗边没有动静，只是趴着发呆。"
 FALLBACK_CLIMATE = "平静"
 
 
-def _load_live_wire_cache() -> dict | None:
+def _load_live_wire_cache(thought_signature: str = "") -> dict | None:
     try:
         if not os.path.exists(_LIVE_WIRE_CACHE_PATH):
             return None
@@ -24,6 +25,8 @@ def _load_live_wire_cache() -> dict | None:
             return None
         if cache.get("source") != "thought_synthesis":
             return None
+        if thought_signature and cache.get("thought_signature") != thought_signature:
+            return None
         if time.time() - cache.get("generated_at", 0) > _LIVE_WIRE_TTL:
             return None
         return cache
@@ -31,7 +34,7 @@ def _load_live_wire_cache() -> dict | None:
         return None
 
 
-def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int) -> None:
+def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int, thought_signature: str) -> None:
     try:
         os.makedirs(os.path.dirname(_LIVE_WIRE_CACHE_PATH), exist_ok=True)
         with open(_LIVE_WIRE_CACHE_PATH, "w") as f:
@@ -41,6 +44,7 @@ def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int) -
                 "mood_trace": mood_trace,
                 "live_wire": live_wire,
                 "thought_count": thought_count,
+                "thought_signature": thought_signature,
                 "generated_at": time.time(),
             }, f)
     except Exception:
@@ -67,8 +71,13 @@ def _thought_lines(thoughts: list) -> list[str]:
     return lines
 
 
+def _thought_signature(thoughts: list) -> str:
+    joined = "\n".join(_thought_lines(thoughts))
+    return hashlib.sha1(joined.encode("utf-8")).hexdigest() if joined else ""
+
+
 def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
-    """Call DeepSeek to synthesize Climate + Mood Trace from sourced thoughts."""
+    """Call DeepSeek to synthesize Climate and an auxiliary trace from sourced thoughts."""
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
         return None
@@ -114,13 +123,14 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
 
 def get_daily_mood(branch: str = None, thoughts: list = None):
     """
-    Synthesize Climate and Mood Trace from sourced thoughts only.
+    Synthesize Climate from sourced thoughts only.
 
     `branch` is a retired compatibility parameter. When synthesis is unavailable,
     return a fixed neutral sentinel instead of a random dead mood dictionary.
     """
-    cache = _load_live_wire_cache()
     current_count = len(thoughts) if thoughts else 0
+    thought_signature = _thought_signature(thoughts or [])
+    cache = _load_live_wire_cache(thought_signature)
 
     if cache:
         return (cache["mood_trace"], cache["live_wire"])
@@ -128,7 +138,7 @@ def get_daily_mood(branch: str = None, thoughts: list = None):
     if thoughts and len(thoughts) >= 2:
         synth = _synthesize_mood(thoughts)
         if synth:
-            _save_live_wire_cache(synth[0], synth[1], current_count)
+            _save_live_wire_cache(synth[0], synth[1], current_count, thought_signature)
             return synth
 
     return (FALLBACK_MOOD_TRACE, FALLBACK_CLIMATE)

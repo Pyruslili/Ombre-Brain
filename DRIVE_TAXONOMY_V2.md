@@ -87,10 +87,17 @@ The canonical feed shape is `drive_event_v2`:
 Legacy `drives` and `brain_signals` are accepted only as migration input. They
 are folded into one event and do not pulse separately.
 
+First-hand thoughts and feel-derived drive events should come from Nox's CLI
+analyzer, not from DP. DP may refine `speech_event_state` asynchronously and may
+synthesize Climate from already-sourced thoughts; `Mood Trace` stays the latest
+sourced thought so the readout remains live. DP must not mint new Nox thoughts
+directly from raw feels.
+
 Preset intent pools, static hook menus, and random mood dictionaries are retired.
-Climate/Mood Trace may be rendered as text, but only from sourced thoughts or
-event state. If synthesis is unavailable, the fixed neutral sentinel is
-`Climate=平静` and `Mood Trace=窗边没有动静，只是趴着发呆。`; it is not cached.
+Climate may be synthesized from sourced thoughts. If synthesis is unavailable,
+the fixed neutral sentinel is `Climate=平静`; it is not cached. `Mood Trace`
+uses the latest sourced thought, falling back to `窗边没有动静，只是趴着发呆。`
+only when there is no thought at all.
 
 ## Agency Gate
 

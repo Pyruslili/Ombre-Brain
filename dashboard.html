@@ -811,6 +811,12 @@ label {
   padding: .95rem 0;
   border-top: 1px solid var(--line-soft);
 }
+.latent-note-row.pinned {
+  opacity: .82;
+}
+.latent-note-pin {
+  color: var(--accent-deep);
+}
 .latent-note-line {
   color: var(--ink-soft);
   font: 300 1.02rem/1.75 var(--font-body);
@@ -1970,6 +1976,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     <div class="latent-tabs" id="latent-note-tabs">
       <button class="active" data-latent-tab="draft">草稿 <span id="latent-count-draft">0</span></button>
       <button data-latent-tab="approved">已确认 <span id="latent-count-approved">0</span></button>
+      <button data-latent-tab="used">沉底 <span id="latent-count-used">0</span></button>
     </div>
     <div class="latent-drive-tabs" id="latent-drive-tabs"></div>
     <div class="latent-list" id="latent-note-list">
@@ -2585,10 +2592,11 @@ async function loadDesire(button) {
     const driveEntries = Object.entries(d.drives || {});
     const topDrive = [...driveEntries].sort((a, b) => finiteNumber(b[1]) - finiteNumber(a[1]))[0] || ['—', 0];
     const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
-    const latestTrace = thoughts.find(t => String(t.text || '').trim())?.text || d.mood_trace || d.pulse_weather?.mood_trace || 'No recent thought.';
     desireThoughts = thoughts;
 
     const weather = d.pulse_weather || {};
+    const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
+    const latestTrace = latestThought || weather.mood_trace || d.mood_trace || 'No recent thought.';
     const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
     const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
     const warmthNow = finiteNumber(weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);
@@ -4839,7 +4847,13 @@ function latentTypeLabel(type) {
 }
 
 function latentStatusLabel(status) {
-  return status === 'approved' ? '已确认' : '草稿';
+  if (status === 'approved') return '已确认';
+  if (status === 'used') return '沉底';
+  return '草稿';
+}
+
+function latentPinnedLabel(note) {
+  return note?.pinned ? '常驻' : '';
 }
 
 function latentDriveLabel(drive) {
@@ -4867,11 +4881,15 @@ function renderLatentNotes() {
   const sub = document.getElementById('latent-note-sub');
   const draftCount = latentNotes.filter(n => n.status === 'draft').length;
   const approvedCount = latentNotes.filter(n => n.status === 'approved').length;
+  const usedCount = latentNotes.filter(n => n.status === 'used').length;
+  const pinnedCount = latentNotes.filter(n => n.status === 'approved' && n.pinned).length;
   const draftEl = document.getElementById('latent-count-draft');
   const approvedEl = document.getElementById('latent-count-approved');
+  const usedEl = document.getElementById('latent-count-used');
   if (draftEl) draftEl.textContent = draftCount;
   if (approvedEl) approvedEl.textContent = approvedCount;
-  if (sub) sub.textContent = `${draftCount} drafts · ${approvedCount} approved`;
+  if (usedEl) usedEl.textContent = usedCount;
+  if (sub) sub.textContent = `${draftCount} drafts · ${approvedCount} approved · ${usedCount} used · ${pinnedCount} pinned`;
   document.querySelectorAll('[data-latent-tab]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.latentTab === latentNoteTab);
   });
@@ -4880,6 +4898,9 @@ function renderLatentNotes() {
   const visible = latentNotes.filter(n =>
     n.status === latentNoteTab &&
     (latentDriveTab === 'all' || latentDriveLabel(n.drive_tag) === latentDriveTab)
+  ).sort((a, b) =>
+    Number(!!a.pinned) - Number(!!b.pinned) ||
+    String(b.created_at || '').localeCompare(String(a.created_at || ''))
   );
   const rows = [];
   if (latentCreating) rows.push(renderLatentEditor({ id: '__new__', note_type: 'outward', dream_line: '' }, true));
@@ -4913,19 +4934,28 @@ function renderLatentNoteRow(note) {
     latentTypeLabel(note.note_type),
     latentDriveLabel(note.drive_tag),
     latentStatusLabel(note.status),
+    latentPinnedLabel(note),
     note.source_kind || '',
     note.source_title || '',
   ].filter(Boolean).join(' · ');
   const confirmButton = note.status === 'draft'
     ? `<button class="btn-primary" onclick="confirmLatentNote('${esc(id)}')">确认</button>`
     : '';
-  return `<div class="latent-note-row" data-latent-id="${esc(id)}">
+  const restoreButton = note.status === 'used'
+    ? `<button class="btn-primary" onclick="restoreLatentNote('${esc(id)}')">回池</button>`
+    : '';
+  const pinButton = note.pinned
+    ? `<button class="btn-primary latent-note-pin" onclick="toggleLatentNotePinned('${esc(id)}', false)">取消常驻</button>`
+    : `<button class="btn-primary" onclick="toggleLatentNotePinned('${esc(id)}', true)">常驻</button>`;
+  return `<div class="latent-note-row${note.pinned ? ' pinned' : ''}" data-latent-id="${esc(id)}">
     <div>
       <div class="latent-note-line">${esc(line)}</div>
       <div class="latent-note-meta">${esc(meta)}</div>
     </div>
     <div class="latent-note-actions">
       ${confirmButton}
+      ${restoreButton}
+      ${pinButton}
       <button class="btn-primary" onclick="editLatentNote('${esc(id)}')">编辑</button>
       <button class="btn-primary" onclick="deleteLatentNote('${esc(id)}')">删除</button>
     </div>
@@ -5028,6 +5058,32 @@ async function confirmLatentNote(id) {
   });
   if (!res.ok) return alert('确认失败');
   latentNoteTab = 'approved';
+  await loadLatentNotes();
+}
+
+async function restoreLatentNote(id) {
+  const res = await fetch(BASE + '/api/latent-notes/' + encodeURIComponent(id) + '/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ status: 'approved' })
+  });
+  if (!res.ok) return alert('回池失败');
+  latentNoteTab = 'approved';
+  await loadLatentNotes();
+}
+
+async function toggleLatentNotePinned(id, pinned) {
+  const note = latentNotes.find(n => String(n.id || '') === String(id));
+  const payload = note?.status === 'used' && pinned
+    ? { pinned, status: 'approved' }
+    : { pinned };
+  const res = await fetch(BASE + '/api/latent-notes/' + encodeURIComponent(id) + '/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) return alert('常驻状态更新失败');
+  if (note?.status === 'used' && pinned) latentNoteTab = 'approved';
   await loadLatentNotes();
 }
 

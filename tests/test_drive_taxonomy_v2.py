@@ -114,3 +114,32 @@ def test_mood_pool_has_no_unsourced_dictionary_fallback(monkeypatch, tmp_path):
 
     assert result == ("窗边没有动静，只是趴着发呆。", "平静")
     assert not (tmp_path / "live_wire_cache.json").exists()
+
+
+def test_mood_pool_cache_tracks_top_thought_signature(monkeypatch, tmp_path):
+    monkeypatch.setenv("LIVE_WIRE_CACHE", str(tmp_path / "live_wire_cache.json"))
+
+    import importlib
+    import mood_pool
+
+    mood_pool = importlib.reload(mood_pool)
+    calls = []
+
+    def fake_synthesize(thoughts):
+        calls.append([t["text"] for t in thoughts])
+        return (f"trace {len(calls)}", "气候")
+
+    monkeypatch.setattr(mood_pool, "_synthesize_mood", fake_synthesize)
+    first = [
+        {"text": "one sourced thought", "drive": "reflection", "strength": 0.8},
+        {"text": "another sourced thought", "drive": "curiosity", "strength": 0.7},
+    ]
+    second = [
+        {"text": "changed sourced thought", "drive": "reflection", "strength": 0.9},
+        {"text": "another sourced thought", "drive": "curiosity", "strength": 0.7},
+    ]
+
+    assert mood_pool.get_daily_mood(thoughts=first) == ("trace 1", "气候")
+    assert mood_pool.get_daily_mood(thoughts=first) == ("trace 1", "气候")
+    assert mood_pool.get_daily_mood(thoughts=second) == ("trace 2", "气候")
+    assert len(calls) == 2

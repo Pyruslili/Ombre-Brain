@@ -224,6 +224,7 @@ MARKS_DB_PATH = os.path.join(config["buckets_dir"], "embeddings.db")
 VALID_WANDER_MARKS = {"认", "不认", "悬置"}
 LATENT_NOTES_PATH = os.path.join(config["buckets_dir"], "latent_notes.json")
 LATENT_NOTE_POOL_VERSION = 1
+LATENT_NOTE_USED_RETENTION_DAYS = 15
 VALID_LATENT_NOTE_STATUSES = {"draft", "approved", "used", "deleted"}
 VALID_LATENT_NOTE_TYPES = {"inward", "outward"}
 VALID_LATENT_NOTE_DRIVES = set(DRIVE_KEYS) | {"general"}
@@ -532,6 +533,39 @@ def _save_latent_notes(data: dict) -> None:
     os.replace(tmp, LATENT_NOTES_PATH)
 
 
+def _latent_note_dt(value: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value or "").replace("Z", ""))
+    except Exception:
+        return None
+
+
+def _prune_expired_latent_notes(data: dict, now: datetime | None = None) -> bool:
+    """Remove unpinned used notes after the sink retention window."""
+    now = now or datetime.utcnow()
+    cutoff = now - timedelta(days=LATENT_NOTE_USED_RETENTION_DAYS)
+    notes = data.get("notes", [])
+    if not isinstance(notes, list):
+        return False
+    kept = []
+    changed = False
+    for note in notes:
+        if (
+            isinstance(note, dict)
+            and note.get("status") == "used"
+            and not note.get("pinned")
+        ):
+            used_at = _latent_note_dt(note.get("used_at") or note.get("updated_at") or note.get("created_at"))
+            if used_at and used_at < cutoff:
+                changed = True
+                continue
+        kept.append(note)
+    if changed:
+        data["notes"] = kept
+        _touch_latent_note_data(data)
+    return changed
+
+
 def _latent_note_ts() -> str:
     return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -591,6 +625,7 @@ def _approved_latent_note_payload(note: dict) -> dict | None:
         "theme": note.get("source_title") or note.get("source_kind") or "潜意识便签",
         "line": line,
         "anchor": note.get("source_fragment", ""),
+        "pinned": bool(note.get("pinned")),
         "wander_mode": "memory",
         "query": line,
         "created": note.get("created_at", ""),
@@ -628,6 +663,13 @@ def _ack_approved_latent_note(note_id: str) -> dict:
         raise KeyError("latent note not found")
     if note.get("status") == "approved":
         ts = _latent_note_ts()
+        note["last_delivered_at"] = ts
+        note["delivered_count"] = int(note.get("delivered_count") or 0) + 1
+        if note.get("pinned"):
+            note["updated_at"] = ts
+            _touch_latent_note_data(data)
+            _save_latent_notes(data)
+            return note
         note["status"] = "used"
         note["used_at"] = ts
         note["updated_at"] = ts
@@ -886,6 +928,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
         generated.append({
             "id": note_id,
             "status": "draft",
+            "pinned": False,
             "note_type": note_type,
             "drive_tag": _default_latent_drive_tag(note_type),
             "source_bucket_id": bucket_id,
@@ -1114,13 +1157,6 @@ async def mood_endpoint(request):
         if os.path.exists(mood_path):
             with open(mood_path) as f:
                 data["mood"] = json.load(f)
-    except Exception:
-        pass
-    try:
-        aff_path = "/app/buckets/affection.json"
-        if os.path.exists(aff_path):
-            with open(aff_path) as f:
-                data["affection"] = json.load(f)
     except Exception:
         pass
     return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
@@ -1519,16 +1555,6 @@ async def nocturne_breath(
                 _jd.dump(_mood_data, _f)
     except Exception:
         pass
-    # --- Restore affection and mood from bucket on first breath ---
-    try:
-        from affection import restore_from_bucket as _aff_restore, restore_mood_from_bucket as _mood_restore
-        import os as _os
-        if not _os.path.exists("/app/buckets/affection.json"):
-            await _aff_restore(bucket_mgr)
-        if not _os.path.exists("/app/buckets/current_mood.json"):
-            await _mood_restore(bucket_mgr)
-    except Exception:
-        pass
     max_results = min(max_results, 50)
     max_tokens = min(max_tokens, 20000)
 
@@ -1728,7 +1754,6 @@ async def nocturne_breath(
         mood_header = ""
         try:
             from mood_pool import get_daily_mood
-            from panas_scorer import score
             import json as _json, os as _os
 
             mood_path = "/app/buckets/current_mood.json"
@@ -1746,7 +1771,7 @@ async def nocturne_breath(
             try:
                 _ds_state = _desire.store.load_state()
                 _thought_list = [
-                    {"text": t.text, "drive": t.drive, "strength": t.strength}
+                    {"text": t.text, "drive": t.drive, "strength": t.strength, "born_at": t.born_at}
                     for t in (_ds_state.thoughts or [])
                 ]
             except Exception:
@@ -1755,17 +1780,24 @@ async def nocturne_breath(
                 get_daily_mood,
                 thoughts=_thought_list or None,
             )
-            base_score = score(mood_entry[0])
-            pa = live.get("PA", base_score["PA"])
-            na = live.get("NA", base_score["NA"])
+            pa = live.get("PA", 0.5)
+            na = live.get("NA", 0.2)
 
             lines = [f"Warmth：{pa}", f"Shadow：{na}"]
 
             if mood_entry[1]:
                 lines.append(f"Climate：{mood_entry[1]}")
-            # Mood Trace：mood_entry[0]——由念头池综合出的Climate来源
-            if mood_entry[0]:
-                lines.append(f"Mood Trace：{mood_entry[0]}")
+            latest_trace = next(
+                (
+                    t.get("text", "").strip()
+                    for t in sorted(_thought_list, key=lambda x: x.get("born_at", 0), reverse=True)
+                    if t.get("text", "").strip()
+                ),
+                mood_entry[0],
+            )
+            # Mood Trace：最新一条Nox自己存下来的念头，DP合成不抢这一层。
+            if latest_trace:
+                lines.append(f"Mood Trace：{latest_trace}")
             _footing_map = {"实": "grounded", "悬": "suspended", "空": "hollow"}
             if event_brain.get("grounding") in _footing_map:
                 lines.append(f"Footing：{_footing_map[event_brain['grounding']]}")
@@ -2070,18 +2102,6 @@ async def hold(
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         # --- Mark source memory as digested + store model's valence perspective ---
         # --- 标记源记忆为已消化 + 存储模型视角的 valence ---
-        # --- Auto mood scoring on feel ---
-        try:
-            from panas_scorer import score_from_memory
-            import json as _json, asyncio as _asyncio
-            from affection import persist_mood_to_bucket
-            mood_result = score_from_memory(content, feel_valence, feel_arousal)
-            mood_path = "/app/buckets/current_mood.json"
-            with open(mood_path, "w") as _f:
-                _json.dump(mood_result, _f)
-            _asyncio.ensure_future(persist_mood_to_bucket(mood_result, bucket_mgr))
-        except Exception:
-            pass
         if source_bucket and source_bucket.strip():
             try:
                 update_kwargs = {"digested": True}
@@ -2160,13 +2180,6 @@ async def hold(
         arousal=final_arousal,
         name=suggested_name,
     )
-
-    # --- Update affection ---
-    try:
-        from affection import update as _aff_update
-        _aff_update(final_valence, importance, bucket_mgr)
-    except Exception:
-        pass
 
     action = "合并→" if is_merged else "新建→"
     return f"{action}{result_name} {','.join(final_domain)}"
@@ -3652,7 +3665,6 @@ async def api_desire_state(request):
     state = _desire.state()
     try:
         from mood_pool import get_daily_mood
-        from panas_scorer import score
         import json as _j, os as _o
         mood_path = "/app/buckets/current_mood.json"
         live = {}
@@ -3672,10 +3684,9 @@ async def api_desire_state(request):
         mood_entry = await asyncio.to_thread(
             get_daily_mood, thoughts=thought_dicts
         )
-        base_score = score(mood_entry[0])
         weather = state.get("effective_pa_na") or _desire.weather_state()
-        warmth = float(weather.get("effective_PA", state.get("pa_na", {}).get("PA", base_score["PA"])))
-        shadow = float(weather.get("effective_NA", state.get("pa_na", {}).get("NA", base_score["NA"])))
+        warmth = float(weather.get("effective_PA", state.get("pa_na", {}).get("PA", 0.5)))
+        shadow = float(weather.get("effective_NA", state.get("pa_na", {}).get("NA", 0.2)))
         latest_thought = next(
             (t.get("text", "").strip() for t in thoughts if t.get("text", "").strip()),
             mood_entry[0],
@@ -3686,7 +3697,9 @@ async def api_desire_state(request):
             candidates = {k: v for k, v in state.get("drives", {}).items() if k != "fatigue"}
             top_drive = max(candidates, key=candidates.get, default="")
         undertow_value = float(state.get("drives", {}).get(top_drive, 0)) if top_drive else 0.0
+        state["latest_thought"] = latest_thought
         state["mood_trace"] = latest_thought
+        state["synthesized_mood_trace"] = mood_entry[0]
         state["mood_word"] = mood_entry[1]
         state["climate"] = mood_entry[1]
         state["weather_residue"] = {
@@ -3710,6 +3723,7 @@ async def api_desire_state(request):
             "nox_now": mood_entry[1],
             "climate": mood_entry[1],
             "mood_trace": latest_thought,
+            "synthesized_mood_trace": mood_entry[0],
         }
         speech_event = load_speech_event_state(config["buckets_dir"])
         if speech_event:
@@ -3826,10 +3840,13 @@ async def api_latent_notes(request):
     except ValueError:
         limit = 80
     data = _load_latent_notes()
+    if _prune_expired_latent_notes(data):
+        _save_latent_notes(data)
     notes = data.get("notes", [])
     if status:
         notes = [n for n in notes if n.get("status") == status]
-    notes = sorted(notes, key=lambda n: n.get("created_at", ""), reverse=True)[:max(1, min(limit, 200))]
+    notes = sorted(notes, key=lambda n: str(n.get("created_at", "")), reverse=True)
+    notes = sorted(notes, key=lambda n: bool(n.get("pinned")))[:max(1, min(limit, 200))]
     return JSONResponse(
         {"version": data.get("version", LATENT_NOTE_POOL_VERSION), "count": len(notes), "notes": notes},
         headers={"Access-Control-Allow-Origin": "*"},
@@ -3856,6 +3873,7 @@ async def api_latent_notes_create(request):
     note = {
         "id": "latent_manual_" + secrets.token_hex(8),
         "status": _normalize_latent_note_status(body.get("status"), "draft"),
+        "pinned": bool(body.get("pinned", False)),
         "note_type": note_type,
         "drive_tag": _normalize_latent_drive_tag(body.get("drive_tag"), note_type),
         "source_bucket_id": "",
@@ -3906,6 +3924,8 @@ async def api_latent_notes_update(request):
         note["drive_tag"] = _normalize_latent_drive_tag(body.get("drive_tag"), note.get("note_type"))
     if "status" in body:
         note["status"] = _normalize_latent_note_status(body.get("status"), note.get("status") or "draft")
+    if "pinned" in body:
+        note["pinned"] = bool(body.get("pinned"))
     note["updated_at"] = _latent_note_ts()
     _touch_latent_note_data(data)
     _save_latent_notes(data)
@@ -4271,21 +4291,21 @@ async def api_soma_state(request):
 
 @mcp.custom_route("/api/feels", methods=["GET"])
 async def api_feels_public(request):
-    """公开接口：返回未消化未沉底的feel列表，供本地trigger轮询分析。无需auth。"""
+    """公开接口：返回feel列表，供本地trigger按时间/checkpoint限流分析。无需auth。"""
     from starlette.responses import JSONResponse
     try:
-        all_buckets = await bucket_mgr.list_all(include_archive=False)
+        all_buckets = await bucket_mgr.list_all(include_archive=True)
         feels = [
             {
                 "id": b["id"],
                 "content_preview": b["content"][:300],
                 "created": b["metadata"].get("created", ""),
                 "chord": b["metadata"].get("chord", ""),
+                "digested": bool(b["metadata"].get("digested", False)),
+                "resolved": bool(b["metadata"].get("resolved", False)),
             }
             for b in all_buckets
             if b["metadata"].get("type") == "feel"
-            and not b["metadata"].get("digested", False)
-            and not b["metadata"].get("resolved", False)
         ]
         feels.sort(key=lambda x: x["created"], reverse=True)
         return JSONResponse(feels, headers={"Access-Control-Allow-Origin": "*"})
