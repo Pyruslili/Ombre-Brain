@@ -775,6 +775,28 @@ label {
   border-color: rgba(232,149,79,.30);
   background: rgba(232,149,79,.08);
 }
+.latent-drive-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .38rem;
+  margin: -.3rem 0 1rem;
+}
+.latent-drive-tabs button {
+  min-height: 28px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  padding: .34rem .58rem;
+  background: rgba(255,224,186,.014);
+  color: var(--mute);
+  cursor: pointer;
+  font: 300 .58rem/1 var(--font-mono);
+  letter-spacing: .08em;
+}
+.latent-drive-tabs button.active {
+  color: var(--accent-deep);
+  border-color: rgba(232,149,79,.30);
+  background: rgba(232,149,79,.07);
+}
 .latent-list { display: grid; gap: .7rem; }
 .latent-empty {
   padding: 1.4rem 0;
@@ -1949,6 +1971,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <button class="active" data-latent-tab="draft">草稿 <span id="latent-count-draft">0</span></button>
       <button data-latent-tab="approved">已确认 <span id="latent-count-approved">0</span></button>
     </div>
+    <div class="latent-drive-tabs" id="latent-drive-tabs"></div>
     <div class="latent-list" id="latent-note-list">
       <div class="latent-empty">∗ No latent notes yet</div>
     </div>
@@ -4804,9 +4827,11 @@ async function loadReverieDream() {
 
 let latentNotes = [];
 let latentNoteTab = 'draft';
+let latentDriveTab = 'all';
 let latentEditingId = '';
 let latentCreating = false;
 const LATENT_DRIVE_OPTIONS = ['general','attachment','curiosity','reflection','duty','social','fatigue','libido','stress','disgust'];
+const LATENT_DRIVE_FILTERS = ['all', ...LATENT_DRIVE_OPTIONS];
 
 function latentTypeLabel(type) {
   return type === 'outward' ? 'outward' : 'inward';
@@ -4847,12 +4872,34 @@ function renderLatentNotes() {
   document.querySelectorAll('[data-latent-tab]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.latentTab === latentNoteTab);
   });
+  renderLatentDriveTabs();
   if (!list) return;
-  const visible = latentNotes.filter(n => n.status === latentNoteTab);
+  const visible = latentNotes.filter(n =>
+    n.status === latentNoteTab &&
+    (latentDriveTab === 'all' || latentDriveLabel(n.drive_tag) === latentDriveTab)
+  );
   const rows = [];
   if (latentCreating) rows.push(renderLatentEditor({ id: '__new__', note_type: 'outward', dream_line: '' }, true));
   rows.push(...visible.map(renderLatentNoteRow));
   list.innerHTML = rows.length ? rows.join('') : '<div class="latent-empty">∗ No latent notes here</div>';
+}
+
+function renderLatentDriveTabs() {
+  const wrap = document.getElementById('latent-drive-tabs');
+  if (!wrap) return;
+  const current = latentNotes.filter(n => n.status === latentNoteTab);
+  const counts = Object.fromEntries(LATENT_DRIVE_FILTERS.map(d => [d, 0]));
+  counts.all = current.length;
+  current.forEach(note => {
+    const drive = latentDriveLabel(note.drive_tag);
+    counts[drive] = (counts[drive] || 0) + 1;
+  });
+  if (!LATENT_DRIVE_FILTERS.includes(latentDriveTab)) latentDriveTab = 'all';
+  wrap.innerHTML = LATENT_DRIVE_FILTERS.map(d => {
+    const label = d === 'all' ? 'all' : d;
+    const count = counts[d] || 0;
+    return `<button class="${d === latentDriveTab ? 'active' : ''}" data-latent-drive="${esc(d)}">${esc(label)} ${count}</button>`;
+  }).join('');
 }
 
 function renderLatentNoteRow(note) {
@@ -5024,6 +5071,16 @@ document.addEventListener('click', event => {
   const tab = event.target.closest?.('[data-latent-tab]');
   if (!tab) return;
   latentNoteTab = tab.dataset.latentTab || 'draft';
+  latentDriveTab = 'all';
+  latentEditingId = '';
+  latentCreating = false;
+  renderLatentNotes();
+});
+
+document.addEventListener('click', event => {
+  const tab = event.target.closest?.('[data-latent-drive]');
+  if (!tab) return;
+  latentDriveTab = tab.dataset.latentDrive || 'all';
   latentEditingId = '';
   latentCreating = false;
   renderLatentNotes();
