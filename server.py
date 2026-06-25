@@ -224,6 +224,8 @@ MARKS_DB_PATH = os.path.join(config["buckets_dir"], "embeddings.db")
 VALID_WANDER_MARKS = {"认", "不认", "悬置"}
 LATENT_NOTES_PATH = os.path.join(config["buckets_dir"], "latent_notes.json")
 LATENT_NOTE_POOL_VERSION = 1
+VALID_LATENT_NOTE_STATUSES = {"draft", "approved", "used", "deleted"}
+VALID_LATENT_NOTE_TYPES = {"inward", "outward"}
 
 
 def _init_marks_table() -> None:
@@ -527,6 +529,90 @@ def _save_latent_notes(data: dict) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         _json_lib.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, LATENT_NOTES_PATH)
+
+
+def _latent_note_ts() -> str:
+    return datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def _normalize_latent_note_status(status: str, default: str = "draft") -> str:
+    value = str(status or default).strip().lower()
+    return value if value in VALID_LATENT_NOTE_STATUSES else default
+
+
+def _normalize_latent_note_type(note_type: str) -> str:
+    value = str(note_type or "").strip().lower()
+    return value if value in VALID_LATENT_NOTE_TYPES else "inward"
+
+
+def _latent_note_line(note: dict) -> str:
+    return " ".join(str(note.get("dream_line") or note.get("line") or "").split())
+
+
+def _find_latent_note(data: dict, note_id: str) -> dict | None:
+    note_id = str(note_id or "").strip()
+    if not note_id:
+        return None
+    for note in data.get("notes", []):
+        if str(note.get("id") or "") == note_id:
+            return note
+    return None
+
+
+def _touch_latent_note_data(data: dict) -> None:
+    data["version"] = LATENT_NOTE_POOL_VERSION
+    data["updated_at"] = _latent_note_ts()
+
+
+def _approved_latent_note_payload(note: dict) -> dict | None:
+    line = _latent_note_line(note)
+    note_id = str(note.get("id") or "").strip()
+    if not line or not note_id:
+        return None
+    return {
+        "kind": "latent_pool",
+        "note_type": _normalize_latent_note_type(note.get("note_type")),
+        "note_id": note_id,
+        "bucket_id": note_id,
+        "source_bucket_id": note.get("source_bucket_id", ""),
+        "theme": note.get("source_title") or note.get("source_kind") or "潜意识便签",
+        "line": line,
+        "anchor": note.get("source_fragment", ""),
+        "wander_mode": "memory",
+        "query": line,
+        "created": note.get("created_at", ""),
+        "score": 1.0,
+    }
+
+
+def _select_approved_latent_note(exclude_ids: set[str]) -> dict | None:
+    data = _load_latent_notes()
+    pool = []
+    for note in data.get("notes", []):
+        if note.get("status") != "approved":
+            continue
+        note_id = str(note.get("id") or "").strip()
+        if not note_id or note_id in exclude_ids:
+            continue
+        payload = _approved_latent_note_payload(note)
+        if payload:
+            pool.append(payload)
+    return random.choice(pool) if pool else None
+
+
+def _ack_approved_latent_note(note_id: str) -> dict:
+    data = _load_latent_notes()
+    note = _find_latent_note(data, note_id)
+    if not note:
+        raise KeyError("latent note not found")
+    if note.get("status") == "approved":
+        ts = _latent_note_ts()
+        note["status"] = "used"
+        note["used_at"] = ts
+        note["updated_at"] = ts
+        _touch_latent_note_data(data)
+        _save_latent_notes(data)
+    return note
 
 
 def _latent_note_api_config() -> tuple[str, str, str]:
@@ -3605,6 +3691,12 @@ async def api_heartbeat_latent_note(request):
     from starlette.responses import JSONResponse
     raw_exclude = request.query_params.get("exclude", "")
     exclude_ids = {x.strip() for x in raw_exclude.split(",") if x.strip()}
+    approved_note = _select_approved_latent_note(exclude_ids)
+    if approved_note:
+        return JSONResponse(
+            {"note": approved_note, "source": "approved_pool", "candidate_count": 1},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=True)
         marks_by_bucket = _load_all_marks()
@@ -3644,10 +3736,35 @@ async def api_heartbeat_latent_note(request):
                             headers={"Access-Control-Allow-Origin": "*"})
 
 
+@mcp.custom_route("/api/heartbeat/latent-note/ack", methods=["POST"])
+async def api_heartbeat_latent_note_ack(request):
+    """Heartbeat bridge 投递成功后确认消耗 approved 便签。"""
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    note_id = body.get("note_id") or body.get("id") or body.get("bucket_id") or ""
+    try:
+        note = _ack_approved_latent_note(note_id)
+        return JSONResponse(
+            {"ok": True, "note": note},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except KeyError:
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
+                            headers={"Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/api/latent-notes", methods=["GET"])
 async def api_latent_notes(request):
     """查看潜意识便签池。当前只用于草稿测试，不自动进入 heartbeat。"""
     from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
     status = (request.query_params.get("status") or "").strip()
     try:
         limit = int(request.query_params.get("limit") or 80)
@@ -3664,10 +3781,103 @@ async def api_latent_notes(request):
     )
 
 
+@mcp.custom_route("/api/latent-notes", methods=["POST"])
+async def api_latent_notes_create(request):
+    """手动添加一条潜意识便签草稿。"""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    dream_line = " ".join(str(body.get("dream_line") or body.get("line") or "").split())
+    if not dream_line:
+        return JSONResponse({"ok": False, "error": "dream_line required"}, status_code=400,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    ts = _latent_note_ts()
+    note = {
+        "id": "latent_manual_" + secrets.token_hex(8),
+        "status": _normalize_latent_note_status(body.get("status"), "draft"),
+        "note_type": _normalize_latent_note_type(body.get("note_type")),
+        "source_bucket_id": "",
+        "source_kind": "manual",
+        "source_title": str(body.get("source_title") or "手动便签").strip()[:80],
+        "source_created": "",
+        "source_fragment": str(body.get("source_fragment") or dream_line).strip()[:200],
+        "dream_line": dream_line[:120],
+        "model": "manual",
+        "created_at": ts,
+        "updated_at": ts,
+    }
+    data = _load_latent_notes()
+    data["notes"] = [note] + data.get("notes", [])
+    _touch_latent_note_data(data)
+    _save_latent_notes(data)
+    return JSONResponse({"ok": True, "note": note}, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/latent-notes/{note_id}/update", methods=["POST"])
+async def api_latent_notes_update(request):
+    """编辑便签正文、类型或状态。"""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    note_id = request.path_params["note_id"]
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    data = _load_latent_notes()
+    note = _find_latent_note(data, note_id)
+    if not note:
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    if "dream_line" in body or "line" in body:
+        dream_line = " ".join(str(body.get("dream_line") or body.get("line") or "").split())
+        if not dream_line:
+            return JSONResponse({"ok": False, "error": "dream_line required"}, status_code=400,
+                                headers={"Access-Control-Allow-Origin": "*"})
+        note["dream_line"] = dream_line[:120]
+    if "note_type" in body:
+        note["note_type"] = _normalize_latent_note_type(body.get("note_type"))
+    if "status" in body:
+        note["status"] = _normalize_latent_note_status(body.get("status"), note.get("status") or "draft")
+    note["updated_at"] = _latent_note_ts()
+    _touch_latent_note_data(data)
+    _save_latent_notes(data)
+    return JSONResponse({"ok": True, "note": note}, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/latent-notes/{note_id}/delete", methods=["POST"])
+async def api_latent_notes_delete(request):
+    """软删除一条潜意识便签。"""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    note_id = request.path_params["note_id"]
+    data = _load_latent_notes()
+    note = _find_latent_note(data, note_id)
+    if not note:
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    ts = _latent_note_ts()
+    note["status"] = "deleted"
+    note["deleted_at"] = ts
+    note["updated_at"] = ts
+    _touch_latent_note_data(data)
+    _save_latent_notes(data)
+    return JSONResponse({"ok": True, "note": note}, headers={"Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/api/latent-notes/generate", methods=["POST"])
 async def api_latent_notes_generate(request):
     """批量生成潜意识便签草稿。DP 慢路径，只进 draft 池，不直接喂 heartbeat。"""
     from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
     try:
         body = await request.json()
     except Exception:

@@ -742,6 +742,107 @@ label {
 .dream-empty { color: var(--mute); }
 .spark-wrap { position: relative; min-height: 54px; }
 .spark-wrap svg { width: 100%; height: 52px; overflow: visible; }
+.latent-card { margin-top: 1rem; }
+.latent-head { align-items: center; gap: 1rem; margin-bottom: 1.15rem; }
+.latent-title-wrap { display: flex; flex-direction: column; gap: .28rem; }
+.latent-actions { display: flex; align-items: center; justify-content: flex-end; gap: .55rem; flex-wrap: wrap; }
+.latent-actions .btn-primary,
+.latent-note-actions .btn-primary,
+.latent-editor-actions .btn-primary {
+  min-height: 30px;
+  padding: .42rem .72rem;
+  font-size: .64rem;
+}
+.latent-tabs {
+  display: inline-flex;
+  gap: .35rem;
+  padding: .22rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--line-soft);
+  background: rgba(255,224,186,.028);
+}
+.latent-tabs button {
+  min-height: 30px;
+  border: 0;
+  padding: .42rem .75rem;
+  background: transparent;
+  color: var(--mute);
+  cursor: pointer;
+  font: 300 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.latent-tabs button.active {
+  color: var(--accent-deep);
+  background: rgba(232,149,79,.08);
+}
+.latent-list { display: grid; gap: .7rem; }
+.latent-empty {
+  padding: 1.4rem 0;
+  border-top: 1px solid var(--line-soft);
+  color: var(--mute);
+  font: 300 .78rem/1.6 var(--font-body);
+}
+.latent-note-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: .85rem;
+  padding: .95rem 0;
+  border-top: 1px solid var(--line-soft);
+}
+.latent-note-line {
+  color: var(--ink-soft);
+  font: 300 1.02rem/1.75 var(--font-body);
+  text-wrap: pretty;
+}
+.latent-note-meta {
+  margin-top: .42rem;
+  color: var(--mute);
+  font: 300 var(--fs-micro)/1.45 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.latent-note-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: .42rem;
+  flex-wrap: wrap;
+}
+.latent-note-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 140px auto;
+  gap: .6rem;
+  align-items: start;
+}
+.latent-note-editor textarea,
+.latent-note-editor select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255,224,186,.035);
+  color: var(--ink);
+  padding: .6rem .68rem;
+  outline: none;
+}
+.latent-note-editor textarea {
+  min-height: 82px;
+  resize: vertical;
+  line-height: 1.55;
+}
+.latent-note-editor textarea:focus,
+.latent-note-editor select:focus {
+  border-color: rgba(232,149,79,.32);
+  background: rgba(255,224,186,.055);
+}
+.latent-editor-actions {
+  display: flex;
+  gap: .42rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.latent-generating { opacity: .58; pointer-events: none; }
 
 .network-legend {
   display: flex; gap: 2rem; align-items: center;
@@ -1621,6 +1722,10 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .reverie-grid { grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: "dream" "weather" "density"; }
   .dream-card { height: auto; min-height: 0; }
   .dream-body { max-height: none; overflow: visible; }
+  .latent-note-row { grid-template-columns: 1fr; }
+  .latent-note-actions { justify-content: flex-start; }
+  .latent-note-editor { grid-template-columns: 1fr; }
+  .latent-editor-actions { justify-content: flex-start; }
   .drift-weather-values { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
@@ -1827,6 +1932,26 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <div class="spark-wrap" id="rev-sparkWrap">
         <div class="spark-tooltip" id="rev-sparkTooltip"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="reverie-card latent-card">
+    <div class="reverie-head latent-head">
+      <div class="latent-title-wrap">
+        <span class="reverie-title">Latent Notes</span>
+        <span class="reverie-sub" id="latent-note-sub">subconscious pool</span>
+      </div>
+      <div class="latent-actions">
+        <button class="btn-primary" onclick="startLatentNoteCreate()">手动添加</button>
+        <button class="btn-primary" id="latent-generate-btn" onclick="generateLatentNotes()">重新生成 15 条</button>
+      </div>
+    </div>
+    <div class="latent-tabs" id="latent-note-tabs">
+      <button class="active" data-latent-tab="draft">草稿 <span id="latent-count-draft">0</span></button>
+      <button data-latent-tab="approved">已确认 <span id="latent-count-approved">0</span></button>
+    </div>
+    <div class="latent-list" id="latent-note-list">
+      <div class="latent-empty">∗ No latent notes yet</div>
     </div>
   </div>
 </div>
@@ -4678,6 +4803,219 @@ async function loadReverieDream() {
   }
 }
 
+let latentNotes = [];
+let latentNoteTab = 'draft';
+let latentEditingId = '';
+let latentCreating = false;
+
+function latentTypeLabel(type) {
+  return type === 'outward' ? 'outward' : 'inward';
+}
+
+function latentStatusLabel(status) {
+  return status === 'approved' ? '已确认' : '草稿';
+}
+
+async function loadLatentNotes() {
+  const list = document.getElementById('latent-note-list');
+  try {
+    const r = await fetch(BASE + '/api/latent-notes?limit=200');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    latentNotes = Array.isArray(d.notes) ? d.notes : [];
+  } catch (e) {
+    if (list) list.innerHTML = '<div class="latent-empty">∗ Latent notes are out of reach</div>';
+    return;
+  }
+  renderLatentNotes();
+}
+
+function renderLatentNotes() {
+  const list = document.getElementById('latent-note-list');
+  const sub = document.getElementById('latent-note-sub');
+  const draftCount = latentNotes.filter(n => n.status === 'draft').length;
+  const approvedCount = latentNotes.filter(n => n.status === 'approved').length;
+  const draftEl = document.getElementById('latent-count-draft');
+  const approvedEl = document.getElementById('latent-count-approved');
+  if (draftEl) draftEl.textContent = draftCount;
+  if (approvedEl) approvedEl.textContent = approvedCount;
+  if (sub) sub.textContent = `${draftCount} drafts · ${approvedCount} approved`;
+  document.querySelectorAll('[data-latent-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.latentTab === latentNoteTab);
+  });
+  if (!list) return;
+  const visible = latentNotes.filter(n => n.status === latentNoteTab);
+  const rows = [];
+  if (latentCreating) rows.push(renderLatentEditor({ id: '__new__', note_type: 'outward', dream_line: '' }, true));
+  rows.push(...visible.map(renderLatentNoteRow));
+  list.innerHTML = rows.length ? rows.join('') : '<div class="latent-empty">∗ No latent notes here</div>';
+}
+
+function renderLatentNoteRow(note) {
+  const id = String(note.id || '');
+  if (latentEditingId === id) return renderLatentEditor(note, false);
+  const line = String(note.dream_line || note.line || '');
+  const meta = [
+    latentTypeLabel(note.note_type),
+    latentStatusLabel(note.status),
+    note.source_kind || '',
+    note.source_title || '',
+  ].filter(Boolean).join(' · ');
+  const confirmButton = note.status === 'draft'
+    ? `<button class="btn-primary" onclick="confirmLatentNote('${esc(id)}')">确认</button>`
+    : '';
+  return `<div class="latent-note-row" data-latent-id="${esc(id)}">
+    <div>
+      <div class="latent-note-line">${esc(line)}</div>
+      <div class="latent-note-meta">${esc(meta)}</div>
+    </div>
+    <div class="latent-note-actions">
+      ${confirmButton}
+      <button class="btn-primary" onclick="editLatentNote('${esc(id)}')">编辑</button>
+      <button class="btn-primary" onclick="deleteLatentNote('${esc(id)}')">删除</button>
+    </div>
+  </div>`;
+}
+
+function renderLatentEditor(note, isNew) {
+  const id = String(note.id || '');
+  const type = latentTypeLabel(note.note_type);
+  const line = String(note.dream_line || note.line || '');
+  return `<div class="latent-note-row editing" data-latent-id="${esc(id)}">
+    <div class="latent-note-editor">
+      <textarea id="latent-line-${esc(id)}" aria-label="潜意识便签">${esc(line)}</textarea>
+      <select id="latent-type-${esc(id)}" aria-label="便签类型">
+        <option value="inward"${type === 'inward' ? ' selected' : ''}>inward</option>
+        <option value="outward"${type === 'outward' ? ' selected' : ''}>outward</option>
+      </select>
+      <div class="latent-editor-actions">
+        <button class="btn-primary" onclick="${isNew ? 'saveNewLatentNote()' : `saveLatentNote('${esc(id)}')`}">保存</button>
+        <button class="btn-primary" onclick="${isNew ? 'cancelLatentNoteCreate()' : 'cancelLatentNoteEdit()'}">取消</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function startLatentNoteCreate() {
+  latentCreating = true;
+  latentEditingId = '';
+  latentNoteTab = 'draft';
+  renderLatentNotes();
+  setTimeout(() => document.getElementById('latent-line-__new__')?.focus(), 0);
+}
+
+function cancelLatentNoteCreate() {
+  latentCreating = false;
+  renderLatentNotes();
+}
+
+function editLatentNote(id) {
+  latentCreating = false;
+  latentEditingId = id;
+  renderLatentNotes();
+  setTimeout(() => document.getElementById('latent-line-' + id)?.focus(), 0);
+}
+
+function cancelLatentNoteEdit() {
+  latentEditingId = '';
+  renderLatentNotes();
+}
+
+function latentEditorPayload(id) {
+  const line = document.getElementById('latent-line-' + id)?.value.trim() || '';
+  const noteType = document.getElementById('latent-type-' + id)?.value || 'inward';
+  return { dream_line: line, note_type: noteType };
+}
+
+async function saveNewLatentNote() {
+  const payload = latentEditorPayload('__new__');
+  if (!payload.dream_line) return alert('便签不能为空');
+  const lines = payload.dream_line.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  for (const line of lines) {
+    const res = await fetch(BASE + '/api/latent-notes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ ...payload, dream_line: line, status: 'draft' })
+    });
+    if (!res.ok) return alert('保存失败');
+  }
+  latentCreating = false;
+  latentNoteTab = 'draft';
+  await loadLatentNotes();
+}
+
+async function saveLatentNote(id) {
+  const payload = latentEditorPayload(id);
+  if (!payload.dream_line) return alert('便签不能为空');
+  const res = await fetch(BASE + '/api/latent-notes/' + encodeURIComponent(id) + '/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) return alert('保存失败');
+  latentEditingId = '';
+  await loadLatentNotes();
+}
+
+async function confirmLatentNote(id) {
+  const res = await fetch(BASE + '/api/latent-notes/' + encodeURIComponent(id) + '/update', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ status: 'approved' })
+  });
+  if (!res.ok) return alert('确认失败');
+  latentNoteTab = 'approved';
+  await loadLatentNotes();
+}
+
+async function deleteLatentNote(id) {
+  if (!confirm('删除这张潜意识便签？')) return;
+  const res = await fetch(BASE + '/api/latent-notes/' + encodeURIComponent(id) + '/delete', {
+    method: 'POST',
+  });
+  if (!res.ok) return alert('删除失败');
+  await loadLatentNotes();
+}
+
+async function generateLatentNotes() {
+  const btn = document.getElementById('latent-generate-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('latent-generating');
+    btn.textContent = '生成中';
+  }
+  try {
+    const res = await fetch(BASE + '/api/latent-notes/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ count: 15 })
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return alert('生成失败：' + (error.error || res.status));
+    }
+    latentCreating = false;
+    latentEditingId = '';
+    latentNoteTab = 'draft';
+    await loadLatentNotes();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('latent-generating');
+      btn.textContent = '重新生成 15 条';
+    }
+  }
+}
+
+document.addEventListener('click', event => {
+  const tab = event.target.closest?.('[data-latent-tab]');
+  if (!tab) return;
+  latentNoteTab = tab.dataset.latentTab || 'draft';
+  latentEditingId = '';
+  latentCreating = false;
+  renderLatentNotes();
+});
+
 function renderReverieSparkline(data) {
   const wrap = document.getElementById('rev-sparkWrap');
   const tooltip = document.getElementById('rev-sparkTooltip');
@@ -4767,6 +5105,7 @@ function loadReverie() {
   loadReverieWeather();
   loadReverieDream();
   loadReverieDensity();
+  loadLatentNotes();
   if (reverieMoodTimer) clearInterval(reverieMoodTimer);
   reverieMoodTimer = setInterval(loadReverieWeather, 30000);
 }
