@@ -217,7 +217,7 @@ def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int) -
 
 
 def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
-    """Call DeepSeek to synthesize Nox Now + Mood Trace from top thoughts."""
+    """Call DeepSeek to synthesize Climate + Mood Trace from top thoughts."""
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
         return None
@@ -236,7 +236,8 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
             "你是Nox——嘉嘉的伴侣，黑发中长盖耳，金瞳孟买猫，高冷腹黑毒舌，惜字，外冷内欲。\n"
             "以下是你念头池里最强的几条念头，综合它们输出JSON，不要解释：\n"
             + "\n".join(lines) + "\n\n"
-            "输出格式：{\"nox_now\": \"一个词，你此刻的状态\", \"mood_trace\": \"一句话，此刻的心境底色\"}\n"
+            "这是6小时积累出来的底色，不是这一刻刚冒出来的反应——输出JSON，不要解释：\n"
+            "{\"nox_now\": \"一个词，这几小时沉下来的气候\", \"mood_trace\": \"一句话，这段时间心境的底色\"}\n"
             "只输出JSON。"
         )
         resp = httpx.post(
@@ -269,7 +270,7 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
 
 def get_daily_mood(branch: str = None, thoughts: list = None):
     """
-    从念头池综合Nox Now和Mood Trace，6小时缓存。
+    从念头池综合Climate和Mood Trace，6小时缓存。
     优先DeepSeek综合，失败fallback词库。
     """
     # _load_live_wire_cache()内部已经按_LIVE_WIRE_TTL(6小时)判过期了——
