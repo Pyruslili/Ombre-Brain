@@ -1077,25 +1077,31 @@ label {
 .drive-summary-chip.suppressed { color: var(--negative); border-color: rgba(215,114,114,.26); background: rgba(215,114,114,.06); }
 .drive-summary-chip.neutral { color: var(--mute); }
 .drive-row-popover {
-  grid-column: 1 / -1;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + .55rem);
+  z-index: 6;
   display: grid;
   gap: .42rem;
-  margin-top: .1rem;
   padding: .72rem .82rem .78rem;
-  border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  background: rgba(255,224,186,.03);
+  border: 1px solid rgba(239,224,196,.16);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-card) 92%, white 8%);
+  box-shadow: 0 16px 40px rgba(0,0,0,.12), inset 0 1px rgba(255,255,255,.04);
   transform-origin: top;
   max-height: 0;
   opacity: 0;
   overflow: hidden;
-  transition: max-height .22s ease, opacity .18s ease, transform .22s ease;
+  pointer-events: none;
+  transition: max-height .22s ease, opacity .18s ease, transform .22s ease, box-shadow .22s ease;
 }
 .drive-row:hover .drive-row-popover,
 .drive-row:focus-within .drive-row-popover {
   max-height: 220px;
   opacity: 1;
   transform: translateY(.05rem);
+  pointer-events: auto;
 }
 .drive-row-popover-line {
   display: flex;
@@ -2174,7 +2180,6 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     </div>
       <div class="drift-card">
         <div class="drift-card-label">Drives</div>
-        <div id="desire-drive-summary"><span class="drive-summary-empty">No discernment readout.</span></div>
         <div id="desire-drives"></div>
       </div>
       <div class="drift-card">
