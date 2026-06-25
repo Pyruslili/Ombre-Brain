@@ -1048,8 +1048,20 @@ label {
 .drive-fill { position: absolute; inset: 0 auto 0 0; background: var(--ink-soft); }
 .drive-row.high .drive-name, .drive-row.high .drive-value { color: var(--accent-deep); }
 .drive-row.high .drive-fill { background: var(--accent-deep); box-shadow: 0 0 10px rgba(232,149,79,.2); }
-.drive-value { justify-self: end; text-align: right; color: var(--ink); font: 300 1.3rem/1 var(--font-number); }
-.drive-value small { display: block; margin-top: .24rem; color: var(--mute); font: 300 .54rem/1.2 var(--font-mono); }
+.drive-value {
+  justify-self: end;
+  width: 132px;
+  text-align: right;
+  color: var(--ink);
+  font: 300 1.3rem/1 var(--font-number);
+}
+.drive-value small {
+  display: block;
+  margin-top: .24rem;
+  color: var(--mute);
+  font: 300 .54rem/1.2 var(--font-mono);
+  line-height: 1.22;
+}
 .drive-summary {
   display: flex;
   flex-wrap: wrap;
@@ -1084,12 +1096,12 @@ label {
   z-index: 6;
   display: grid;
   gap: .42rem;
-  width: min(66%, 760px);
+  width: min(64%, 720px);
   margin-inline: auto;
   padding: .72rem .82rem .78rem;
   border: 1px solid rgba(239,224,196,.16);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--bg-card) 96%, white 4%);
+  background: var(--card);
   box-shadow: 0 16px 40px rgba(0,0,0,.12), inset 0 1px rgba(255,255,255,.04);
   transform-origin: top;
   max-height: 0;
@@ -1117,6 +1129,19 @@ label {
   color: var(--ink-soft);
   font-size: .74rem;
   line-height: 1.5;
+}
+.drive-source-icon {
+  min-height: 22px;
+  min-width: 22px;
+  padding: .08rem;
+  justify-content: center;
+}
+.drive-source-icon .thought-icon {
+  width: 15px;
+  height: 15px;
+  border: 0;
+  background: transparent;
+  color: inherit;
 }
 .thought-row { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: .36rem .65rem; align-items: start; padding: .82rem 0; border-top: 1px solid var(--line-soft); }
 .thought-row:first-child { border-top: 0; }
@@ -2855,7 +2880,7 @@ function driveSourceChip(source, sourceType = '') {
   const isCollision = label === 'DP碰撞';
   const icon = isNox ? thoughtSourceIcon('self') : (isCollision ? thoughtSourceIcon('collision') : '');
   return isNox || isCollision
-    ? `<span class="drive-summary-chip neutral">${icon}<strong>${esc(label)}</strong></span>`
+    ? `<span class="drive-summary-chip neutral drive-source-icon">${icon}</span>`
     : `<span class="drive-summary-chip neutral"><strong>${esc(label)}</strong></span>`;
 }
 
@@ -3060,14 +3085,16 @@ function renderDriveEvents(events = []) {
     const discernmentText = discernment?.state && discernment.state !== 'clear'
       ? `<span class="drive-event-delta suppressed"><strong>${esc(discernment.display || '皱眉')}</strong> ${esc((discernment.flags || []).join(' · ') || discernment.state)}</span>`
       : '';
+    const reasonText = reason
+      ? `<span class="drive-event-delta neutral"><strong>reason</strong> ${esc(reason)}</span>`
+      : '';
     return `<div class="drive-event-row">
       <div class="drive-event-head">
         ${driveSourceChip(event?.source || brain?.source || 'feed', brain?.source_type || event?.source_type || '')}
         <span class="drive-event-label">${esc(label)}</span>
       </div>
       <div class="drive-event-meta">${esc(time)} · ${intensity} · ${confidence} · ${agency}${event?.suppressed ? ' · 悬置' : ''}</div>
-      <div class="drive-event-deltas">${deltaText}${archivalText}${discernmentText}</div>
-      ${reason ? `<div class="drive-event-reason"><strong>reason</strong> ${esc(reason)}</div>` : ''}
+      <div class="drive-event-deltas">${deltaText}${archivalText}${discernmentText}${reasonText}</div>
     </div>`;
   }).join('');
 }
