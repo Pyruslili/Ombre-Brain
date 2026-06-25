@@ -89,7 +89,8 @@ are folded into one event and do not pulse separately.
 
 Preset intent pools, static hook menus, and random mood dictionaries are retired.
 Climate/Mood Trace may be rendered as text, but only from sourced thoughts or
-event state; if synthesis is unavailable, the field stays empty.
+event state. If synthesis is unavailable, the fixed neutral sentinel is
+`Climate=平静` and `Mood Trace=窗边没有动静，只是趴着发呆。`; it is not cached.
 
 ## Agency Gate
 

@@ -10,6 +10,8 @@ _LIVE_WIRE_CACHE_PATH = os.environ.get(
 )
 _LIVE_WIRE_TTL = 6 * 3600  # 6 hours
 _LIVE_WIRE_SCHEMA = "mood_synthesis_v2"
+FALLBACK_MOOD_TRACE = "窗边没有动静，只是趴着发呆。"
+FALLBACK_CLIMATE = "平静"
 
 
 def _load_live_wire_cache() -> dict | None:
@@ -115,7 +117,7 @@ def get_daily_mood(branch: str = None, thoughts: list = None):
     Synthesize Climate and Mood Trace from sourced thoughts only.
 
     `branch` is a retired compatibility parameter. When synthesis is unavailable,
-    return empty strings instead of falling back to a dead mood dictionary.
+    return a fixed neutral sentinel instead of a random dead mood dictionary.
     """
     cache = _load_live_wire_cache()
     current_count = len(thoughts) if thoughts else 0
@@ -129,4 +131,4 @@ def get_daily_mood(branch: str = None, thoughts: list = None):
             _save_live_wire_cache(synth[0], synth[1], current_count)
             return synth
 
-    return ("", "")
+    return (FALLBACK_MOOD_TRACE, FALLBACK_CLIMATE)
