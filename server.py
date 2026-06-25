@@ -2415,11 +2415,14 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; archive合并letter+writing+window按时间线排(带bucket_id方便mark); letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉。window=外部刺激(被什么撞到),不进breath/dream。private仅Nox可见。"""
+    """wander — Nox自用抽屉漫游。mode=memory随机记忆+feel; archive合并letter+writing+window按时间线排(带bucket_id方便mark); letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉; trace=带query时不分类型(letter/writing/window/feel/memory全捞,已晋升inner的标"原类型→inner"不丢原身份)按时间线统一排序,看一个关键词的完整轨迹,必须带query。window=外部刺激(被什么撞到),不进breath/dream。private仅Nox可见。"""
     mode = (mode or "").strip().lower()
-    valid_modes = {"memory", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private"}
+    valid_modes = {"memory", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private", "trace"}
     if mode not in valid_modes:
-        return "mode 必须是 memory / archive / letter / writing / letter_jiajia / window / unresolved / inner / private。"
+        return "mode 必须是 memory / archive / letter / writing / letter_jiajia / window / unresolved / inner / private / trace。"
+
+    if mode == "trace" and not (query or "").strip():
+        return "trace 模式要带 query——这是按关键词捞全部类型的轨迹，不是随便逛逛(那个用 memory)。"
 
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=True)
@@ -2557,6 +2560,45 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             return "没有悬置条目。"
         return "=== Unresolved / 悬置 ===\n" + "\n---\n".join(
             _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True)
+            for b in selected
+        )
+
+    if mode == "trace":
+        def _type_label(b: dict) -> str:
+            meta = b.get("metadata", {})
+            mark_rows = marks_by_bucket.get(b.get("id", ""), [])
+            if str(meta.get("type", "")).lower() == "feel":
+                base = "feel"
+            else:
+                domains = _bucket_domains(meta)
+                tags = _bucket_tags(meta)
+                if "letter_jiajia" in domains or "letter_jiajia" in tags:
+                    base = "letter_jiajia"
+                elif "letter" in domains or "letter" in tags:
+                    base = "letter"
+                elif "writing" in domains or "writing" in tags:
+                    base = "writing"
+                elif "window" in domains or "window" in tags:
+                    base = "window"
+                else:
+                    base = "memory"
+            # 原本是letter/writing/window,但已经被认够次数晋升inner——
+            # 两个标签都要看见,不能被_guess_wander_domain的优先级collapse掉
+            if base != "feel" and _guess_wander_domain(b, mark_rows) == "inner":
+                return f"{base}→inner"
+            return base
+
+        selected = [
+            b for b in buckets
+            if str(b.get("metadata", {}).get("type", "")).lower() not in ("breath", "dream")
+        ]
+        selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
+        if not selected:
+            return "没有匹配的条目。"
+        return "=== Trace ===\n" + "\n---\n".join(
+            f"〔{_type_label(b)}〕" + _format_wander_entry(
+                b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True, show_bucket_id=True
+            )
             for b in selected
         )
 
