@@ -1937,7 +1937,7 @@ async def nocturne_breath(
             speech_trace = ""
             if speech_event and is_recent_speech_event(speech_event):
                 speech_trace = str(speech_event.get("trace") or "").strip()
-            mood_trace = speech_trace or latest_thought
+            mood_trace = latest_thought
 
             lines = []
             if top_drive:
@@ -1947,6 +1947,8 @@ async def nocturne_breath(
                 lines.append(f"Climate：{mood_entry[1]}")
             if mood_trace:
                 lines.append(f"Mood Trace：{mood_trace}")
+            if speech_trace:
+                lines.append(f"Speech Trace：{speech_trace}")
             soma = _fresh_soma_state()
             soma_line = str(soma.get("line") or "").strip()
             soma_chord = str(soma.get("chord") or "").strip()

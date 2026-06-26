@@ -2232,6 +2232,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       </div>
       <div class="drift-weather-line"><span>Climate</span><strong id="desire-now">—</strong></div>
       <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
+      <div class="drift-weather-trace" id="desire-speech-wrap" style="display:none"><span>Speech Trace</span><div id="desire-speech-trace"></div></div>
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
     </div>
       <div class="drift-card">
@@ -2794,7 +2795,7 @@ async function loadDesire(button) {
     const weather = d.pulse_weather || {};
     const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
     const speechTrace = d.speech_event?.recent ? String(d.speech_event?.trace || '').trim() : '';
-    const latestTrace = speechTrace || latestThought || weather.mood_trace || d.mood_trace || '';
+    const latestTrace = latestThought || weather.mood_trace || d.mood_trace || '';
     const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
     const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
     const warmthNow = finiteNumber(weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);
@@ -2817,6 +2818,7 @@ async function loadDesire(button) {
     document.getElementById('desire-current-chord').textContent = weather.chord_display || currentChord;
     document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
+    renderSpeechTrace(speechTrace);
     renderSomaTrace(soma);
     renderDiscernment(d.discernment);
     renderDriveEvents(driveEvents);
@@ -2856,6 +2858,7 @@ async function loadDesire(button) {
   } catch(e) {
     document.getElementById('desire-undertow').textContent = 'Out of reach';
     document.getElementById('desire-mood-trace').textContent = 'The drift is out of reach.';
+    renderSpeechTrace('');
     renderSomaTrace(null);
     const driveEventsEl = document.getElementById('desire-drive-events');
     if (driveEventsEl) driveEventsEl.innerHTML = '<span class="drive-event-empty">The ledger is out of reach.</span>';
@@ -2887,6 +2890,20 @@ function renderSomaTrace(soma) {
   }
   const chord = String(soma?.chord || '').trim();
   target.textContent = chord ? `${chord} · ${line}` : line;
+  wrap.style.display = '';
+}
+
+function renderSpeechTrace(trace) {
+  const wrap = document.getElementById('desire-speech-wrap');
+  const target = document.getElementById('desire-speech-trace');
+  if (!wrap || !target) return;
+  const line = String(trace || '').trim();
+  if (!line) {
+    wrap.style.display = 'none';
+    target.textContent = '';
+    return;
+  }
+  target.textContent = line;
   wrap.style.display = '';
 }
 
