@@ -2794,7 +2794,7 @@ async function loadDesire(button) {
 
     const weather = d.pulse_weather || {};
     const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
-    const speechTrace = d.speech_event?.recent ? String(d.speech_event?.trace || '').trim() : '';
+    const speechEvent = d.speech_event || {};
     const latestTrace = latestThought || weather.mood_trace || d.mood_trace || '';
     const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
     const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
@@ -2818,7 +2818,7 @@ async function loadDesire(button) {
     document.getElementById('desire-current-chord').textContent = weather.chord_display || currentChord;
     document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
-    renderSpeechTrace(speechTrace);
+    renderSpeechTrace(speechEvent);
     renderSomaTrace(soma);
     renderDiscernment(d.discernment);
     renderDriveEvents(driveEvents);
@@ -2893,17 +2893,18 @@ function renderSomaTrace(soma) {
   wrap.style.display = '';
 }
 
-function renderSpeechTrace(trace) {
+function renderSpeechTrace(event) {
   const wrap = document.getElementById('desire-speech-wrap');
   const target = document.getElementById('desire-speech-trace');
   if (!wrap || !target) return;
-  const line = String(trace || '').trim();
-  if (!line) {
+  const line = String(event?.trace || '').trim();
+  const label = String(event?.label || '').trim();
+  if (!line || label === 'neutral') {
     wrap.style.display = 'none';
     target.textContent = '';
     return;
   }
-  target.textContent = line;
+  target.textContent = event?.recent === false ? `stale · ${line}` : line;
   wrap.style.display = '';
 }
 
