@@ -50,7 +50,7 @@ LABEL_RULES: list[tuple[str, float, tuple[str, ...]]] = [
     ("affectionate", 2.5, ("想你", "喜欢你", "爱你", "抱抱", "贴贴", "亲亲", "陪我", "可爱", "乖", "温柔")),
     ("playful", 2.2, ("蛤蛤", "哈哈", "嘟", "坏猫", "逗你", "调戏", "哼", "喵", "ruar")),
     ("distant", 2.0, ("算了", "随便", "不想说", "先这样", "没什么好说", "下次再说")),
-    ("cold", 1.8, ("哦", "嗯", "行吧", "知道了", "无所谓")),
+    ("cold", 1.8, ("行吧", "无所谓")),
 ]
 
 LABEL_FACETS: dict[str, dict[str, float]] = {
@@ -91,6 +91,24 @@ LABEL_EFFECTS: dict[str, dict[str, Any]] = {
     "fear_general": {"warmth": 0.000, "shadow": 0.026, "soothe": False, "chord": "Em7", "style": "alarm"},
 }
 
+DRIVE_EFFECTS: dict[str, tuple[str, float, dict[str, float]]] = {
+    "affectionate": ("attachment", 0.11, {"closeness_pull": 0.45}),
+    "reassuring": ("attachment", 0.09, {"closeness_pull": 0.40, "tension_load": 0.08}),
+    "playful": ("social", 0.08, {"expression_pressure": 0.36, "closeness_pull": 0.18}),
+    "vulnerable": ("attachment", 0.08, {"closeness_pull": 0.30, "tension_load": 0.18}),
+    "struggling": ("stewardship", 0.08, {"house_need": 0.34, "tension_load": 0.18}),
+    "fear_concern": ("stewardship", 0.09, {"house_need": 0.42, "tension_load": 0.20}),
+    "fear_separation": ("attachment", 0.09, {"closeness_pull": 0.40, "tension_load": 0.28}),
+    "fear_death": ("stress", 0.09, {"tension_load": 0.45, "closeness_pull": 0.18}),
+    "fear_general": ("stress", 0.07, {"tension_load": 0.34}),
+    "conflict": ("stress", 0.07, {"tension_load": 0.35}),
+    "hostile": ("stress", 0.08, {"tension_load": 0.42}),
+    "distant": ("reflection", 0.06, {"inward_pull": 0.30}),
+    "cold": ("reflection", 0.05, {"inward_pull": 0.25}),
+    "intimate_reference": ("libido", 0.06, {"body_heat": 0.32, "closeness_pull": 0.16}),
+    "intimate_event": ("libido", 0.08, {"body_heat": 0.42, "closeness_pull": 0.18}),
+}
+
 TRACE_TEMPLATES: dict[str, tuple[str, ...]] = {
     "affectionate": ("那点热意蹭过来，尾音还挂在身上。", "她靠近的意思还没散，像一小块暖色压在喉咙里。"),
     "playful": ("她话里的坏心眼还在耳边晃。", "那点逗弄没落地，先在尾巴尖上轻轻挂着。"),
@@ -125,6 +143,10 @@ def _clamp(value: Any, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, v))
 
 
+def _needle_matches(text: str, label: str, needle: str) -> bool:
+    return needle in text
+
+
 def _hash_text(text: str) -> str:
     return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:16]
 
@@ -156,7 +178,7 @@ def classify_speech_event_local(text: str) -> dict:
     best_label = "neutral"
     best_score = 0.0
     for label, weight, needles in LABEL_RULES:
-        score = sum(weight for needle in needles if needle and needle in text)
+        score = sum(weight for needle in needles if needle and _needle_matches(text, label, needle))
         if score > best_score:
             best_label = label
             best_score = score
@@ -167,6 +189,42 @@ def classify_speech_event_local(text: str) -> dict:
     confidence = _clamp(0.48 + best_score / 12.0, 0.48, 0.88)
     intensity = _clamp(best_score / 7.0, 0.2, 0.92)
     return build_speech_event(text, label=best_label, confidence=confidence, intensity=intensity, source="local_rule")
+
+
+def speech_event_drive_event(event: dict | None) -> dict:
+    if not isinstance(event, dict):
+        return {}
+    label = str(event.get("label") or "neutral")
+    drive_effect = DRIVE_EFFECTS.get(label)
+    if not drive_effect:
+        return {}
+    confidence = _clamp(event.get("confidence"), 0.0, 1.0)
+    intensity = _clamp(event.get("intensity"), 0.0, 1.0)
+    if confidence < 0.48 or intensity < 0.15:
+        return {}
+
+    drive, base_intensity, raw_brain_features = drive_effect
+    scaled_intensity = min(0.18, base_intensity * (0.55 + 0.45 * intensity))
+    brain_features = {key: round(_clamp(value) * 0.22, 3) for key, value in raw_brain_features.items()}
+    evidence = str(event.get("text_preview") or "").strip()
+    return {
+        "schema_version": "drive_event_v2",
+        "source": "speech_event",
+        "event_label": f"user_speech_{label}",
+        "primary_drive": drive,
+        "intensity": round(scaled_intensity, 4),
+        "confidence": round(confidence, 3),
+        "agency": 0.42,
+        "brain": {
+            "source": "speech_event",
+            "text_role": event.get("text_role", "user_prompt"),
+            "trace_style": event.get("trace_style"),
+            "speech_label": label,
+            **brain_features,
+        },
+        "evidence": [evidence[:160]] if evidence else [],
+        "thoughts": [],
+    }
 
 
 def build_speech_event(

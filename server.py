@@ -70,6 +70,7 @@ from speech_event_engine import (
     load_speech_event_state,
     normalize_speech_event,
     save_speech_event_state,
+    speech_event_drive_event,
     speech_event_classifier_available,
     append_ledger as append_speech_event_ledger,
 )
@@ -183,6 +184,7 @@ async def _refine_speech_event_background(prompt: str, event_id: str, fallback_e
         current = load_speech_event_state(config["buckets_dir"])
         if current.get("event_id") == event_id:
             save_speech_event_state(config["buckets_dir"], refined, ledger_stage="dp_refined")
+            _apply_speech_event_drive(refined)
         else:
             append_speech_event_ledger(
                 config["buckets_dir"],
@@ -199,6 +201,37 @@ async def _refine_speech_event_background(prompt: str, event_id: str, fallback_e
             except Exception:
                 pass
         logger.warning(f"speech_event DP refine failed: {e}")
+
+
+def _apply_speech_event_drive(event: dict | None) -> dict:
+    payload = speech_event_drive_event(event)
+    if not payload:
+        return {}
+    try:
+        result = _desire.apply_drive_event(payload)
+    except Exception as e:
+        logger.warning(f"speech_event drive apply failed: {e}")
+        return {"ok": False, "error": str(e)}
+    try:
+        import json as _json, os as _os
+        mood_path = _bucket_path("current_mood.json")
+        mood_data = {}
+        if _os.path.exists(mood_path):
+            with open(mood_path) as f:
+                mood_data = _json.load(f)
+        mood_data["drive_event"] = {
+            "schema_version": DRIVE_EVENT_SCHEMA,
+            "primary_drive": payload.get("primary_drive", ""),
+            "event_label": payload.get("event_label", ""),
+            "brain": payload.get("brain", {}),
+            "evidence": payload.get("evidence", []),
+            "result": result,
+        }
+        with open(mood_path, "w") as f:
+            _json.dump(mood_data, f)
+    except Exception as e:
+        logger.warning(f"speech_event drive mood write failed: {e}")
+    return result
 
 
 
@@ -3728,11 +3761,14 @@ async def api_speech_event_submit(request):
         return JSONResponse({"error": str(e)}, status_code=500,
                            headers={"Access-Control-Allow-Origin": "*"})
 
-    if prompt and speech_event_classifier_available():
+    dp_available = speech_event_classifier_available()
+    if prompt and dp_available:
         asyncio.create_task(_refine_speech_event_background(prompt, saved["event_id"], saved))
+    elif not dp_available:
+        _apply_speech_event_drive(saved)
 
     return JSONResponse(
-        {"ok": True, "event": saved, "dp_queued": speech_event_classifier_available()},
+        {"ok": True, "event": saved, "dp_queued": dp_available},
         headers={"Access-Control-Allow-Origin": "*"},
     )
 

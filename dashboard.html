@@ -2497,6 +2497,7 @@ const ICONS = {
   archived: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
   window: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M12 3v18M3 12h18"/></svg>',
   inner: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m12 3 2.2 5.3L20 9l-4.3 3.8 1.3 5.7-5-3-5 3 1.3-5.7L4 9l5.8-.7L12 3Z"/><circle cx="12" cy="12" r="2"/></svg>',
+  speech: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><path d="M8 10h8M8 14h5"/></svg>',
   letter: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
   writing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 20 4.2-1 10.9-10.9a2.1 2.1 0 0 0-3-3L5.2 16 4 20Z"/><path d="m14.8 6.4 2.8 2.8"/></svg>',
   all: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
@@ -2522,7 +2523,7 @@ const DRIVE_SOURCE_LABELS = {
   thought: 'Nox念头',
   analyze_nocturne_entry: 'Nox念头',
   collision: 'DP碰撞',
-  speech_event: '说话',
+  speech_event: 'Speech Trace',
   reflection: '回看',
 };
 
@@ -2917,7 +2918,7 @@ function driveSourceLabel(source, sourceType = '') {
   if (s.includes('collision') || t.includes('collision')) return 'DP碰撞';
   if (s.includes('cli') || t === 'cli') return 'CLI';
   if (s.includes('thought') || s.includes('manual') || s === 'analyze_nocturne_entry' || t.includes('thought') || t.includes('manual') || t.includes('writing')) return 'Nox念头';
-  if (s.includes('speech')) return '说话';
+  if (s.includes('speech')) return 'Speech Trace';
   if (s.includes('reflection')) return '回看';
   if (s.includes('feed')) return '输入';
   return '来源';
@@ -2927,8 +2928,9 @@ function driveSourceChip(source, sourceType = '') {
   const label = driveSourceLabel(source, sourceType);
   const isNox = label === 'Nox念头';
   const isCollision = label === 'DP碰撞';
-  const icon = isNox ? thoughtSourceIcon('self') : (isCollision ? thoughtSourceIcon('collision') : '');
-  return isNox || isCollision
+  const isSpeech = label === 'Speech Trace';
+  const icon = isNox ? thoughtSourceIcon('self') : (isCollision ? thoughtSourceIcon('collision') : (isSpeech ? `<span class="thought-icon" title="Speech Trace" aria-label="Speech Trace">${ICONS.speech}</span>` : ''));
+  return isNox || isCollision || isSpeech
     ? `<span class="drive-summary-chip neutral drive-source-icon">${icon}</span>`
     : `<span class="drive-summary-chip neutral"><strong>${esc(label)}</strong></span>`;
 }
@@ -2943,7 +2945,7 @@ function compactDriveLabel(raw) {
     [/territorial[_\-\s]*memory/i, '领地记忆'],
     [/softening[_\-\s]*check|self[_\-\s]*softening/i, '自省'],
     [/forward[_\-\s]*archival/i, '留痕'],
-    [/speech[_\-\s]*event/i, '说话'],
+    [/speech[_\-\s]*event|user[_\-\s]*speech/i, 'Speech Trace'],
   ];
   for (const [pattern, label] of exact) if (pattern.test(text)) return label;
   const tokens = text.toLowerCase().split(/[_\-\s]+/).filter(Boolean);
@@ -2957,7 +2959,7 @@ function compactDriveLabel(raw) {
     archive: '留痕',
     collision: '碰撞',
     confrontation: '碰撞',
-    speech: '说话',
+    speech: 'Speech Trace',
     feed: '输入',
     thought: '念头',
     drive: '驱动',
@@ -3027,6 +3029,8 @@ function buildDriveLedgerHistory(events = []) {
       if (!map[drive]) map[drive] = [];
       map[drive].push({
         source,
+        source_raw: event?.source || brain?.source || 'feed',
+        source_type: brain?.source_type || event?.source_type || '',
         label,
         reason,
         delta,
@@ -3084,7 +3088,8 @@ function buildDriveDetailPanel(key, output, history = [], sourceHint = '', fatig
 
   const recent = history.slice(0, 2).map(item => {
     const body = `${item.label} · ${item.sign}${Math.abs(item.delta).toFixed(3)} ${item.arrows}`;
-    return `<span class="drive-summary-chip ${item.delta >= 0 ? 'positive' : 'suppressed'}"><strong>${esc(item.source)}</strong> ${esc(body)}</span>`;
+    const sourceChip = driveSourceChip(item.source_raw || item.source, item.source_type || '');
+    return `${sourceChip}<span class="drive-summary-chip ${item.delta >= 0 ? 'positive' : 'suppressed'}">${esc(body)}</span>`;
   });
   const recentLine = recent.length ? recent.join('') : `<span class="drive-summary-chip neutral">暂无最近变化</span>`;
   return {
