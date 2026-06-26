@@ -68,7 +68,6 @@ from speech_event_engine import (
     apply_speech_event_review,
     batch_text,
     classify_speech_batch_dp,
-    classify_speech_event_dp,
     clear_pending_batch,
     is_recent_speech_event,
     load_speech_event_state,
@@ -175,36 +174,6 @@ def _weather_chord_display(weather: dict) -> str:
     if active and current and active != current:
         return f"{active}→{current}"
     return current or active
-
-
-async def _refine_speech_event_background(prompt: str, event_id: str, fallback_event: dict) -> None:
-    """Async DP refinement. It may update speech_event_state, but never the hook response."""
-    try:
-        refined = await classify_speech_event_dp(
-            prompt,
-            state_context=_speech_event_context_snapshot(),
-            fallback_event=fallback_event,
-        )
-        current = load_speech_event_state(config["buckets_dir"])
-        if current.get("event_id") == event_id:
-            save_speech_event_state(config["buckets_dir"], refined, ledger_stage="dp_refined")
-            _apply_speech_event_drive(refined)
-        else:
-            append_speech_event_ledger(
-                config["buckets_dir"],
-                {"stage": "dp_refined_stale", "event_id": event_id, "event": refined},
-            )
-    except Exception as e:
-        current = load_speech_event_state(config["buckets_dir"])
-        if current.get("event_id") == event_id:
-            current["status"] = "dp_failed"
-            current["dp_error"] = str(e)[:180]
-            current["updated_at"] = time.time()
-            try:
-                save_speech_event_state(config["buckets_dir"], current, ledger_stage="dp_failed")
-            except Exception:
-                pass
-        logger.warning(f"speech_event DP refine failed: {e}")
 
 
 async def _refine_speech_batch_background(items: list[dict]) -> None:
@@ -3796,22 +3765,13 @@ async def api_speech_event_submit(request):
     raw_event = body.get("event")
     if isinstance(raw_event, dict) and body.get("text_role"):
         raw_event = {**raw_event, "text_role": str(body.get("text_role") or "").strip()[:40]}
-    event = normalize_speech_event(raw_event, prompt)
-    if not prompt and not event.get("text_preview"):
+    if not prompt:
         return JSONResponse({"error": "prompt required"}, status_code=400,
                            headers={"Access-Control-Allow-Origin": "*"})
 
-    if not speech_event_classifier_available():
-        event["status"] = "local_only"
-
-    try:
-        saved = save_speech_event_state(config["buckets_dir"], event, ledger_stage="local_submit")
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500,
-                           headers={"Access-Control-Allow-Origin": "*"})
-
     dp_available = speech_event_classifier_available()
-    pending = append_pending_batch(config["buckets_dir"], prompt, saved.get("event_id", "")) if prompt else []
+    event_id = str(raw_event.get("event_id") or "") if isinstance(raw_event, dict) else ""
+    pending = append_pending_batch(config["buckets_dir"], prompt, event_id)
     batch_size = 5
     if len(pending) >= batch_size:
         batch = pending[:batch_size]
@@ -3827,7 +3787,7 @@ async def api_speech_event_submit(request):
             _apply_speech_event_drive(saved_batch)
 
     return JSONResponse(
-        {"ok": True, "event": saved, "dp_queued": dp_available and len(pending) >= batch_size, "pending_batch": len(pending) % batch_size},
+        {"ok": True, "dp_queued": dp_available and len(pending) >= batch_size, "pending_batch": len(pending) % batch_size},
         headers={"Access-Control-Allow-Origin": "*"},
     )
 
