@@ -304,6 +304,10 @@ def review_path(buckets_dir: str) -> Path:
     return Path(buckets_dir) / "speech_event_reviews.jsonl"
 
 
+def batch_path(buckets_dir: str) -> Path:
+    return Path(buckets_dir) / "speech_event_pending_batch.json"
+
+
 def _atomic_write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -325,6 +329,47 @@ def load_speech_event_state(buckets_dir: str) -> dict:
         return raw if isinstance(raw, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def load_pending_batch(buckets_dir: str) -> list[dict]:
+    try:
+        raw = json.loads(batch_path(buckets_dir).read_text(encoding="utf-8"))
+        return raw if isinstance(raw, list) else []
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def save_pending_batch(buckets_dir: str, items: list[dict]) -> list[dict]:
+    cleaned = [item for item in items if isinstance(item, dict) and str(item.get("text") or "").strip()]
+    path = batch_path(buckets_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(cleaned[-20:], ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+    return cleaned[-20:]
+
+
+def append_pending_batch(buckets_dir: str, text: str, event_id: str = "") -> list[dict]:
+    text = (text or "").strip()
+    if not text:
+        return load_pending_batch(buckets_dir)
+    items = load_pending_batch(buckets_dir)
+    items.append({"text": text, "event_id": event_id, "created_at": time.time(), "created_iso": _now_iso()})
+    return save_pending_batch(buckets_dir, items)
+
+
+def clear_pending_batch(buckets_dir: str, count: int) -> list[dict]:
+    items = load_pending_batch(buckets_dir)
+    return save_pending_batch(buckets_dir, items[max(0, count):])
+
+
+def batch_text(items: list[dict]) -> str:
+    lines = []
+    for index, item in enumerate(items, 1):
+        text = str((item or {}).get("text") or "").strip()
+        if text:
+            lines.append(f"{index}. {text}")
+    return "\n".join(lines)
 
 
 def save_speech_event_state(buckets_dir: str, event: dict, *, ledger_stage: str = "state") -> dict:
@@ -458,3 +503,16 @@ async def classify_speech_event_dp(text: str, state_context: dict | None = None,
         facets=result["facets"],
         previous=fallback,
     )
+
+
+async def classify_speech_batch_dp(items: list[dict], state_context: dict | None = None,
+                                   fallback_event: dict | None = None) -> dict:
+    text = batch_text(items)
+    if not text:
+        return build_speech_event("", label="neutral", confidence=0.45, intensity=0.0, source="local_rule")
+    fallback = fallback_event or classify_speech_event_local(text)
+    event = await classify_speech_event_dp(text, state_context=state_context, fallback_event=fallback)
+    event["status"] = "dp_batch_refined"
+    event["batch_size"] = len([item for item in items if str((item or {}).get("text") or "").strip()])
+    event["batch_event_ids"] = [str(item.get("event_id") or "") for item in items if isinstance(item, dict)]
+    return event

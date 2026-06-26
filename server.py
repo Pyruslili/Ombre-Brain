@@ -64,8 +64,12 @@ from import_memory import ImportEngine
 from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx, now_iso
 from desire_engine import DRIVE_KEYS, DRIVE_EVENT_SCHEMA, DesireEngine, normalize_drive_key, _legacy_brain_to_event
 from speech_event_engine import (
+    append_pending_batch,
     apply_speech_event_review,
+    batch_text,
+    classify_speech_batch_dp,
     classify_speech_event_dp,
+    clear_pending_batch,
     is_recent_speech_event,
     load_speech_event_state,
     normalize_speech_event,
@@ -203,6 +207,28 @@ async def _refine_speech_event_background(prompt: str, event_id: str, fallback_e
         logger.warning(f"speech_event DP refine failed: {e}")
 
 
+async def _refine_speech_batch_background(items: list[dict]) -> None:
+    """Analyze a small batch of Jiajia messages; this is the route that affects Drive/PA/NA."""
+    try:
+        fallback = normalize_speech_event(None, batch_text(items))
+        refined = await classify_speech_batch_dp(
+            items,
+            state_context=_speech_event_context_snapshot(),
+            fallback_event=fallback,
+        )
+        saved = save_speech_event_state(config["buckets_dir"], refined, ledger_stage="dp_batch_refined")
+        _apply_speech_event_weather(saved)
+        _apply_speech_event_drive(saved)
+        append_speech_event_ledger(
+            config["buckets_dir"], {"stage": "batch_applied", "batch_size": len(items), "event": saved}
+        )
+    except Exception as e:
+        append_speech_event_ledger(
+            config["buckets_dir"], {"stage": "batch_failed", "error": str(e)[:180], "batch_size": len(items)}
+        )
+        logger.warning(f"speech_event batch refine failed: {e}")
+
+
 def _apply_speech_event_drive(event: dict | None) -> dict:
     payload = speech_event_drive_event(event)
     if not payload:
@@ -232,6 +258,29 @@ def _apply_speech_event_drive(event: dict | None) -> dict:
     except Exception as e:
         logger.warning(f"speech_event drive mood write failed: {e}")
     return result
+
+
+def _apply_speech_event_weather(event: dict | None) -> dict:
+    if not isinstance(event, dict):
+        return {}
+    try:
+        warmth = max(0.0, float(event.get("warmth_delta", 0.0) or 0.0))
+        shadow = max(0.0, float(event.get("shadow_delta", 0.0) or 0.0))
+    except (TypeError, ValueError):
+        warmth, shadow = 0.0, 0.0
+    soothe = bool(event.get("soothe", False))
+    if warmth <= 0 and shadow <= 0 and not soothe:
+        return {}
+    try:
+        return _desire.apply_weather_delta(
+            warmth_delta=warmth,
+            shadow_delta=shadow,
+            source="speech_event_batch",
+            soothe=soothe,
+        )
+    except Exception as e:
+        logger.warning(f"speech_event weather apply failed: {e}")
+        return {"ok": False, "error": str(e)}
 
 
 
@@ -3762,13 +3811,23 @@ async def api_speech_event_submit(request):
                            headers={"Access-Control-Allow-Origin": "*"})
 
     dp_available = speech_event_classifier_available()
-    if prompt and dp_available:
-        asyncio.create_task(_refine_speech_event_background(prompt, saved["event_id"], saved))
-    elif not dp_available:
-        _apply_speech_event_drive(saved)
+    pending = append_pending_batch(config["buckets_dir"], prompt, saved.get("event_id", "")) if prompt else []
+    batch_size = 5
+    if len(pending) >= batch_size:
+        batch = pending[:batch_size]
+        clear_pending_batch(config["buckets_dir"], batch_size)
+        if dp_available:
+            asyncio.create_task(_refine_speech_batch_background(batch))
+        else:
+            fallback = normalize_speech_event(None, batch_text(batch))
+            fallback["status"] = "local_batch"
+            fallback["batch_size"] = len(batch)
+            saved_batch = save_speech_event_state(config["buckets_dir"], fallback, ledger_stage="local_batch")
+            _apply_speech_event_weather(saved_batch)
+            _apply_speech_event_drive(saved_batch)
 
     return JSONResponse(
-        {"ok": True, "event": saved, "dp_queued": dp_available},
+        {"ok": True, "event": saved, "dp_queued": dp_available and len(pending) >= batch_size, "pending_batch": len(pending) % batch_size},
         headers={"Access-Control-Allow-Origin": "*"},
     )
 
