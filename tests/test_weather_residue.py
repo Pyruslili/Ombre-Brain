@@ -39,9 +39,37 @@ def test_soma_chord_is_short_strong_weather_impulse(tmp_path):
     assert result["warmth_residue"] == 0.08
     assert weather["active_chord"] == "Gmaj7"
     assert weather["active_chord_source"] == "soma"
+    assert weather["active_chord_weight"] > 0
+    assert weather["source_stack"][0]["source"] == "soma"
     assert weather["current_chord"] == current_weather_chord(
         weather["effective_PA"], weather["effective_NA"]
     )
+
+
+def test_chord_impulse_active_selection_uses_decayed_weight(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    start = 1000.0
+
+    engine.weather.apply_chord("Dm7", source="thought", now=start)
+    state = engine.weather.apply_chord("Gmaj7", source="soma", now=start + 3 * 3600)
+
+    assert state["active_chord"] == "Gmaj7"
+    assert state["active_chord_source"] == "soma"
+
+    later = engine.weather.load(now=start + 6 * 3600, decay=True)
+    assert later["active_chord"] == "Dm7"
+    assert later["active_chord_source"] == "thought"
+
+
+def test_chord_impulse_below_threshold_does_not_display_active(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    start = 1000.0
+
+    engine.weather.apply_chord("Gmaj7", source="soma", now=start)
+    later = engine.weather.load(now=start + 5 * 3600, decay=True)
+
+    assert later["active_chord"] == ""
+    assert later["active_chord_source"] == ""
 
 
 def test_expanded_chord_vocabulary_routes_liminal_and_color(tmp_path):

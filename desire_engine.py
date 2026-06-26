@@ -263,7 +263,10 @@ WEATHER_WARM_CHORDS = {"Dmaj7", "Amaj7", "Fmaj7", "Fmaj7#11", "Gmaj7"}
 WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim", "Bm7b5"}
 WEATHER_LIMINAL_CHORDS = {"C6", "Am7", "Gsus4"}
 WEATHER_CHORD_DELTAS = {"feel": 0.075, "soma": 0.08, "thought": 0.035}
-WEATHER_ACTIVE_CHORD_TTL_SEC = {"feel": 12 * 3600, "soma": 45 * 60, "thought": 4 * 3600}
+WEATHER_CHORD_IMPULSE_STRENGTH = {"feel": 0.72, "soma": 1.0, "thought": 0.72}
+WEATHER_CHORD_IMPULSE_HALFLIFE_SEC = {"feel": 12 * 3600, "soma": 45 * 60, "thought": 4 * 3600}
+WEATHER_ACTIVE_CHORD_THRESHOLD = 0.12
+WEATHER_MAX_CHORD_IMPULSES = 16
 WEATHER_SOOTHE_SHADOW_THRESHOLD = 0.08
 WEATHER_RECENT_LOW_CHORD_SEC = 3 * 3600
 WEATHER_SOOTHE_DURATION_SEC = 30 * 60
@@ -598,6 +601,7 @@ def _weather_default_state(now: float = None) -> dict:
         "active_chord": "",
         "active_chord_source": "",
         "active_chord_at": 0.0,
+        "chord_impulses": [],
     }
 
 
@@ -661,18 +665,97 @@ def current_weather_chord(warmth: float, shadow: float) -> str:
     return "C6"
 
 
+def _chord_impulse_weight(impulse: dict, now: float) -> float:
+    try:
+        strength = max(0.0, float(impulse.get("strength", 0.0) or 0.0))
+        created_at = float(impulse.get("created_at", 0.0) or 0.0)
+        half_life = max(1.0, float(impulse.get("half_life", 0.0) or 0.0))
+    except (TypeError, ValueError):
+        return 0.0
+    age = max(0.0, now - created_at)
+    return strength * (0.5 ** (age / half_life))
+
+
+def _normalize_chord_impulses(state: dict, now: float) -> list:
+    impulses = []
+    raw_items = state.get("chord_impulses")
+    if isinstance(raw_items, list):
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            chord = _normalize_chord(item.get("chord", ""))
+            source = str(item.get("source") or "").strip()
+            if not chord or not source:
+                continue
+            try:
+                strength = max(0.0, float(item.get("strength", 0.0) or 0.0))
+                half_life = max(1.0, float(item.get("half_life", 0.0) or 0.0))
+                created_at = float(item.get("created_at", now) or now)
+            except (TypeError, ValueError):
+                continue
+            impulse = {
+                "chord": chord,
+                "source": source,
+                "strength": round(strength, 6),
+                "half_life": round(half_life, 3),
+                "created_at": created_at,
+            }
+            if _chord_impulse_weight(impulse, now) >= WEATHER_ACTIVE_CHORD_THRESHOLD / 4:
+                impulses.append(impulse)
+
+    if not impulses:
+        chord = _normalize_chord(state.get("active_chord", ""))
+        source = str(state.get("active_chord_source") or "").strip()
+        created_at = float(state.get("active_chord_at", 0.0) or 0.0)
+        if chord and source and created_at:
+            impulse = {
+                "chord": chord,
+                "source": source,
+                "strength": WEATHER_CHORD_IMPULSE_STRENGTH.get(source, 0.4),
+                "half_life": WEATHER_CHORD_IMPULSE_HALFLIFE_SEC.get(source, 3600),
+                "created_at": created_at,
+            }
+            if _chord_impulse_weight(impulse, now) >= WEATHER_ACTIVE_CHORD_THRESHOLD / 4:
+                impulses.append(impulse)
+
+    impulses.sort(key=lambda item: _chord_impulse_weight(item, now), reverse=True)
+    return impulses[:WEATHER_MAX_CHORD_IMPULSES]
+
+
 def _active_weather_chord(state: dict, now: float = None) -> dict:
     now = now if now is not None else time.time()
-    chord = _normalize_chord(state.get("active_chord", ""))
-    source = str(state.get("active_chord_source") or "").strip()
-    updated_at = float(state.get("active_chord_at", 0.0) or 0.0)
-    ttl = WEATHER_ACTIVE_CHORD_TTL_SEC.get(source, 0)
-    if not chord or not source or not updated_at or not ttl or now - updated_at > ttl:
-        return {"active_chord": "", "active_chord_source": "", "active_chord_age_sec": None}
+    impulses = _normalize_chord_impulses(state, now)
+    if not impulses:
+        return {
+            "active_chord": "",
+            "active_chord_source": "",
+            "active_chord_age_sec": None,
+            "active_chord_weight": 0.0,
+            "source_stack": [],
+        }
+    active = impulses[0]
+    weight = _chord_impulse_weight(active, now)
+    if weight < WEATHER_ACTIVE_CHORD_THRESHOLD:
+        return {
+            "active_chord": "",
+            "active_chord_source": "",
+            "active_chord_age_sec": None,
+            "active_chord_weight": round(weight, 3),
+            "source_stack": [],
+        }
     return {
-        "active_chord": chord,
-        "active_chord_source": source,
-        "active_chord_age_sec": round(max(0.0, now - updated_at), 3),
+        "active_chord": active["chord"],
+        "active_chord_source": active["source"],
+        "active_chord_age_sec": round(max(0.0, now - active["created_at"]), 3),
+        "active_chord_weight": round(weight, 3),
+        "source_stack": [
+            {
+                "chord": item["chord"],
+                "source": item["source"],
+                "weight": round(_chord_impulse_weight(item, now), 3),
+            }
+            for item in impulses[:5]
+        ],
     }
 
 
@@ -720,6 +803,7 @@ class WeatherResidueStore:
                 "shadow": float(component.get("shadow", 0.0) or 0.0),
                 "updated_at": float(component.get("updated_at", raw.get("updated_at", now)) or now),
             }
+        state["chord_impulses"] = _normalize_chord_impulses(state, now)
 
         if decay:
             state = self._decay(state, now)
@@ -787,9 +871,20 @@ class WeatherResidueStore:
         )
         if kind == "shadow":
             state["last_low_chord_at"] = now if now is not None else time.time()
-        state["active_chord"] = _normalize_chord(chord)
-        state["active_chord_source"] = source
-        state["active_chord_at"] = now if now is not None else time.time()
+        created_at = now if now is not None else time.time()
+        state["chord_impulses"] = _normalize_chord_impulses(state, created_at)
+        state["chord_impulses"].insert(0, {
+            "chord": _normalize_chord(chord),
+            "source": source,
+            "strength": WEATHER_CHORD_IMPULSE_STRENGTH[source],
+            "half_life": WEATHER_CHORD_IMPULSE_HALFLIFE_SEC[source],
+            "created_at": created_at,
+        })
+        state["chord_impulses"] = _normalize_chord_impulses(state, created_at)
+        active = _active_weather_chord(state, created_at)
+        state["active_chord"] = active.get("active_chord", "")
+        state["active_chord_source"] = active.get("active_chord_source", "")
+        state["active_chord_at"] = created_at if state["active_chord"] else 0.0
         state = self.save(state)
         return state
 
@@ -807,6 +902,14 @@ class WeatherResidueStore:
                 component.get("shadow", 0.0), elapsed, spec["halflife_hours"], soothe_elapsed
             )
             component["updated_at"] = now
+        state["chord_impulses"] = _normalize_chord_impulses(state, now)
+        active = _active_weather_chord(state, now)
+        state["active_chord"] = active.get("active_chord", "")
+        state["active_chord_source"] = active.get("active_chord_source", "")
+        state["active_chord_at"] = (
+            now - float(active.get("active_chord_age_sec", 0.0) or 0.0)
+            if state["active_chord"] else 0.0
+        )
         return self._refresh_totals(state, now)
 
     def _refresh_totals(self, state: dict, now: float) -> dict:

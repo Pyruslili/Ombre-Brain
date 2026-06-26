@@ -3822,6 +3822,8 @@ async def api_desire_state(request):
             "updated_at": weather.get("updated_at"),
             "active_chord": weather.get("active_chord", ""),
             "active_chord_source": weather.get("active_chord_source", ""),
+            "active_chord_weight": weather.get("active_chord_weight", 0.0),
+            "source_stack": weather.get("source_stack", []),
         }
         state["pulse_weather"] = {
             "undertow": top_drive,
@@ -3831,6 +3833,8 @@ async def api_desire_state(request):
             "current_chord": weather.get("current_chord", ""),
             "active_chord": weather.get("active_chord", ""),
             "active_chord_source": weather.get("active_chord_source", ""),
+            "active_chord_weight": weather.get("active_chord_weight", 0.0),
+            "source_stack": weather.get("source_stack", []),
             "chord_display": _weather_chord_display(weather),
             "warmth_residue": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(weather.get("shadow_residue", 0.0)), 3),
