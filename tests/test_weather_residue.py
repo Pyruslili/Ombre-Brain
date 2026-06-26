@@ -1,4 +1,4 @@
-from desire_engine import DesireEngine, DRIVE_BASELINES, pa_na_snapshot
+from desire_engine import DesireEngine, DRIVE_BASELINES, current_weather_chord, pa_na_snapshot
 
 
 def test_weather_delta_adds_to_effective_pa_na(tmp_path):
@@ -39,7 +39,31 @@ def test_soma_chord_is_short_strong_weather_impulse(tmp_path):
     assert result["warmth_residue"] == 0.08
     assert weather["active_chord"] == "Gmaj7"
     assert weather["active_chord_source"] == "soma"
-    assert weather["current_chord"] in {"Gmaj7", "Fmaj7"}
+    assert weather["current_chord"] == current_weather_chord(
+        weather["effective_PA"], weather["effective_NA"]
+    )
+
+
+def test_expanded_chord_vocabulary_routes_liminal_and_color(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+
+    lydian = engine.apply_chord_echo("Fmaj7#11", source="thought")
+    liminal = engine.apply_chord_echo("Gsus4", source="soma")
+    shadow = engine.apply_chord_echo("Bm7b5", source="feel")
+
+    assert lydian["kind"] == "warmth"
+    assert liminal["kind"] == "liminal"
+    assert shadow["kind"] == "shadow"
+    assert liminal["warmth_residue"] > lydian["warmth_residue"]
+    assert liminal["shadow_residue"] > 0
+
+
+def test_current_weather_chord_uses_expanded_regions():
+    assert current_weather_chord(0.7, 0.2) == "Dmaj7"
+    assert current_weather_chord(0.62, 0.42) == "Fmaj7#11"
+    assert current_weather_chord(0.44, 0.4) == "Am7"
+    assert current_weather_chord(0.3, 0.66) == "F#dim"
+    assert current_weather_chord(0.32, 0.43) == "Gsus4"
 
 
 def test_soothe_needs_shadow_context(tmp_path):

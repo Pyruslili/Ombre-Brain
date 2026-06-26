@@ -259,8 +259,9 @@ WEATHER_COMPONENTS = {
     "thought": {"halflife_hours": 8.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
     "feel": {"halflife_hours": 72.0, "warmth_cap": 0.35, "shadow_cap": 0.35},
 }
-WEATHER_WARM_CHORDS = {"Fmaj7", "Gmaj7", "Dmaj7"}
-WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim"}
+WEATHER_WARM_CHORDS = {"Dmaj7", "Amaj7", "Fmaj7", "Fmaj7#11", "Gmaj7"}
+WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim", "Bm7b5"}
+WEATHER_LIMINAL_CHORDS = {"C6", "Am7", "Gsus4"}
 WEATHER_CHORD_DELTAS = {"feel": 0.075, "soma": 0.08, "thought": 0.035}
 WEATHER_ACTIVE_CHORD_TTL_SEC = {"feel": 12 * 3600, "soma": 45 * 60, "thought": 4 * 3600}
 WEATHER_SOOTHE_SHADOW_THRESHOLD = 0.08
@@ -604,12 +605,20 @@ def _normalize_chord(chord: str) -> str:
     token = (chord or "").strip().split()[0] if chord else ""
     aliases = {
         "fmaj7": "Fmaj7",
+        "fmaj7#11": "Fmaj7#11",
+        "fmaj7♯11": "Fmaj7#11",
         "gmaj7": "Gmaj7",
         "dmaj7": "Dmaj7",
+        "amaj7": "Amaj7",
         "dm7": "Dm7",
         "em7": "Em7",
         "f#dim": "F#dim",
         "f♯dim": "F#dim",
+        "bm7b5": "Bm7b5",
+        "bø7": "Bm7b5",
+        "c6": "C6",
+        "am7": "Am7",
+        "gsus4": "Gsus4",
     }
     return aliases.get(token.lower(), token)
 
@@ -620,6 +629,8 @@ def weather_chord_kind(chord: str) -> Optional[str]:
         return "warmth"
     if normalized in WEATHER_SHADOW_CHORDS:
         return "shadow"
+    if normalized in WEATHER_LIMINAL_CHORDS:
+        return "liminal"
     return None
 
 
@@ -627,11 +638,27 @@ def current_weather_chord(warmth: float, shadow: float) -> str:
     """Snapshot chord from current effective Warmth/Shadow."""
     warmth = _clamp(float(warmth or 0.0))
     shadow = _clamp(float(shadow or 0.0))
-    if warmth < 0.3 and shadow < 0.3:
+    if warmth < 0.28 and shadow < 0.28:
         return "C6"
+    if shadow >= 0.62 and warmth < 0.35:
+        return "F#dim"
+    if warmth >= 0.68 and shadow < 0.28:
+        return "Dmaj7"
+    if warmth >= 0.6 and shadow < 0.22:
+        return "Amaj7"
+    if warmth >= 0.58 and shadow >= 0.38:
+        return "Fmaj7#11"
+    if abs(warmth - shadow) <= 0.08 and max(warmth, shadow) >= 0.38:
+        return "Am7"
+    if shadow >= 0.32 and warmth < 0.36 and shadow - warmth <= 0.14:
+        return "Gsus4"
     if shadow > warmth:
-        return "Dm7" if shadow > 0.5 else "Em7"
-    return "Fmaj7" if warmth > 0.5 else "Gmaj7"
+        return "Dm7" if shadow >= 0.55 else "Em7"
+    if warmth >= 0.52:
+        return "Fmaj7"
+    if warmth >= 0.36 or shadow >= 0.32:
+        return "Gmaj7" if warmth >= shadow else "Gsus4"
+    return "C6"
 
 
 def _active_weather_chord(state: dict, now: float = None) -> dict:
@@ -750,8 +777,8 @@ class WeatherResidueStore:
             return self.load(now, decay=True)
         source = source if source in ("feel", "soma", "thought") else "thought"
         delta = WEATHER_CHORD_DELTAS[source]
-        warmth_delta = delta if kind == "warmth" else 0.0
-        shadow_delta = delta if kind == "shadow" else 0.0
+        warmth_delta = delta if kind == "warmth" else (delta * 0.5 if kind == "liminal" else 0.0)
+        shadow_delta = delta if kind == "shadow" else (delta * 0.5 if kind == "liminal" else 0.0)
         state = self.apply_delta(
             warmth_delta=warmth_delta,
             shadow_delta=shadow_delta,

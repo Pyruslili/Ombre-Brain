@@ -2134,7 +2134,8 @@ def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "", chord: 
     嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
     drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress
     thought: 可选，把这次经历的一句话存入念头池（flit）
-    chord: 可选，把这次念头的和弦回声写入weather_residue（Fmaj7/Gmaj7/Dmaj7→warmth，Dm7/Em7/F#dim→shadow）
+    chord: 可选，把这次念头的和弦回声写入weather_residue。
+    warm: Dmaj7/Amaj7/Fmaj7/Fmaj7#11/Gmaj7；shadow: Dm7/Em7/F#dim/Bm7b5；liminal: C6/Am7/Gsus4。
     speech/DP chord_hint暂不接入天气；Soma触碰由/api/soma/report以source=soma写入短时余波。
     """
     result = _desire.pulse(drive_key, delta, chord=chord.strip())

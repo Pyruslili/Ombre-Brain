@@ -2745,9 +2745,17 @@ function setWeatherProgress(kind, value) {
 function currentWeatherChord(warmth, shadow) {
   const w = finiteNumber(warmth);
   const s = finiteNumber(shadow);
-  if (w < .3 && s < .3) return 'C6';
-  if (s > w) return s > .5 ? 'Dm7' : 'Em7';
-  return w > .5 ? 'Fmaj7' : 'Gmaj7';
+  if (w < .28 && s < .28) return 'C6';
+  if (s >= .62 && w < .35) return 'F#dim';
+  if (w >= .68 && s < .28) return 'Dmaj7';
+  if (w >= .6 && s < .22) return 'Amaj7';
+  if (w >= .58 && s >= .38) return 'Fmaj7#11';
+  if (Math.abs(w - s) <= .08 && Math.max(w, s) >= .38) return 'Am7';
+  if (s >= .32 && w < .36 && s - w <= .14) return 'Gsus4';
+  if (s > w) return s >= .55 ? 'Dm7' : 'Em7';
+  if (w >= .52) return 'Fmaj7';
+  if (w >= .36 || s >= .32) return w >= s ? 'Gmaj7' : 'Gsus4';
+  return 'C6';
 }
 
 function setWeatherMetric(kind, current, base, residue) {
