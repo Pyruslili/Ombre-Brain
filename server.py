@@ -493,8 +493,6 @@ async def _recent_weather_sources(limit: int = 2) -> list[dict]:
     items = []
     for bucket in buckets:
         meta = bucket.get("metadata", {}) or {}
-        if meta.get("type") == "feel":
-            continue
         text = _analyzer_preview(bucket.get("content", ""), limit=240)
         if not text:
             continue
@@ -503,7 +501,7 @@ async def _recent_weather_sources(limit: int = 2) -> list[dict]:
         labels = domains | tags
         if "private" in labels:
             continue
-        source_type = "memory"
+        source_type = "feel" if meta.get("type") == "feel" else "memory"
         for label in ("letter_jiajia", "letter", "writing", "window"):
             if label in labels:
                 source_type = label
@@ -519,10 +517,9 @@ async def _recent_weather_sources(limit: int = 2) -> list[dict]:
     return items[:limit]
 
 
-async def _weather_mood_entry(thoughts: list | None = None) -> tuple[str, str]:
+async def _weather_mood_entry() -> tuple[str, str]:
     from mood_pool import get_daily_mood
-    sources = list(thoughts or [])
-    sources.extend(await _recent_weather_sources(limit=2))
+    sources = await _recent_weather_sources(limit=2)
     return await asyncio.to_thread(get_daily_mood, thoughts=sources or None)
 
 
@@ -1907,7 +1904,7 @@ async def nocturne_breath(
                 ]
             except Exception:
                 pass
-            mood_entry = await _weather_mood_entry(_thought_list or None)
+            mood_entry = await _weather_mood_entry()
             _dstate = _desire.state()
             weather = _dstate.get("effective_pa_na") or _desire.weather_state()
             warmth = float(weather.get("effective_PA", live.get("PA", 0.5)))
@@ -3785,12 +3782,9 @@ async def api_desire_state(request):
             reverse=True,
         )
         state["thoughts"] = thoughts
-        thought_dicts = [{"text": t.get("text", ""), "drive": t.get("drive", ""), "strength": t.get("strength", 0),
-                          "born_at": t.get("born_at", 0), "source_type": t.get("source_type", "")}
-                         for t in thoughts]
         # get_daily_mood缓存不命中时会同步调DeepSeek(最长10s)，helper会扔进线程池跑，
         # 不然这一个请求会卡住整个事件循环，拖累同时打过来的所有其他请求。
-        mood_entry = await _weather_mood_entry(thought_dicts)
+        mood_entry = await _weather_mood_entry()
         weather = state.get("effective_pa_na") or _desire.weather_state()
         warmth = float(weather.get("effective_PA", state.get("pa_na", {}).get("PA", 0.5)))
         shadow = float(weather.get("effective_NA", state.get("pa_na", {}).get("NA", 0.2)))

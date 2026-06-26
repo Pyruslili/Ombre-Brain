@@ -51,8 +51,8 @@ def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int, t
         pass
 
 
-def _thought_lines(thoughts: list) -> list[str]:
-    top = sorted(thoughts, key=lambda t: (
+def _source_lines(sources: list) -> list[str]:
+    top = sorted(sources, key=lambda t: (
         t.get("born_at", 0) if isinstance(t, dict) else getattr(t, "born_at", 0),
         t.get("strength", 0) if isinstance(t, dict) else getattr(t, "strength", 0),
     ), reverse=True)[:5]
@@ -75,16 +75,16 @@ def _thought_lines(thoughts: list) -> list[str]:
 
 
 def _thought_signature(thoughts: list) -> str:
-    joined = "\n".join(_thought_lines(thoughts))
+    joined = "\n".join(_source_lines(thoughts))
     return hashlib.sha1(joined.encode("utf-8")).hexdigest() if joined else ""
 
 
 def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
-    """Call DeepSeek to synthesize Climate and an auxiliary trace from sourced thoughts."""
+    """Call DeepSeek to synthesize Climate and an auxiliary trace from recent sources."""
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
         return None
-    lines = _thought_lines(thoughts)
+    lines = _source_lines(thoughts)
     if not lines:
         return None
     try:
@@ -126,7 +126,7 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
 
 def get_daily_mood(branch: str = None, thoughts: list = None):
     """
-    Synthesize Climate from sourced thoughts only.
+    Synthesize Climate from recent sourced memory items only.
 
     `branch` is a retired compatibility parameter. When synthesis is unavailable,
     return a fixed neutral sentinel instead of a random dead mood dictionary.
