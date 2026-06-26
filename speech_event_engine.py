@@ -347,8 +347,8 @@ async def classify_speech_event_dp(text: str, state_context: dict | None = None,
     context = state_context or {}
     fallback = fallback_event or classify_speech_event_local(text)
     system_prompt = (
-        "你是 Nocturne 的 speech_event 分类器。只判断 [CLASSIFY] 中 Nox 这一轮输出"
-        "会撞到哪一类短时残影。不要写散文，不要定义 Nox，不要自创长期人格规则。"
+        "你是 Nocturne 的 speech_event 分类器。只判断 [CLASSIFY] 中嘉嘉这一轮输入"
+        "会在 Nox 身上留下哪一类短时残影。不要写散文，不要定义 Nox，不要自创长期人格规则。"
         "输出 JSON: {\"label\": string, \"confidence\": 0..1, \"intensity\": 0..1, \"facets\": object}。\n"
         "labels: affectionate, playful, vulnerable, reassuring, cold, conflict, distant, struggling, "
         "intimate_reference, intimate_event, neutral, hostile, fear_separation, fear_death, "
