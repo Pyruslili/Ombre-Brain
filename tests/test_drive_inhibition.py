@@ -21,11 +21,26 @@ from desire_engine import (
     longing_value,
     longing_phase,
     reunion_boost_for_return,
+    refuse_intent,
+    satisfy,
 )
 
 
 def _baseline_drives():
     return dict(DRIVE_BASELINES)
+
+
+def test_refuse_lowers_target_drive_but_less_than_satisfy():
+    drives = _baseline_drives()
+    drives["attachment"] = 0.80
+    state = DriveState(drives=drives)
+
+    refused = refuse_intent(state, "attachment")
+    satisfied = satisfy(state, "attachment")
+
+    assert abs(refused.drives["attachment"] - 0.60) < 1e-9
+    assert abs(satisfied.drives["attachment"] - 0.48) < 1e-9
+    assert satisfied.drives["attachment"] < refused.drives["attachment"]
 
 
 # ─── ESM互抑 ──────────────────────────────────────────────────────────────

@@ -1248,14 +1248,15 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
     """
     拒绝执行某个intent。
     不是系统判断不合适——是我自己这一刻不想。
-    回落幅度比satisfy小得多（大概乘0.88），念头不清掉。
+    回落幅度比satisfy小，但要足够明显：拒绝代表这条牵引不合当下。
+    念头不清掉，后续仍可自然回流。
     """
     import copy
     drive_key = normalize_drive_key(drive_key, drive_key)
     new_drives = copy.copy(normalize_drive_values(state.drives))
-    # 轻微回落：只压目标维度，不波及其他
+    # 中等回落：只压目标维度，不波及其他；satisfy 仍然释放更多张力。
     if drive_key in new_drives:
-        new_drives[drive_key] = _clamp(new_drives[drive_key] * 0.88)
+        new_drives[drive_key] = _clamp(new_drives[drive_key] * 0.75)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
@@ -2455,7 +2456,7 @@ class DesireEngine:
         """
         拒绝执行intent。
         不是不合适——是这一刻不想。
-        目标维度轻微回落（×0.88），比satisfy小得多。
+        目标维度中等回落（×0.75），比satisfy小。
         念头留在池子里，下次心跳还可以再冒出来。
         原因可选，可以只是"不想"。
         """

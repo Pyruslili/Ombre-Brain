@@ -245,7 +245,7 @@ def test_mood_pool_has_no_unsourced_dictionary_fallback(monkeypatch, tmp_path):
         {"text": "another sourced thought", "drive": "curiosity", "strength": 0.7},
     ])
 
-    assert result == ("窗边没有动静，只是趴着发呆。", "平静")
+    assert result == ("", "平静")
     assert not (tmp_path / "live_wire_cache.json").exists()
 
 

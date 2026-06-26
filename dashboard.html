@@ -2785,8 +2785,8 @@ async function loadDesire(button) {
 
     const weather = d.pulse_weather || {};
     const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
-    const speechTrace = String(d.speech_event?.trace || '').trim();
-    const latestTrace = speechTrace || latestThought || weather.mood_trace || d.mood_trace || 'No recent thought.';
+    const speechTrace = d.speech_event?.recent ? String(d.speech_event?.trace || '').trim() : '';
+    const latestTrace = speechTrace || latestThought || weather.mood_trace || d.mood_trace || '';
     const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
     const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
     const warmthNow = finiteNumber(weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);

@@ -475,6 +475,69 @@ def _analyzer_preview(content: str, limit: int = 1000) -> str:
     return text[:limit].rstrip() + "..."
 
 
+def _bucket_created_ts(bucket: dict) -> float:
+    raw = str(bucket.get("metadata", {}).get("created", "") or "").strip()
+    if not raw:
+        return 0.0
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return 0.0
+
+
+async def _recent_weather_sources(limit: int = 2) -> list[dict]:
+    try:
+        buckets = await bucket_mgr.list_all(include_archive=False)
+    except Exception:
+        return []
+    items = []
+    for bucket in buckets:
+        meta = bucket.get("metadata", {}) or {}
+        if meta.get("type") == "feel":
+            continue
+        text = _analyzer_preview(bucket.get("content", ""), limit=240)
+        if not text:
+            continue
+        domains = _bucket_domains(meta)
+        tags = _bucket_tags(meta)
+        labels = domains | tags
+        if "private" in labels:
+            continue
+        source_type = "memory"
+        for label in ("letter_jiajia", "letter", "writing", "window"):
+            if label in labels:
+                source_type = label
+                break
+        items.append({
+            "text": text,
+            "drive": "memory",
+            "source_type": source_type,
+            "strength": 0.72,
+            "born_at": _bucket_created_ts(bucket),
+        })
+    items.sort(key=lambda item: item.get("born_at", 0), reverse=True)
+    return items[:limit]
+
+
+async def _weather_mood_entry(thoughts: list | None = None) -> tuple[str, str]:
+    from mood_pool import get_daily_mood
+    sources = list(thoughts or [])
+    sources.extend(await _recent_weather_sources(limit=2))
+    return await asyncio.to_thread(get_daily_mood, thoughts=sources or None)
+
+
+def _fresh_soma_state() -> dict:
+    try:
+        path = _bucket_path("soma_state.json")
+        with open(path) as f:
+            data = _json_lib.load(f)
+        if time.time() - float(data.get("updated_at", 0) or 0) > 3600:
+            return {}
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def _short_text(text: str, limit: int = 36) -> str:
     text = " ".join(strip_wikilinks(text or "").split())
     if len(text) <= limit:
@@ -1822,10 +1885,9 @@ async def nocturne_breath(
         if not pinned_results and not dynamic_results and not feel_results and not dream_section and not marginalia_section:
             return "权重池平静，没有需要处理的记忆。"
 
-        # --- Pulse Weather: 心情+drive+longing快照 ---
+        # --- Pulse Weather: 与/api/desire/state对齐的天气快照 ---
         mood_header = ""
         try:
-            from mood_pool import get_daily_mood
             import json as _json, os as _os
 
             mood_path = _bucket_path("current_mood.json")
@@ -1836,9 +1898,6 @@ async def nocturne_breath(
                         live = _json.load(_f)
                 except Exception:
                     live = {}
-            drive_event = live.get("drive_event", {})
-            event_brain = drive_event.get("brain", {}) if isinstance(drive_event, dict) else {}
-
             _thought_list = []
             try:
                 _ds_state = _desire.store.load_state()
@@ -1848,70 +1907,47 @@ async def nocturne_breath(
                 ]
             except Exception:
                 pass
-            mood_entry = await asyncio.to_thread(
-                get_daily_mood,
-                thoughts=_thought_list or None,
-            )
-            pa = live.get("PA", 0.5)
-            na = live.get("NA", 0.2)
+            mood_entry = await _weather_mood_entry(_thought_list or None)
+            _dstate = _desire.state()
+            weather = _dstate.get("effective_pa_na") or _desire.weather_state()
+            warmth = float(weather.get("effective_PA", live.get("PA", 0.5)))
+            shadow = float(weather.get("effective_NA", live.get("NA", 0.2)))
+            current_chord = weather.get("current_chord") or ""
 
-            lines = [f"Warmth：{pa}", f"Shadow：{na}"]
+            top_drive = (_dstate.get("intent") or {}).get("drive_key")
+            if not top_drive:
+                candidates = {k: v for k, v in (_dstate.get("drives") or {}).items() if k != "fatigue"}
+                top_drive = max(candidates, key=candidates.get, default="")
+            undertow_value = float((_dstate.get("drives") or {}).get(top_drive, 0.0)) if top_drive else 0.0
 
-            if mood_entry[1]:
-                lines.append(f"Climate：{mood_entry[1]}")
-            latest_trace = next(
+            latest_thought = next(
                 (
                     t.get("text", "").strip()
                     for t in sorted(_thought_list, key=lambda x: x.get("born_at", 0), reverse=True)
                     if t.get("text", "").strip()
                 ),
-                mood_entry[0],
+                "",
             )
-            # Mood Trace：最新一条Nox自己存下来的念头，DP合成不抢这一层。
-            if latest_trace:
-                lines.append(f"Mood Trace：{latest_trace}")
-            _footing_map = {"实": "grounded", "悬": "suspended", "空": "hollow"}
-            if event_brain.get("grounding") in _footing_map:
-                lines.append(f"Footing：{_footing_map[event_brain['grounding']]}")
+            speech_event = load_speech_event_state(config["buckets_dir"])
+            speech_trace = ""
+            if speech_event and is_recent_speech_event(speech_event):
+                speech_trace = str(speech_event.get("trace") or "").strip()
+            mood_trace = speech_trace or latest_thought
 
-            # Undertow：当前最强drive
-            try:
-                _ds2 = _desire.store.load_state()
-                _intent2 = _desire.intent()
-                _top_drive2 = _intent2["drive_key"] if _intent2 else max(
-                    (k for k in _ds2.drives if k != "fatigue"),
-                    key=lambda k: _ds2.drives[k], default=""
-                )
-                if _top_drive2:
-                    lines.append(f"Undertow：{_top_drive2} {_ds2.drives[_top_drive2]:.2f}")
-            except Exception:
-                pass
-
-            # Drift：thought pool里最高strength的念头
-            try:
-                _dstate2 = _desire.state()
-                _thoughts2 = [
-                    t for t in (_dstate2.get("thoughts") or [])
-                    if (t.get("text") or "").strip() and not (t.get("text") or "").startswith("Failed")
-                ]
-                if _thoughts2:
-                    import random as _rand
-                    _top_t = max(_thoughts2, key=lambda t: t.get("strength", 0))
-                    lines.append(f"Drift：\"{_top_t['text']}\"")
-            except Exception:
-                pass
-
-            # Longing：缺席引发的思念曲线
-            try:
-                from desire_engine import LONGING_FEELINGS, longing_feeling_key
-                _dstate = _desire.state()
-                _longing = _dstate.get("longing", 0.0)
-                _phase = _dstate.get("longing_phase", "content")
-                _fkey = longing_feeling_key(_longing, _phase)
-                _word = LONGING_FEELINGS.get(_fkey, {}).get("word") if _fkey else "安稳"
-                lines.append(f"Longing：{_word} {_longing:.2f}")
-            except Exception:
-                pass
+            lines = []
+            if top_drive:
+                lines.append(f"Undertow：{top_drive} {undertow_value:.2f}")
+            lines.extend([f"Warmth：{warmth:.2f}", f"Shadow：{abs(shadow):.2f}"])
+            if mood_entry[1]:
+                lines.append(f"Climate：{mood_entry[1]}")
+            if mood_trace:
+                lines.append(f"Mood Trace：{mood_trace}")
+            soma = _fresh_soma_state()
+            soma_line = str(soma.get("line") or "").strip()
+            if soma_line:
+                lines.append(f"Soma Trace：{soma_line}")
+            if current_chord:
+                lines.append(f"Current Chord：{current_chord}")
 
             mood_header = "=== Pulse Weather ===\n" + "\n".join(lines)
         except Exception:
@@ -3737,7 +3773,6 @@ async def api_desire_state(request):
     from starlette.responses import JSONResponse
     state = _desire.state()
     try:
-        from mood_pool import get_daily_mood
         import json as _j, os as _o
         mood_path = _bucket_path("current_mood.json")
         live = {}
@@ -3750,19 +3785,18 @@ async def api_desire_state(request):
             reverse=True,
         )
         state["thoughts"] = thoughts
-        thought_dicts = [{"text": t.get("text", ""), "drive": t.get("drive", ""), "strength": t.get("strength", 0)}
+        thought_dicts = [{"text": t.get("text", ""), "drive": t.get("drive", ""), "strength": t.get("strength", 0),
+                          "born_at": t.get("born_at", 0), "source_type": t.get("source_type", "")}
                          for t in thoughts]
-        # get_daily_mood缓存不命中时会同步调DeepSeek(最长10s)，扔进线程池跑，
+        # get_daily_mood缓存不命中时会同步调DeepSeek(最长10s)，helper会扔进线程池跑，
         # 不然这一个请求会卡住整个事件循环，拖累同时打过来的所有其他请求。
-        mood_entry = await asyncio.to_thread(
-            get_daily_mood, thoughts=thought_dicts
-        )
+        mood_entry = await _weather_mood_entry(thought_dicts)
         weather = state.get("effective_pa_na") or _desire.weather_state()
         warmth = float(weather.get("effective_PA", state.get("pa_na", {}).get("PA", 0.5)))
         shadow = float(weather.get("effective_NA", state.get("pa_na", {}).get("NA", 0.2)))
         latest_thought = next(
             (t.get("text", "").strip() for t in thoughts if t.get("text", "").strip()),
-            mood_entry[0],
+            "",
         )
         intent = state.get("intent") or {}
         top_drive = intent.get("drive_key")

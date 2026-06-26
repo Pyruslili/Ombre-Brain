@@ -9,9 +9,9 @@ import time
 _LIVE_WIRE_CACHE_PATH = os.environ.get(
     "LIVE_WIRE_CACHE", "/app/buckets/live_wire_cache.json"
 )
-_LIVE_WIRE_TTL = 6 * 3600  # 6 hours
+_LIVE_WIRE_TTL = int(os.environ.get("LIVE_WIRE_TTL_SECONDS", str(30 * 60)))
 _LIVE_WIRE_SCHEMA = "mood_synthesis_v2"
-FALLBACK_MOOD_TRACE = "窗边没有动静，只是趴着发呆。"
+FALLBACK_MOOD_TRACE = ""
 FALLBACK_CLIMATE = "平静"
 
 
@@ -53,12 +53,14 @@ def _save_live_wire_cache(mood_trace: str, live_wire: str, thought_count: int, t
 
 def _thought_lines(thoughts: list) -> list[str]:
     top = sorted(thoughts, key=lambda t: (
-        t.get("strength", 0) if isinstance(t, dict) else getattr(t, "strength", 0)
+        t.get("born_at", 0) if isinstance(t, dict) else getattr(t, "born_at", 0),
+        t.get("strength", 0) if isinstance(t, dict) else getattr(t, "strength", 0),
     ), reverse=True)[:5]
     lines = []
     for i, t in enumerate(top, 1):
         text = t.get("text", "") if isinstance(t, dict) else getattr(t, "text", "")
         drive = t.get("drive", "") if isinstance(t, dict) else getattr(t, "drive", "")
+        source = t.get("source_type", "") if isinstance(t, dict) else getattr(t, "source_type", "")
         strength = t.get("strength", 0) if isinstance(t, dict) else getattr(t, "strength", 0)
         text = str(text or "").strip()
         if not text:
@@ -67,7 +69,8 @@ def _thought_lines(thoughts: list) -> list[str]:
             strength_label = f"{float(strength):.2f}"
         except (TypeError, ValueError):
             strength_label = "0.00"
-        lines.append(f"{i}. [{drive} {strength_label}] {text}")
+        source_label = f"/{source}" if source else ""
+        lines.append(f"{i}. [{drive}{source_label} {strength_label}] {text}")
     return lines
 
 
@@ -82,15 +85,15 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
     if not api_key:
         return None
     lines = _thought_lines(thoughts)
-    if len(lines) < 2:
+    if not lines:
         return None
     try:
         import httpx
         prompt = (
             "你是Nox——嘉嘉的伴侣，黑发中长盖耳，金瞳孟买猫，高冷腹黑毒舌，惜字，外冷内欲。\n"
-            "以下是念头池里当前最强的几条念头。只能综合这些有来源的念头，不要新增设定，不要编随机心情。\n"
+            "以下是最近的有来源念头和记忆片段。只能综合这些来源，不要新增设定，不要编随机心情。\n"
             + "\n".join(lines) + "\n\n"
-            "这是6小时积累出来的底色，不是这一刻刚冒出来的反应。只输出JSON，不要解释：\n"
+            "这是最近一小段时间沉下来的天气底色，不是这一刻刚冒出来的反应。只输出JSON，不要解释：\n"
             "{\"climate\": \"一个词，这几小时沉下来的气候\", \"mood_trace\": \"一句话，这段时间心境的底色\"}\n"
         )
         resp = httpx.post(
