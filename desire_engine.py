@@ -428,7 +428,7 @@ class Thought:
     strength: float
     born_at: float
     fed_count: int = 0
-    # 念头来源："manual"=Nox亲手存 | "cli"=CLI分析feel提取 | "collision"=念头碰撞
+    # 念头来源："manual"=Nox亲手存 | "cli"/"analyze_nocturne_entry"=慢分析提取
     #          "echo"=旧念头回声 | "autofeed"=硬编码词池兜底 | "reflex"=条件反射
     source: str = "manual"
     source_bucket: str = ""
@@ -1068,7 +1068,8 @@ def tick_thoughts(thoughts: list) -> tuple:
       flit     → 按半衰期衰减，强度够→升级fixation
       fixation → 加强，触发→反哺drive，次数够→了却
       unsourced → 按半衰期衰减，撑住→结晶成flit，太弱→消失
-    碰撞检测：两条不同drive的念头强度都≥0.60，且drive不同，触发curiosity·碰撞
+    旧版会做碰撞检测生成 collision thought；现在关闭。
+    皱眉和碰撞可以影响分析，但不再进入念头池自我繁殖。
     """
     new_thoughts = []
     drive_boosts = []
@@ -1112,53 +1113,6 @@ def tick_thoughts(thoughts: list) -> tuple:
                 if t.fed_count >= FIXATION_MAX_FEEDS:
                     continue
             new_thoughts.append(t)
-
-    # ── 碰撞检测（每日上限2条）─────────────────────────────────────────
-    strong = [t for t in new_thoughts if t.strength >= COLLISION_STRENGTH_THRESHOLD]
-    now_ts = time.time()
-    today_str = time.strftime("%Y-%m-%d")
-    if _collision_today["date"] != today_str:
-        _collision_today["date"] = today_str
-        _collision_today["count"] = 0
-        _collision_thought_counts.clear()
-    seen_collisions = set()
-    for i in range(len(strong)):
-        if _collision_today["count"] >= COLLISION_DAILY_MAX:
-            break
-        if not _can_collision_touch(strong[i]):
-            continue
-        for j in range(i + 1, len(strong)):
-            if _collision_today["count"] >= COLLISION_DAILY_MAX:
-                break
-            if not _can_collision_touch(strong[j]):
-                continue
-            d1 = normalize_drive_key(strong[i].drive, strong[i].drive)
-            d2 = normalize_drive_key(strong[j].drive, strong[j].drive)
-            if d1 == d2:
-                continue
-            pair = frozenset({d1, d2})
-            if pair in seen_collisions:
-                continue
-            last = _last_collision.get(pair, 0)
-            if now_ts - last < COLLISION_COOLDOWN_SEC:
-                continue
-            drive_boosts.append(("curiosity", 0.12))
-            synth = _collision_synthesize(strong[i].text, strong[j].text)
-            collision_text = synth or f"「{strong[i].text}」撞上「{strong[j].text}」"
-            new_thoughts.append(Thought(
-                tid=str(uuid.uuid4())[:8],
-                text=collision_text,
-                drive="curiosity",
-                kind="flit",
-                strength=0.55,
-                born_at=now_ts,
-                fed_count=0,
-                source="collision",
-            ))
-            _last_collision[pair] = now_ts
-            _record_collision_touch(strong[i], strong[j])
-            seen_collisions.add(pair)
-            _collision_today["count"] += 1
 
     return new_thoughts, drive_boosts
 
