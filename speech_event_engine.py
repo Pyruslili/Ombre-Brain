@@ -191,6 +191,7 @@ def build_speech_event(
     event = {
         "event_id": event_id or _event_id(text),
         "rubric_version": RUBRIC_VERSION,
+        "text_role": (previous or {}).get("text_role", ""),
         "source": source,
         "status": status or ("dp_refined" if source == "dp" else "pending_dp"),
         "label": label,

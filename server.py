@@ -3715,7 +3715,10 @@ async def api_speech_event_submit(request):
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
     prompt = (body.get("prompt") or body.get("text") or "").strip()
-    event = normalize_speech_event(body.get("event"), prompt)
+    raw_event = body.get("event")
+    if isinstance(raw_event, dict) and body.get("text_role"):
+        raw_event = {**raw_event, "text_role": str(body.get("text_role") or "").strip()[:40]}
+    event = normalize_speech_event(raw_event, prompt)
     if not prompt and not event.get("text_preview"):
         return JSONResponse({"error": "prompt required"}, status_code=400,
                            headers={"Access-Control-Allow-Origin": "*"})
