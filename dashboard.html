@@ -2233,6 +2233,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <div class="drift-weather-line"><span>Climate</span><strong id="desire-now">—</strong></div>
       <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
+      <div class="drift-weather-trace" id="desire-chord-flow-wrap" style="display:none"><span>Chord Flow</span><div id="desire-chord-flow"></div></div>
     </div>
       <div class="drift-card">
         <div class="drift-card-label">Drives</div>
@@ -2805,10 +2806,12 @@ async function loadDesire(button) {
     document.getElementById('desire-longing').textContent = longingNow.toFixed(2);
     document.getElementById('desire-longing-current').textContent = longingNow.toFixed(2);
     setWeatherProgress('longing', longingNow);
-    document.getElementById('desire-current-chord').textContent = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
+    const currentChord = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
+    document.getElementById('desire-current-chord').textContent = currentChord;
     document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSomaTrace(soma);
+    renderChordFlow(weather, currentChord);
     renderDiscernment(d.discernment);
     renderDriveEvents(driveEvents);
 
@@ -2847,6 +2850,8 @@ async function loadDesire(button) {
   } catch(e) {
     document.getElementById('desire-undertow').textContent = 'Out of reach';
     document.getElementById('desire-mood-trace').textContent = 'The drift is out of reach.';
+    renderSomaTrace(null);
+    renderChordFlow({}, '');
     const driveEventsEl = document.getElementById('desire-drive-events');
     if (driveEventsEl) driveEventsEl.innerHTML = '<span class="drive-event-empty">The ledger is out of reach.</span>';
   } finally {
@@ -2877,6 +2882,21 @@ function renderSomaTrace(soma) {
   }
   const chord = String(soma?.chord || '').trim();
   target.textContent = chord ? `${chord} · ${line}` : line;
+  wrap.style.display = '';
+}
+
+function renderChordFlow(weather, currentChord) {
+  const wrap = document.getElementById('desire-chord-flow-wrap');
+  const target = document.getElementById('desire-chord-flow');
+  if (!wrap || !target) return;
+  const active = String(weather?.active_chord || '').trim();
+  const current = String(currentChord || weather?.current_chord || '').trim();
+  if (!active || !current || active === current) {
+    wrap.style.display = 'none';
+    target.textContent = '';
+    return;
+  }
+  target.textContent = `${active} → ${current}`;
   wrap.style.display = '';
 }
 

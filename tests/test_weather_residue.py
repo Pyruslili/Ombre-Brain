@@ -20,9 +20,26 @@ def test_chord_echo_routes_by_source_and_chord(tmp_path):
     shadow = engine.apply_chord_echo("Dm7", source="thought")
 
     assert warm["kind"] == "warmth"
+    assert warm["active_chord"] == "Fmaj7"
+    assert warm["active_chord_source"] == "feel"
     assert warm["warmth_residue"] > 0
     assert shadow["kind"] == "shadow"
+    assert shadow["active_chord"] == "Dm7"
+    assert shadow["active_chord_source"] == "thought"
     assert shadow["shadow_residue"] > 0
+
+
+def test_soma_chord_is_short_strong_weather_impulse(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+
+    result = engine.apply_chord_echo("Gmaj7", source="soma")
+    weather = engine.weather_state()
+
+    assert result["kind"] == "warmth"
+    assert result["warmth_residue"] == 0.08
+    assert weather["active_chord"] == "Gmaj7"
+    assert weather["active_chord_source"] == "soma"
+    assert weather["current_chord"] in {"Gmaj7", "Fmaj7"}
 
 
 def test_soothe_needs_shadow_context(tmp_path):

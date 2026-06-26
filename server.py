@@ -164,6 +164,14 @@ def _speech_event_context_snapshot() -> dict:
     }
 
 
+def _weather_chord_display(weather: dict) -> str:
+    current = str((weather or {}).get("current_chord") or "").strip()
+    active = str((weather or {}).get("active_chord") or "").strip()
+    if active and current and active != current:
+        return f"{active}→{current}"
+    return current or active
+
+
 async def _refine_speech_event_background(prompt: str, event_id: str, fallback_event: dict) -> None:
     """Async DP refinement. It may update speech_event_state, but never the hook response."""
     try:
@@ -1909,7 +1917,7 @@ async def nocturne_breath(
             weather = _dstate.get("effective_pa_na") or _desire.weather_state()
             warmth = float(weather.get("effective_PA", live.get("PA", 0.5)))
             shadow = float(weather.get("effective_NA", live.get("NA", 0.2)))
-            current_chord = weather.get("current_chord") or ""
+            current_chord = _weather_chord_display(weather)
 
             top_drive = (_dstate.get("intent") or {}).get("drive_key")
             if not top_drive:
@@ -1941,8 +1949,9 @@ async def nocturne_breath(
                 lines.append(f"Mood Trace：{mood_trace}")
             soma = _fresh_soma_state()
             soma_line = str(soma.get("line") or "").strip()
+            soma_chord = str(soma.get("chord") or "").strip()
             if soma_line:
-                lines.append(f"Soma Trace：{soma_line}")
+                lines.append(f"Soma Trace：{soma_chord + ' · ' if soma_chord else ''}{soma_line}")
             if current_chord:
                 lines.append(f"Current Chord：{current_chord}")
 
@@ -2126,6 +2135,7 @@ def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "", chord: 
     drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress
     thought: 可选，把这次经历的一句话存入念头池（flit）
     chord: 可选，把这次念头的和弦回声写入weather_residue（Fmaj7/Gmaj7/Dmaj7→warmth，Dm7/Em7/F#dim→shadow）
+    speech/DP chord_hint暂不接入天气；Soma触碰由/api/soma/report以source=soma写入短时余波。
     """
     result = _desire.pulse(drive_key, delta, chord=chord.strip())
     if thought.strip():
@@ -3809,6 +3819,8 @@ async def api_desire_state(request):
             "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
             "base_shadow": round(float(weather.get("base_NA", 0.0)), 3),
             "updated_at": weather.get("updated_at"),
+            "active_chord": weather.get("active_chord", ""),
+            "active_chord_source": weather.get("active_chord_source", ""),
         }
         state["pulse_weather"] = {
             "undertow": top_drive,
@@ -3816,6 +3828,9 @@ async def api_desire_state(request):
             "warmth": round(warmth, 3),
             "shadow": round(shadow, 3),
             "current_chord": weather.get("current_chord", ""),
+            "active_chord": weather.get("active_chord", ""),
+            "active_chord_source": weather.get("active_chord_source", ""),
+            "chord_display": _weather_chord_display(weather),
             "warmth_residue": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(weather.get("shadow_residue", 0.0)), 3),
             "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
@@ -4381,6 +4396,8 @@ async def api_soma_report(request):
         os.makedirs(os.path.dirname(_SOMA_STATE_PATH), exist_ok=True)
         with open(_SOMA_STATE_PATH, "w") as f:
             json.dump({"line": line, "chord": chord, "source": source, "updated_at": time.time()}, f)
+        if chord:
+            _desire.apply_chord_echo(chord, source="soma")
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     return JSONResponse({"ok": True}, headers={"Access-Control-Allow-Origin": "*"})

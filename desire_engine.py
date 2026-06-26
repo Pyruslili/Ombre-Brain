@@ -255,12 +255,14 @@ LONGING_FEELINGS = {
 # 独立持久化的PA/NA余波；只叠到展示，不反推drive。
 WEATHER_COMPONENTS = {
     "keyword": {"halflife_hours": 4.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
+    "soma": {"halflife_hours": 0.75, "warmth_cap": 0.16, "shadow_cap": 0.16},
     "thought": {"halflife_hours": 8.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
     "feel": {"halflife_hours": 72.0, "warmth_cap": 0.35, "shadow_cap": 0.35},
 }
 WEATHER_WARM_CHORDS = {"Fmaj7", "Gmaj7", "Dmaj7"}
 WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim"}
-WEATHER_CHORD_DELTAS = {"feel": 0.075, "thought": 0.035}
+WEATHER_CHORD_DELTAS = {"feel": 0.075, "soma": 0.08, "thought": 0.035}
+WEATHER_ACTIVE_CHORD_TTL_SEC = {"feel": 12 * 3600, "soma": 45 * 60, "thought": 4 * 3600}
 WEATHER_SOOTHE_SHADOW_THRESHOLD = 0.08
 WEATHER_RECENT_LOW_CHORD_SEC = 3 * 3600
 WEATHER_SOOTHE_DURATION_SEC = 30 * 60
@@ -592,6 +594,9 @@ def _weather_default_state(now: float = None) -> dict:
         },
         "last_low_chord_at": 0.0,
         "soothe_until": 0.0,
+        "active_chord": "",
+        "active_chord_source": "",
+        "active_chord_at": 0.0,
     }
 
 
@@ -627,6 +632,21 @@ def current_weather_chord(warmth: float, shadow: float) -> str:
     if shadow > warmth:
         return "Dm7" if shadow > 0.5 else "Em7"
     return "Fmaj7" if warmth > 0.5 else "Gmaj7"
+
+
+def _active_weather_chord(state: dict, now: float = None) -> dict:
+    now = now if now is not None else time.time()
+    chord = _normalize_chord(state.get("active_chord", ""))
+    source = str(state.get("active_chord_source") or "").strip()
+    updated_at = float(state.get("active_chord_at", 0.0) or 0.0)
+    ttl = WEATHER_ACTIVE_CHORD_TTL_SEC.get(source, 0)
+    if not chord or not source or not updated_at or not ttl or now - updated_at > ttl:
+        return {"active_chord": "", "active_chord_source": "", "active_chord_age_sec": None}
+    return {
+        "active_chord": chord,
+        "active_chord_source": source,
+        "active_chord_age_sec": round(max(0.0, now - updated_at), 3),
+    }
 
 
 def _decay_weather_value(value: float, elapsed: float, halflife_hours: float,
@@ -728,7 +748,7 @@ class WeatherResidueStore:
         kind = weather_chord_kind(chord)
         if not kind:
             return self.load(now, decay=True)
-        source = source if source in ("feel", "thought") else "thought"
+        source = source if source in ("feel", "soma", "thought") else "thought"
         delta = WEATHER_CHORD_DELTAS[source]
         warmth_delta = delta if kind == "warmth" else 0.0
         shadow_delta = delta if kind == "shadow" else 0.0
@@ -740,7 +760,10 @@ class WeatherResidueStore:
         )
         if kind == "shadow":
             state["last_low_chord_at"] = now if now is not None else time.time()
-            state = self.save(state)
+        state["active_chord"] = _normalize_chord(chord)
+        state["active_chord_source"] = source
+        state["active_chord_at"] = now if now is not None else time.time()
+        state = self.save(state)
         return state
 
     def _decay(self, state: dict, now: float) -> dict:
@@ -2282,6 +2305,7 @@ class DesireEngine:
             "effective_PA": round(effective_pa, 3),
             "effective_NA": round(effective_na, 3),
             "current_chord": current_weather_chord(effective_pa, effective_na),
+            **_active_weather_chord(residue, now),
             "warmth_residue": round(float(residue.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(residue.get("shadow_residue", 0.0)), 3),
             "updated_at": residue.get("updated_at"),
@@ -2304,11 +2328,13 @@ class DesireEngine:
         }
 
     def apply_chord_echo(self, chord: str, source: str = "thought") -> dict:
+        source = source if source in ("feel", "soma", "thought") else "thought"
         state = self.weather.apply_chord(chord, source=source)
         return {
             "chord": _normalize_chord(chord),
             "kind": weather_chord_kind(chord),
             "source": source,
+            **_active_weather_chord(state),
             "warmth_residue": round(float(state.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(state.get("shadow_residue", 0.0)), 3),
         }
