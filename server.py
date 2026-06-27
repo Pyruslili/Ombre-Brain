@@ -200,6 +200,114 @@ def _weather_chord_display(weather: dict) -> str:
     return current or active
 
 
+def _short_state_text(value: object, limit: int = 160) -> str:
+    text = str(value or "").strip().replace("\n", " ")
+    return text[:limit]
+
+
+def _compact_desire_state(state: dict) -> dict:
+    """MCP readout for Claude: dashboard state is too large for tool context."""
+    state = state if isinstance(state, dict) else {}
+    weather = state.get("pulse_weather") if isinstance(state.get("pulse_weather"), dict) else {}
+    effective = state.get("effective_pa_na") if isinstance(state.get("effective_pa_na"), dict) else {}
+    intent = state.get("intent") if isinstance(state.get("intent"), dict) else None
+    thoughts = state.get("thoughts") if isinstance(state.get("thoughts"), list) else []
+    drive_events = state.get("drive_events") if isinstance(state.get("drive_events"), list) else []
+    speech_event = state.get("speech_event") if isinstance(state.get("speech_event"), dict) else {}
+    dialogue = state.get("dialogue_residue") if isinstance(state.get("dialogue_residue"), dict) else {}
+
+    def _compact_thought(t: dict) -> dict:
+        return {
+            "tid": t.get("tid"),
+            "drive": t.get("drive"),
+            "kind": t.get("kind"),
+            "strength": t.get("strength"),
+            "source": t.get("source"),
+            "text": _short_state_text(t.get("text"), 140),
+        }
+
+    def _compact_event(e: dict) -> dict:
+        brain = e.get("brain") if isinstance(e.get("brain"), dict) else {}
+        return {
+            "source": e.get("source") or brain.get("source"),
+            "primary_drive": e.get("primary_drive"),
+            "event_label": e.get("event_label"),
+            "intensity": e.get("intensity"),
+            "confidence": e.get("confidence"),
+            "agency": e.get("agency"),
+            "applied": e.get("applied"),
+            "suppressed": e.get("suppressed", False),
+            "brain": {
+                k: brain.get(k)
+                for k in (
+                    "target",
+                    "time_mode",
+                    "grounding",
+                    "anchor_target",
+                    "release_pressure",
+                    "closeness_pull",
+                    "inward_pull",
+                    "novelty_pull",
+                    "expression_pressure",
+                    "tension_load",
+                    "discernment_alarm",
+                )
+                if brain.get(k) not in (None, "", [], {})
+            },
+            "evidence": [_short_state_text(x, 120) for x in (e.get("evidence") or [])[:2]],
+        }
+
+    compact_intent = None
+    if intent:
+        compact_intent = {
+            "drive_key": intent.get("drive_key"),
+            "want_action": intent.get("want_action"),
+            "score": intent.get("score"),
+            "thought": _short_state_text(intent.get("thought_text") or intent.get("thought"), 160),
+        }
+
+    return {
+        "drives": state.get("drives", {}),
+        "effective_drives": state.get("effective_drives", {}),
+        "local_fatigue": state.get("local_fatigue", {}),
+        "drive_outputs": state.get("drive_outputs", {}),
+        "discernment": state.get("discernment", {}),
+        "intent": compact_intent,
+        "pulse_weather": {
+            "undertow": weather.get("undertow"),
+            "undertow_value": weather.get("undertow_value"),
+            "warmth": weather.get("warmth"),
+            "shadow": weather.get("shadow"),
+            "climate": weather.get("climate"),
+            "mood_trace": _short_state_text(weather.get("mood_trace"), 160),
+            "current_chord": weather.get("current_chord"),
+            "chord_display": weather.get("chord_display") or _weather_chord_display(effective),
+            "gravity": _short_state_text(weather.get("gravity") or weather.get("gravity_line"), 160),
+        },
+        "speech_event": {
+            "label": speech_event.get("label"),
+            "confidence": speech_event.get("confidence"),
+            "intensity": speech_event.get("intensity"),
+            "trace": _short_state_text(speech_event.get("trace_line"), 140),
+            "recent": speech_event.get("recent"),
+        } if speech_event else {},
+        "dialogue_residue": {
+            "status": dialogue.get("status"),
+            "primary_drive": dialogue.get("primary_drive"),
+            "intensity": dialogue.get("intensity"),
+            "confidence": dialogue.get("confidence"),
+            "event_label": dialogue.get("event_label"),
+        } if dialogue else {},
+        "recent_thoughts": [_compact_thought(t) for t in thoughts[:8] if isinstance(t, dict)],
+        "recent_drive_events": [_compact_event(e) for e in drive_events[:5] if isinstance(e, dict)],
+        "recent_refusals": state.get("recent_refusals", []),
+        "counts": {
+            "thoughts": len(thoughts),
+            "drive_events_in_state": len(drive_events),
+        },
+    }
+
+
 async def _refine_speech_batch_background(items: list[dict]) -> None:
     """Analyze a small batch of Jiajia messages; this is the route that affects Drive/PA/NA."""
     try:
@@ -2213,17 +2321,17 @@ async def nocturne_breath(
 @mcp.tool()
 def desire_state() -> dict:
     """
-    读取欲望引擎的当前状态：
+    读取欲望引擎的当前轻量状态：
     - 9维驱动条（attachment/libido/possessiveness/reflection/stewardship/curiosity/social/fatigue/stress）
     - discernment皱眉层（全局修正/读出，不是普通drive）
     - per-drive局部疲劳（attachment/libido几乎不受疲劳影响）
     - 当前最高意图（want_action + drive_key + score）
-    - 念头池（flit/fixation/unsourced）
+    - 最近少量念头摘要（不是完整念头池）
     - 最近的拒绝记录
     用于了解「此刻我最想做什么」。
     """
     _desire.tick(idle_seconds=0)
-    return _desire.state()
+    return _compact_desire_state(_desire.state())
 
 
 @mcp.tool()
