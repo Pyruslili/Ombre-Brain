@@ -1062,9 +1062,13 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
     if event_core:
         event_weight = 0.30
         for key in ("charge", "clutch", "strain"):
+            baseline_value = baseline_core.get(key, 0.0)
+            event_value = float(event_core.get(key, 0.0) or 0.0)
+            if event_value <= baseline_value:
+                core[key] = baseline_value
+                continue
             core[key] = round(_clamp(
-                baseline_core.get(key, 0.0) * (1.0 - event_weight)
-                + float(event_core.get(key, 0.0) or 0.0) * event_weight
+                baseline_value * (1.0 - event_weight) + event_value * event_weight
             ), 3)
     if event_route:
         event_vector = str(event_route.get("vector") or "").strip()

@@ -253,6 +253,26 @@ def test_drive_event_brain_tints_chord_chemistry_without_changing_chord():
     assert chemistry["situation"] in {"scout", "spark"}
 
 
+def test_drive_event_tint_does_not_dampen_baseline_chemistry():
+    drives = {**DRIVE_BASELINES, "curiosity": 0.62, "social": 0.50}
+    baseline = chord_chemistry_snapshot(drives, warmth=0.60, shadow=0.18, now=1000)
+    weak_tint = chord_event_tint_from_drive_events([
+        {
+            "id": 8,
+            "source": "speech_event",
+            "event_label": "old_speech_event",
+            "suppressed": False,
+            "brain": {"expression_pressure": 0.05, "closeness_pull": 0.02},
+        }
+    ])
+    tinted = chord_chemistry_snapshot(
+        drives, warmth=0.60, shadow=0.18, event_tint=weak_tint, now=1000
+    )
+
+    for key in ("charge", "clutch", "strain"):
+        assert tinted["core"][key] >= baseline["core"][key]
+
+
 def test_soothe_needs_shadow_context(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 
