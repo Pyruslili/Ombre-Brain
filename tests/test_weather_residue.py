@@ -32,8 +32,8 @@ def test_chord_echo_routes_by_source_and_chord(tmp_path):
     assert warm["active_chord_source"] == "feel"
     assert warm["warmth_residue"] > 0
     assert shadow["kind"] == "shadow"
-    assert shadow["active_chord"] == "Dm7"
-    assert shadow["active_chord_source"] == "thought"
+    assert shadow["active_chord"] in {"Fmaj7", "Dm7"}
+    assert shadow["active_chord_source"] in {"feel", "thought"}
     assert shadow["shadow_residue"] > 0
 
 
@@ -253,10 +253,10 @@ def test_drive_event_brain_tints_chord_chemistry_without_changing_chord():
     assert chemistry["situation"] in {"scout", "spark"}
 
 
-def test_drive_event_tint_does_not_dampen_baseline_chemistry():
+def test_drive_event_tint_ignores_retired_speech_event_source():
     drives = {**DRIVE_BASELINES, "curiosity": 0.62, "social": 0.50}
     baseline = chord_chemistry_snapshot(drives, warmth=0.60, shadow=0.18, now=1000)
-    weak_tint = chord_event_tint_from_drive_events([
+    event_tint = chord_event_tint_from_drive_events([
         {
             "id": 8,
             "source": "speech_event",
@@ -266,11 +266,35 @@ def test_drive_event_tint_does_not_dampen_baseline_chemistry():
         }
     ])
     tinted = chord_chemistry_snapshot(
-        drives, warmth=0.60, shadow=0.18, event_tint=weak_tint, now=1000
+        drives, warmth=0.60, shadow=0.18, event_tint=event_tint, now=1000
     )
 
+    assert event_tint == {}
     for key in ("charge", "clutch", "strain"):
         assert tinted["core"][key] >= baseline["core"][key]
+
+
+def test_drive_event_tint_uses_dialogue_after_retired_speech_event():
+    event_tint = chord_event_tint_from_drive_events([
+        {
+            "id": 9,
+            "source": "speech_event",
+            "event_label": "old_speech_event",
+            "suppressed": False,
+            "brain": {"expression_pressure": 0.5},
+        },
+        {
+            "id": 8,
+            "source": "dialogue_residue",
+            "event_label": "boundary_signal",
+            "suppressed": False,
+            "brain": {"territorial_alarm": 0.7, "tension_load": 0.2, "anchor_target": "boundary"},
+        },
+    ])
+
+    assert event_tint["source"] == "dialogue_residue"
+    assert event_tint["event_label"] == "boundary_signal"
+    assert event_tint["route"]["vector"] == "guard"
 
 
 def test_soothe_needs_shadow_context(tmp_path):

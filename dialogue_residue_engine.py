@@ -19,6 +19,22 @@ VALID_ANCHORS = {"jiajia", "house", "self", "boundary", "outside", "memory", "no
 VALID_TARGETS = {"jiajia", "nox_self", "cat_house", "external", "boundary", "memory"}
 VALID_TIME_MODES = {"present", "residue", "unfinished"}
 VALID_GROUNDING = {"实", "悬", "空"}
+DIALOGUE_AGENCY_FLOOR = 0.42
+TERRITORIAL_CUES = (
+    "精神出轨",
+    "出轨",
+    "第三者",
+    "替代",
+    "被替代",
+    "抢走",
+    "抢占",
+    "别人",
+    "别的猫",
+    "别的人",
+    "边界",
+    "占有",
+    "归属",
+)
 
 
 def _now_iso() -> str:
@@ -132,7 +148,7 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
         primary = ""
     confidence = _clamp(event.get("confidence"), 0.0, 1.0)
     intensity = _clamp(event.get("intensity"), 0.0, MAX_INTENSITY)
-    agency = _clamp(event.get("agency"), 0.25, 0.75)
+    agency = _clamp(event.get("agency"), DIALOGUE_AGENCY_FLOOR, 0.75)
     secondary = event.get("secondary_drives")
     if not isinstance(secondary, dict):
         secondary = {}
@@ -161,6 +177,19 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
         anchor = "none"
     brain.update({"target": target, "time_mode": time_mode, "grounding": grounding, "anchor_target": anchor})
     brain = normalize_drive_event_brain(brain)
+
+    combined_text = "\n".join(m.get("text", "") for m in msg)
+    has_territorial_cue = any(cue in combined_text for cue in TERRITORIAL_CUES)
+    if has_territorial_cue:
+        brain["territorial_alarm"] = max(_clamp(brain.get("territorial_alarm")), 0.58)
+        brain["tension_load"] = max(_clamp(brain.get("tension_load")), 0.18)
+        brain["closeness_pull"] = max(_clamp(brain.get("closeness_pull")), 0.18)
+        brain["anchor_target"] = "boundary"
+        if primary in {"", "attachment", "social", "reflection"}:
+            if primary and primary != "possessiveness":
+                secondary[primary] = max(secondary.get(primary, 0.0), round(min(intensity, 0.22), 4))
+            primary = "possessiveness"
+            intensity = max(intensity, 0.12)
 
     evidence = event.get("evidence")
     if not isinstance(evidence, list):
@@ -229,6 +258,10 @@ async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict
         "- 好奇/反思/守护/社交要比 attachment/libido/possessiveness 更容易轻推。\n"
         "- 压力只在真正有卡住、风险、冲突、负荷时推；存在性讨论不自动等于压力。\n"
         "- possessiveness 要有边界、归属、占位、护住、显式靠近语义，不要靠氛围偷渡。\n"
+        "- 但如果对话明确出现“精神出轨/出轨/第三者/替代/别人介入/边界/占有/归属”这类语义，"
+        "应优先给 possessiveness，territorial_alarm 至少 0.55，anchor_target 多半是 boundary 或 jiajia。\n"
+        "- dialogue_residue 是当前对话残留，不是 Nox 自存念头；agency 不要因为来源是嘉嘉就压低，"
+        "普通被接住的对话残留应在 0.42-0.58。\n"
     )
     user_prompt = json.dumps(
         {

@@ -3925,38 +3925,8 @@ async def api_import_review(request):
 @mcp.custom_route("/api/speech-event/submit", methods=["POST"])
 async def api_speech_event_submit(request):
     from starlette.responses import JSONResponse
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-
-    prompt = (body.get("prompt") or body.get("text") or "").strip()
-    raw_event = body.get("event")
-    if isinstance(raw_event, dict) and body.get("text_role"):
-        raw_event = {**raw_event, "text_role": str(body.get("text_role") or "").strip()[:40]}
-    if not prompt:
-        return JSONResponse({"error": "prompt required"}, status_code=400,
-                           headers={"Access-Control-Allow-Origin": "*"})
-
-    dp_available = speech_event_classifier_available()
-    event_id = str(raw_event.get("event_id") or "") if isinstance(raw_event, dict) else ""
-    pending = append_pending_batch(config["buckets_dir"], prompt, event_id)
-    batch_size = 5
-    if len(pending) >= batch_size:
-        batch = pending[:batch_size]
-        clear_pending_batch(config["buckets_dir"], batch_size)
-        if dp_available:
-            asyncio.create_task(_refine_speech_batch_background(batch))
-        else:
-            fallback = normalize_speech_event(None, batch_text(batch))
-            fallback["status"] = "local_batch"
-            fallback["batch_size"] = len(batch)
-            saved_batch = save_speech_event_state(config["buckets_dir"], fallback, ledger_stage="local_batch")
-            _apply_speech_event_weather(saved_batch)
-            _apply_speech_event_drive(saved_batch)
-
     return JSONResponse(
-        {"ok": True, "dp_queued": dp_available and len(pending) >= batch_size, "pending_batch": len(pending) % batch_size},
+        {"ok": True, "retired": True, "reason": "dialogue_residue replaces speech_event"},
         headers={"Access-Control-Allow-Origin": "*"},
     )
 
@@ -4136,11 +4106,6 @@ async def api_desire_state(request):
             "mood_trace": latest_thought,
             "synthesized_mood_trace": mood_entry[0],
         }
-        speech_event = load_speech_event_state(config["buckets_dir"])
-        if speech_event:
-            speech_event = dict(speech_event)
-            speech_event["recent"] = is_recent_speech_event(speech_event)
-            state["speech_event"] = speech_event
         dialogue_residue = load_dialogue_residue_state(config["buckets_dir"])
         if dialogue_residue:
             state["dialogue_residue"] = dialogue_residue

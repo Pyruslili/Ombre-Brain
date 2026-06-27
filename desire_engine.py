@@ -896,6 +896,8 @@ def chord_event_tint_from_drive_events(events: list | None) -> dict:
     for item in events:
         if not isinstance(item, dict) or item.get("suppressed"):
             continue
+        if str(item.get("source") or "").strip() == "speech_event":
+            continue
         brain = item.get("brain")
         if isinstance(brain, dict) and brain:
             event = item

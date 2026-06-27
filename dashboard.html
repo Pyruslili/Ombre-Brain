@@ -2822,7 +2822,6 @@ async function loadDesire(button) {
 
     const weather = d.pulse_weather || {};
     const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
-    const speechEvent = d.speech_event || {};
     const latestTrace = latestThought || weather.mood_trace || d.mood_trace || '';
     const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
     const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
@@ -2847,7 +2846,7 @@ async function loadDesire(button) {
     renderChordChemistry(weather);
     document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
-    renderSpeechTrace(speechEvent);
+    renderSpeechTrace({});
     renderSomaTrace(soma);
     renderDiscernment(d.discernment);
     renderDriveEvents(driveEvents);
