@@ -2681,6 +2681,14 @@ class DesireEngine:
             brain["reflection_mode"] = "forward_archival"
             brain["forward_archival"] = forward_archival
 
+        reflective_self_inquiry = (
+            source == "analyze_nocturne_entry"
+            and primary == "reflection"
+            and str(brain.get("target") or "").strip() == "nox_self"
+            and _feature_value(brain, "inward_pull") >= 0.55
+            and _feature_value(brain, "territorial_alarm") < 0.25
+        )
+
         proposed: dict[str, float] = {}
         suppressed_reasons: list[str] = []
         if primary:
@@ -2700,6 +2708,10 @@ class DesireEngine:
 
         for feature, (drive_key, weight, threshold) in DRIVE_EVENT_BRAIN_FEATURES.items():
             value = _feature_value(brain, feature)
+            if reflective_self_inquiry and feature == "tension_load":
+                value = min(value, 0.18)
+            elif reflective_self_inquiry and feature == "closeness_pull":
+                value = min(value, 0.10)
             if value <= 0 or value < threshold:
                 continue
             proposed[drive_key] = proposed.get(drive_key, 0.0) + (
@@ -2708,7 +2720,11 @@ class DesireEngine:
 
         grounding = str(brain.get("grounding") or "").strip()
         if grounding == "悬":
-            proposed["stress"] = proposed.get("stress", 0.0) + 0.025 * confidence * source_weight
+            if reflective_self_inquiry:
+                if _feature_value(brain, "tension_load") >= 0.65:
+                    proposed["stress"] = proposed.get("stress", 0.0) + 0.010 * confidence * source_weight
+            else:
+                proposed["stress"] = proposed.get("stress", 0.0) + 0.025 * confidence * source_weight
             proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * source_weight
         elif grounding == "空":
             proposed["stress"] = proposed.get("stress", 0.0) + 0.035 * confidence * source_weight

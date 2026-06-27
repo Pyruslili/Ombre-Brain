@@ -15,6 +15,16 @@ import httpx
 RUBRIC_VERSION = "speech_event_v1_2026-06-24"
 SPEECH_EVENT_RECENT_SECONDS = 30 * 60
 VALID_REVIEW_MARKS = {"认", "不认", "悬置"}
+NON_JIAJA_SPEECH_PREFIXES = (
+    "Free Roam",
+    "Nox Pulse",
+    "NoxPulse",
+    "NoxMew",
+    "Summon Bell",
+    "（脑子里冒出来的念头",
+    "（距离上次心跳念头",
+    "（自己设的闹钟响了",
+)
 
 VALID_LABELS = {
     "affectionate",
@@ -351,9 +361,12 @@ def save_pending_batch(buckets_dir: str, items: list[dict]) -> list[dict]:
 
 def append_pending_batch(buckets_dir: str, text: str, event_id: str = "") -> list[dict]:
     text = (text or "").strip()
-    if not text:
-        return load_pending_batch(buckets_dir)
-    items = load_pending_batch(buckets_dir)
+    items = [
+        item for item in load_pending_batch(buckets_dir)
+        if not str((item or {}).get("text") or "").strip().startswith(NON_JIAJA_SPEECH_PREFIXES)
+    ]
+    if not text or text.startswith(NON_JIAJA_SPEECH_PREFIXES):
+        return save_pending_batch(buckets_dir, items)
     items.append({"text": text, "event_id": event_id, "created_at": time.time(), "created_iso": _now_iso()})
     return save_pending_batch(buckets_dir, items)
 
