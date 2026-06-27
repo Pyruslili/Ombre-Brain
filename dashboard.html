@@ -3210,7 +3210,7 @@ function renderThoughtRow(t) {
     <span class="thought-text">${esc(text)}</span>
     <span class="thought-side">
       <span class="thought-meta">${esc(drive)} · ${Math.round(strength * 100)}%</span>
-      ${tid ? `<span class="thought-actions"><button onclick="startThoughtEdit('${esc(tid)}')">编辑</button><button class="danger" onclick="deleteThought('${esc(tid)}')">删除</button></span>` : ''}
+      ${tid ? `<span class="thought-actions"><button onclick="copyThoughtToLatent('${esc(tid)}')">入潜流</button><button onclick="startThoughtEdit('${esc(tid)}')">编辑</button><button class="danger" onclick="deleteThought('${esc(tid)}')">删除</button></span>` : ''}
     </span>
   </div>`;
 }
@@ -3264,6 +3264,33 @@ async function deleteThought(tid) {
   }
   editingThoughtId = null;
   await loadDesire();
+}
+
+async function copyThoughtToLatent(tid) {
+  const thought = (desireThoughts || []).find(t => String(t.tid || '') === String(tid || ''));
+  if (!thought) return alert('找不到这条念头');
+  const text = String(thought.text || '').trim();
+  if (!text) return alert('这条念头是空的');
+  const drive = String(thought.drive || '').trim();
+  const res = await fetch(BASE + '/api/latent-notes', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      dream_line: text,
+      status: 'draft',
+      note_type: drive === 'social' || drive === 'curiosity' ? 'outward' : 'inward',
+      drive_tag: drive,
+      source_kind: 'thought_pool',
+      source_title: 'Thought Pool',
+      source_fragment: text
+    })
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    return alert('入潜流失败：' + (error.error || res.status));
+  }
+  await loadLatentNotes();
 }
 
 function echoUrl(path) {
