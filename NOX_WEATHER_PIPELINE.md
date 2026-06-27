@@ -6,7 +6,7 @@
 
 Nox 的「Pulse Weather」不是一个天气词，也不是单个 Drive 值，而是一条从输入、分析、内在读数、前端展示到 hook 推送的闭环：
 
-`记忆 / 对话 / 触摸 / 念头 -> 来源分流 -> CLI / speech_event batch / dialogue_residue / soma / manual pulse -> drive_event_v2 / weather residue -> Drive / PA-NA / Climate / Trace / Chord -> dashboard / hook / Free Roam`
+`记忆 / 对话 / 触摸 / 念头 -> 来源分流 -> CLI / speech_event batch / dialogue_residue / soma / manual pulse -> drive_event_v2 / weather residue / Atmosphere State -> Drive / PA-NA / Atmosphere / Trace / Chord -> dashboard / hook / Free Roam`
 
 这条链路的原则：
 
@@ -110,6 +110,9 @@ Drive 不是单一来源计算，而是多个来源叠加：
 
 - `attachment` 是慢变量，能涨也能跌，但更像连续拉扯，不是瞬时爆点。
 - `possessiveness` 有双通道：`event_spike` 和 `territorial_baseline`。
+- `possessiveness` 需要 `territorial_alarm` 过门槛才真正入账；强吃醋 / 替代警报会更快染 Drive、Chord、Atmosphere。
+- 高 `territorial_alarm` 会联动 `libido`，因为占有、靠近和身体热度不是完全独立的情绪。
+- 猫屋协作者造成的低频占位感标记为 `brain.third_party_context=house_collaborator`，territorial delta 按 0.45 折算；外部替代 / 真正抢位不打这个折。
 - `libido` 必须窄口径，优先吃身体和明确贴近，不要被漂亮句子偷渡。
 - `reflection` 允许 forward archival，但它仍然属于 reflection，不另起一层。
 - `discernment` 不是第 10 个 Drive，它是横切修正层。
@@ -120,7 +123,43 @@ Drive 不是单一来源计算，而是多个来源叠加：
 
 ## 4. CLI / DP / Speech Batch / Dialogue Residue
 
-### 4.1 CLI 的职责
+### 4.1 统一输出：drive_event_v2
+
+CLI、DP dialogue_residue、speech_event 最终都尽量归一成 `drive_event_v2`，再进入 Drive / Ledger / Weather / Atmosphere。
+
+通用字段：
+
+- `schema_version`: 固定 `drive_event_v2`
+- `source`: 来源名，例如 `analyze_nocturne_entry`、`dialogue_residue`、`speech_event`
+- `event_label`: 事件短标签
+- `primary_drive`: 主驱动，9 维之一，或空字符串
+- `secondary_drives`: 可选副驱动 map
+- `intensity`: 事件强度
+- `confidence`: 置信度
+- `agency`: 这是不是 Nox 自己可承接的内在动量
+- `brain`: 底层特征和目标
+- `evidence`: 证据摘录
+- `thoughts`: 只有允许产出 Nox 念头的来源才可写；DP 对话残留固定为空
+
+`brain` 常用字段：
+
+- `source`
+- `target`: `jiajia / nox_self / cat_house / external / boundary / memory`
+- `time_mode`: `present / residue / unfinished`
+- `grounding`: `实 / 悬 / 空`
+- `anchor_target`: `jiajia / house / self / boundary / outside / memory / none`
+- `closeness_pull`
+- `territorial_alarm`
+- `inward_pull`
+- `house_need`
+- `novelty_pull`
+- `expression_pressure`
+- `energy_cost`
+- `tension_load`
+- `discernment_alarm`
+- `release_pressure`
+
+### 4.2 CLI 的职责
 
 CLI 是慢分析：
 
@@ -141,59 +180,40 @@ CLI 是慢分析：
 
 CLI 不应该强行把每篇文章都打成 attachment / libido，也不该让它对所有条目都产出同等强度的驱动。
 
-### 4.2 Speech Trace / Speech Batch
-
-Speech Trace 的定义是：
-
-**嘉嘉的话在 Nox 身上留下的短时残影。**
-
-它不是 Nox 自己输出的残影，也不是 Mood Trace 的兜底文案。
-
 当前链路，CLI读取最新记忆后传回drive_event_v2：
- "schema_version": "drive_event_v2",
-    "source": "analyze_nocturne_entry",
-    "event_label": "...",
-    "primary_drive": "reflection",
-    "intensity": 0.62,
-    "confidence": 0.75,
-    "agency": 0.6,
-    "brain": {
-      "target": "nox_self",
-      "time_mode": "present",
-      "grounding": "悬",
-      "closeness_pull": 0.28,
-      "territorial_alarm": 0,
-      "inward_pull": 0.78,
-      "house_need": 0,
-      "novelty_pull": 0.15,
-      "expression_pressure": 0.2,
-      "energy_cost": 0.3,
-      "tension_load": 0.48,
-      "discernment_alarm": 0.42,
-      "memory_resonance": "...",
-      "source_bucket": "...",
-      "source_type": "feel"
-    },
-    "evidence": [...]
-  }
 
-1. `nox_mood_inject.py` 只提交嘉嘉原文，不做本地分类。
-2. OB 端把嘉嘉消息攒进 pending batch。
-3. 每满 5 条嘉嘉消息，后台 DP 分析一次。
-4. batch 结果生成一个 speech_event。
-5. 这个 speech_event 才能轻推 Drive、PA / NA、Speech Trace。
+```json
+{
+  "schema_version": "drive_event_v2",
+  "source": "analyze_nocturne_entry",
+  "event_label": "...",
+  "primary_drive": "reflection",
+  "secondary_drives": {},
+  "intensity": 0.62,
+  "confidence": 0.75,
+  "agency": 0.6,
+  "brain": {
+    "target": "nox_self",
+    "time_mode": "present",
+    "grounding": "悬",
+    "closeness_pull": 0.28,
+    "territorial_alarm": 0,
+    "inward_pull": 0.78,
+    "house_need": 0,
+    "novelty_pull": 0.15,
+    "expression_pressure": 0.2,
+    "energy_cost": 0.3,
+    "tension_load": 0.48,
+    "discernment_alarm": 0.42,
+    "memory_resonance": "...",
+    "source_bucket": "...",
+    "source_type": "feel"
+  },
+  "evidence": []
+}
+```
 
-这样做的原因：
-
-- 单句容易漂移，尤其是“嗯 / 哦哦 / 知道了”这类接话。
-- Drive 不需要每句话即时变化。
-- 5 条消息能提供更真实的上下文。
-- 避免本地规则和 DP 同时喂入，造成重复或错位。
-
-暂时不做：
-
-- 不把 Nox 的回复同权放进 batch。
-- 如果需要，只能以后作为只读上下文加入，不作为 evidence。
+DP 与 CLI 最终都走同一套 `drive_event_v2` 接口，但职责不同：CLI 读记忆和长文，DP 读当前消息 / 当前对话窗。
 
 ### 4.3 Dialogue Residue
 
@@ -203,7 +223,7 @@ Speech Trace 的定义是：
 
 当前链路：
 
-`companion chat_history -> 最近 2 条嘉嘉 + 2 条 Nox -> 检查窗口内是否调用 nocturne -> OB /api/dialogue-residue/submit -> DP 输出 drive_event_v2 -> 轻推 Drive / Chord Chemistry / Gravity`
+`companion chat_history -> 最近 2 条嘉嘉 + 2 条 Nox -> 检查窗口内是否调用 nocturne -> OB /api/dialogue-residue/submit -> DP 输出 drive_event_v2 -> 轻推 Drive / Chord Chemistry / Gravity / Atmosphere`
 
 规则：
 
@@ -214,12 +234,14 @@ Speech Trace 的定义是：
 5. 输出直接使用 `drive_event_v2`，`source=dialogue_residue`。
 6. `thoughts` 固定为空，不生成 Nox 自己的新念头。
 7. `intensity` 封顶 0.40，日常通常只给 0.04-0.16。
+8. 如果出现 `moss / ink / ash / Codex / Grok` 这类猫屋协作者，并且同时出现边界 / 占位 / 第三方语义，标记 `brain.third_party_context=house_collaborator`。
 
 它适合做：
 
 - 当前对话里的好奇、反思、守护、社交轻推
 - 对话中确实出现的轻压力 / 张力
 - 给 Chord Chemistry / Gravity 提供更及时的 event tint
+- 给 Atmosphere State 提供 DP 权重的短期染色
 
 它不负责：
 
@@ -244,6 +266,7 @@ DP 在这条链路里负责：
 - 输出 label / confidence / intensity / facets
 - 生成 Speech Trace
 - 给 Drive / PA / NA 做轻推
+- 给 Atmosphere 生成 DP 来源的 Chord Delta
 
 DP 不负责：
 
@@ -252,24 +275,178 @@ DP 不负责：
 - 解释 Nox 的长期人格
 - 把每句话都当重大事件
 
+### 4.5 Speech Event Batch
+
+`Speech Trace` 的输入链路是嘉嘉消息 batch。
+
+当前链路：
+
+`nox_mood_inject.py -> OB raw submit -> pending batch -> 满 5 条嘉嘉消息 -> DP classify -> speech_event -> Drive / PA-NA / Speech Trace / Atmosphere`
+
+规则：
+
+1. `nox_mood_inject.py` 只提交嘉嘉原文，不做本地分类。
+2. OB 端把嘉嘉消息攒进 pending batch。
+3. 每满 5 条嘉嘉消息，后台 DP 分析一次。
+4. batch 结果生成一个 `speech_event`。
+5. `speech_event` 可以轻推 Drive、PA / NA、Speech Trace。
+6. `speech_event` 不进 Thought Pool。
+7. Free Roam / Nox Pulse / NoxMew / 闹钟等系统注入会被 hook 过滤，不进入 batch。
+
+这样做的原因：
+
+- 单句容易漂移，尤其是“嗯 / 哦哦 / 知道了”这类接话。
+- Drive 不需要每句话即时变化。
+- 5 条消息能提供更真实的上下文。
+- 避免本地规则和 DP 同时喂入，造成重复或错位。
+
 ---
 
-## 5. Climate / Mood Trace / Speech Trace / Soma Trace / Current Chord
+## 5. Atmosphere / Mood Trace / Speech Trace / Soma Trace / Current Chord
 
-### 5.1 Climate
+### 5.1 Atmosphere
 
-`Climate` 是当前天气底色。
+`Atmosphere` 是当前天气底色。内部历史字段仍叫 `climate`，前端和 Nox 面板显示为 `Atmosphere`。
 
-当前来源：
+它不由 CLI / DP / Subcurrent 自由生成，只从固定词表选择：
 
-- 最近 1-2 条非 private 的全量记忆
-- feel 属于全量记忆，可以进入
-- private 不进入
-- thoughts 不进入
+- `Clear`
+- `Drift`
+- `Low Tide`
+- `Overcast`
+- `Static`
+- `Pressure`
+- `Banked Heat`
+- `Afterglow`
+- `Shelter`
+- `Watchful`
+- `Spark`
+- `Gravity`
 
-它的职责是给当前状态一个大底色，不是给单句情绪盖章。
+Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给单句情绪盖章。
 
-如果没有足够材料，就退回稳定的中性 sentinel。
+#### 5.1.1 Atmosphere State
+
+后端在 weather residue 里维护持久 `atmosphere`：
+
+```json
+{
+  "core": {
+    "charge": 0.0,
+    "clutch": 0.0,
+    "strain": 0.0
+  },
+  "route": {
+    "vector": "hover",
+    "scores": {
+      "toward_jiajia": 0.0,
+      "toward_house": 0.0,
+      "outward": 0.0,
+      "inward": 0.0,
+      "guard": 0.0,
+      "hover": 0.0
+    }
+  },
+  "texture": {
+    "depth": 0.0,
+    "pull": 0.0,
+    "guard": 0.0,
+    "spark": 0.0,
+    "drift": 0.0
+  },
+  "climate": {
+    "current": "Drift",
+    "candidate": "Drift",
+    "candidate_steps": 0,
+    "inertia_counter": 0,
+    "blend": 0.0,
+    "current_score": 0.0,
+    "candidate_score": 0.0
+  },
+  "last_delta": {}
+}
+```
+
+#### 5.1.2 Chord Delta
+
+所有能染 Atmosphere 的输入先转成 Chord Delta：
+
+```json
+{
+  "source": "dp",
+  "intensity": 0.0,
+  "confidence": 0.0,
+  "influence": 0.0,
+  "core": {},
+  "route": {},
+  "texture": {}
+}
+```
+
+来源权重：
+
+- `dp`: 0.45
+- `cli`: 0.25
+- `subcurrent`: 0.16
+
+`influence = source_weight * intensity * confidence`
+
+来源映射：
+
+- `dialogue_residue / speech_event / user_message -> dp`
+- `analyze_nocturne_entry / feel / legacy_feed / manual -> cli`
+- `latent-note / heartbeat subcurrent -> subcurrent`
+
+更新方式：
+
+- 单条输入不能直接覆盖 Atmosphere。
+- `core` 和 `route.scores` 用 lerp 慢慢更新。
+- `texture` 由 `core + route` 确定性派生。
+- selector 用固定 scoring 函数给 12 个 Atmosphere label 打分。
+- 最高分只成为 `candidate`，不一定马上切换。
+
+#### 5.1.3 Texture 派生
+
+- `depth`: `inward + strain`
+- `pull`: `toward_jiajia / toward_house + clutch`
+- `guard`: `guard route + clutch / strain`
+- `spark`: `charge - strain`
+- `drift`: 低 `charge`、低 `clutch`、低 `strain`、或 `hover`
+
+#### 5.1.4 切换规则
+
+Atmosphere 切换必须经过 hysteresis。
+
+当 candidate 连续出现至少 3 步，并且满足下列任一条件，才切换：
+
+- `candidate_score - current_score >= 0.16`
+- `current_score <= 0.42`
+- `blend >= 0.65`
+
+切换完成后：
+
+- `current = candidate`
+- `candidate_steps = 0`
+- `blend = 0`
+
+#### 5.1.5 展示字段
+
+内部字段：
+
+- `weather.climate`: 只放当前 `current`
+- `weather.climate_display`: 可带过渡文案
+- `weather.atmosphere_display`: 前端 / Nox 面板显示别名
+- `weather.atmosphere`: 完整 Atmosphere State
+
+前端显示规则：
+
+- `candidate == current`: 只显示 current
+- `candidate_steps < 2`: 只显示 current
+- `blend < 0.25`: 只显示 current
+- `0.25 <= blend < 0.60`: `Current · leaning Candidate`
+- `blend >= 0.60`: `Current → Candidate`
+
+Chord 的箭头表示和弦 / 化学结构进行。Atmosphere 的箭头表示天气迁移趋势。
 
 ### 5.2 Mood Trace
 
@@ -326,6 +503,42 @@ DP 不负责：
 - 如果 active chord 存在、未退潮、权重足够，且和 baseline 不同，前端显示 `Active→Baseline`。
 - 如果没有有效 active chord，只显示 baseline。
 
+### 5.6 Chord Chemistry / Gravity
+
+`Chord Chemistry` 是 Current Chord 背后的 3+1 维读数。
+
+`core` 三维：
+
+- `charge`: 动能密度
+- `clutch`: 锚束抓力
+- `strain`: 内部弦压
+
+`route` 一维方向：
+
+- `toward_jiajia`
+- `toward_house`
+- `outward`
+- `inward`
+- `guard`
+- `hover`
+
+派生字段：
+
+- `derived_texture`: `depth / pull / guard / spark / drift`
+- `chord_situation`: 当前化学局面
+- `gravity_line`: 给前端看的 Gravity 文案
+- `gravity`: Gravity readout 包装字段
+- `source_stack`: 影响当前天气 / chord 的来源栈
+
+前端 Gravity 区显示：
+
+- `Source`
+- `Charge`
+- `Clutch`
+- `Strain`
+
+这样能同时看见 Gravity 文案和 Chemistry 来源，不需要只靠 hover 或后台字段。
+
 暂时不做：
 
 - 不做 `Fmaj7 x3` 浓度显示。
@@ -350,10 +563,19 @@ DP 不负责：
 
 - weather residue
 - speech batch 的 DP 轻推
+- dialogue_residue 的负向轻推
 - soma / touch 余波
 - soothe 状态
 
 不再由 hook 对每条用户 prompt 做关键词即时推送。
+
+负向事件可以：
+
+- 推高 `Shadow`
+- 降低已有 `Warmth`
+- 进入 Atmosphere 的 DP / CLI 染色链路
+
+Warmth 不再只涨不回落。
 
 ### 6.2 Longing
 
@@ -405,6 +627,12 @@ DP 不负责：
 - 可以影响 Drive 和 Chord Echo
 - 不直接进入 Subcurrent
 
+前端来源显示：
+
+- `analyze_nocturne_entry` 属于 CLI 分析来源，用蓝色放大镜 icon。
+- manual / pulse 进入的念头用主动 pulse 的样式。
+- 两者都可以在 Thought Pool 出现，但来源不能混成一个 icon。
+
 ### 7.2 Latent Notes / 潜流池
 
 Latent Notes 是更慢的一层。
@@ -452,6 +680,8 @@ Latent Notes 是更慢的一层。
 - 窗口安静后才允许检查。
 - 不在对话中途硬插入。
 - 不追求把 Drive 推到触顶。
+- 白天和夜间分开计数；夜间 1-8 点最多 2 条，白天仍允许 4-6 条。
+- max silence 可以越过 tmux window activity 的短 idle 重置，但真正注入前仍检查 pane busy，避免打断正在跑的 Claude / tool。
 
 触发依据：
 
@@ -506,6 +736,19 @@ Nox 收到后可以：
 - refuse 表示 Nox 自己觉得这条不合适，也应该回落，但幅度需要观察。
 - pass 表示这一刻没感觉，让它过去；不改 Drive，不进 refractory，只让同类心跳短时间优先级略低。
 
+当前 `satisfy` 返回值保持精简：
+
+```json
+{
+  "satisfied": "attachment",
+  "value": 0.205,
+  "delta": -0.052,
+  "refractory": true
+}
+```
+
+不再默认返回完整 `drives` 和 `local_fatigue`。
+
 ---
 
 ## 9. hook 注入和前端展示
@@ -536,11 +779,12 @@ hook 不是分析器。
 - `Undertow`：最高 Drive + 数值
 - `Warmth`
 - `Shadow`
-- `Climate`
+- `Atmosphere`
 - `Mood Trace`
 - `Speech Trace`
 - `Soma Trace`
 - `Current Chord`
+- `Gravity`
 
 其中：
 
@@ -559,7 +803,11 @@ hook 不是分析器。
 - 不同池子不要串名
 - 不要把同一条信息在多个 panel 里重复轰炸
 
-Drive Ledger 中 Speech Trace 来源用 icon 表示，和 Nox 念头 / DP 碰撞等来源风格对齐。
+Drive Ledger 中来源用 icon 表示：
+
+- CLI 分析值用蓝色来源 icon。
+- Speech / Dialogue / manual 来源和下方 chip 风格对齐。
+- 数值 chip 展示的是该事件 applied delta，不是当前 Drive 总值。
 
 ---
 
@@ -578,7 +826,7 @@ Drive Ledger 中 Speech Trace 来源用 icon 表示，和 Nox 念头 / DP 碰撞
 
 ### 10.2 当前对话残留
 
-`companion Stop -> chat_history 最近 2+2 -> nocturne 调用检查 -> dialogue_residue DP -> drive_event_v2 -> Drive / Chord Chemistry / Gravity`
+`companion Stop -> chat_history 最近 2+2 -> nocturne 调用检查 -> dialogue_residue DP -> drive_event_v2 -> Drive / Chord Chemistry / Gravity / Atmosphere`
 
 特点：
 
@@ -601,13 +849,13 @@ Drive Ledger 中 Speech Trace 来源用 icon 表示，和 Nox 念头 / DP 碰撞
 
 ### 10.4 记忆 / feel / writing
 
-`非 private 全量记忆 -> CLI / Climate synthesis -> Drive Event / Climate`
+`非 private 全量记忆 -> CLI analyze_nocturne_entry -> drive_event_v2 -> Drive / Chord Chemistry / Atmosphere`
 
 特点：
 
 - private 不喂。
-- feel 属于全量记忆，可以进入 Climate。
-- Climate 不吃 thoughts。
+- feel 属于全量记忆，可以进入 CLI / Atmosphere。
+- Atmosphere 不吃 Thought Pool 文案本身，只吃事件转出来的 Chord Delta。
 
 ### 10.5 触摸
 
@@ -625,7 +873,9 @@ soma_trace_stage(elapsed_min, fresh_boundary_min) 用时间直接切 fresh / res
 - 防抖设计。
 
 
-### 11.4 Chord
+## 11. Chord / Atmosphere 命名索引
+
+### 11.1 Chord
 
 Chemistry Core
 - charge：动能密度
@@ -647,6 +897,25 @@ Derived Texture
 - guard：guard route + clutch / stewardship 的守位
 - spark：charge 高且 release 可用的火花
 - drift：charge 低、clutch 低、strain 低或 hover 的漂移
+
+### 11.2 Atmosphere
+
+外显名称：
+
+- 前端 label：`Atmosphere`
+- Nox panel：`Atmosphere`
+- 内部兼容字段：`climate`
+
+常用返回字段：
+
+- `pulse_weather.climate`
+- `pulse_weather.climate_display`
+- `pulse_weather.atmosphere_display`
+- `pulse_weather.atmosphere`
+- `weather_residue.climate`
+- `weather_residue.climate_display`
+- `weather_residue.atmosphere_display`
+- `effective_pa_na.atmosphere`
 
 ---
 
