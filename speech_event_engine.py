@@ -101,22 +101,22 @@ LABEL_EFFECTS: dict[str, dict[str, Any]] = {
     "fear_general": {"warmth": 0.000, "shadow": 0.026, "soothe": False, "chord": "Em7", "style": "alarm"},
 }
 
-DRIVE_EFFECTS: dict[str, tuple[str, float, dict[str, float]]] = {
-    "affectionate": ("attachment", 0.11, {"closeness_pull": 0.45}),
-    "reassuring": ("attachment", 0.09, {"closeness_pull": 0.40, "tension_load": 0.08}),
-    "playful": ("social", 0.08, {"expression_pressure": 0.36, "closeness_pull": 0.18}),
-    "vulnerable": ("attachment", 0.08, {"closeness_pull": 0.30, "tension_load": 0.18}),
-    "struggling": ("stewardship", 0.08, {"house_need": 0.34, "tension_load": 0.18}),
-    "fear_concern": ("stewardship", 0.09, {"house_need": 0.42, "tension_load": 0.20}),
-    "fear_separation": ("attachment", 0.09, {"closeness_pull": 0.40, "tension_load": 0.28}),
-    "fear_death": ("stress", 0.09, {"tension_load": 0.45, "closeness_pull": 0.18}),
-    "fear_general": ("stress", 0.07, {"tension_load": 0.34}),
-    "conflict": ("stress", 0.07, {"tension_load": 0.35}),
-    "hostile": ("stress", 0.08, {"tension_load": 0.42}),
-    "distant": ("reflection", 0.06, {"inward_pull": 0.30}),
-    "cold": ("reflection", 0.05, {"inward_pull": 0.25}),
-    "intimate_reference": ("libido", 0.06, {"body_heat": 0.32, "closeness_pull": 0.16}),
-    "intimate_event": ("libido", 0.08, {"body_heat": 0.42, "closeness_pull": 0.18}),
+DRIVE_EFFECTS: dict[str, tuple[str, float, dict[str, float | str]]] = {
+    "affectionate": ("attachment", 0.11, {"closeness_pull": 0.45, "release_pressure": 0.18, "anchor_target": "jiajia"}),
+    "reassuring": ("attachment", 0.09, {"closeness_pull": 0.40, "tension_load": 0.08, "anchor_target": "jiajia"}),
+    "playful": ("social", 0.08, {"expression_pressure": 0.36, "release_pressure": 0.34, "closeness_pull": 0.18, "anchor_target": "jiajia"}),
+    "vulnerable": ("attachment", 0.08, {"closeness_pull": 0.30, "tension_load": 0.18, "release_pressure": 0.14, "anchor_target": "jiajia"}),
+    "struggling": ("stewardship", 0.08, {"house_need": 0.34, "tension_load": 0.18, "anchor_target": "house"}),
+    "fear_concern": ("stewardship", 0.09, {"house_need": 0.42, "tension_load": 0.20, "anchor_target": "house"}),
+    "fear_separation": ("attachment", 0.09, {"closeness_pull": 0.40, "tension_load": 0.28, "anchor_target": "jiajia"}),
+    "fear_death": ("stress", 0.09, {"tension_load": 0.45, "closeness_pull": 0.18, "anchor_target": "self"}),
+    "fear_general": ("stress", 0.07, {"tension_load": 0.34, "anchor_target": "self"}),
+    "conflict": ("stress", 0.07, {"tension_load": 0.35, "release_pressure": 0.28, "anchor_target": "boundary"}),
+    "hostile": ("stress", 0.08, {"tension_load": 0.42, "release_pressure": 0.34, "anchor_target": "boundary"}),
+    "distant": ("reflection", 0.06, {"inward_pull": 0.30, "anchor_target": "self"}),
+    "cold": ("reflection", 0.05, {"inward_pull": 0.25, "anchor_target": "self"}),
+    "intimate_reference": ("libido", 0.06, {"body_heat": 0.32, "closeness_pull": 0.16, "release_pressure": 0.30, "anchor_target": "jiajia"}),
+    "intimate_event": ("libido", 0.08, {"body_heat": 0.42, "closeness_pull": 0.18, "release_pressure": 0.38, "anchor_target": "jiajia"}),
 }
 
 TRACE_TEMPLATES: dict[str, tuple[str, ...]] = {
@@ -215,7 +215,12 @@ def speech_event_drive_event(event: dict | None) -> dict:
 
     drive, base_intensity, raw_brain_features = drive_effect
     scaled_intensity = min(0.18, base_intensity * (0.55 + 0.45 * intensity))
-    brain_features = {key: round(_clamp(value) * 0.22, 3) for key, value in raw_brain_features.items()}
+    brain_features = {}
+    for key, value in raw_brain_features.items():
+        if key == "anchor_target":
+            brain_features[key] = str(value)
+        else:
+            brain_features[key] = round(_clamp(value) * 0.22, 3)
     evidence = str(event.get("text_preview") or "").strip()
     return {
         "schema_version": "drive_event_v2",

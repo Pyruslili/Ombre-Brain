@@ -3,6 +3,7 @@ from desire_engine import (
     DRIVE_EVENT_SOURCE_WEIGHTS,
     DesireEngine,
     _legacy_brain_to_event,
+    normalize_drive_event_brain,
     normalize_drive_key,
 )
 
@@ -84,6 +85,36 @@ def test_drive_event_ledger_keeps_source_metadata(tmp_path):
     assert event["brain"]["source_bucket"] == "bucket-abc"
     assert event["brain"]["source_type"] == "writing"
     assert event["brain"]["source_created"] == "2026-06-25T01:02:03Z"
+
+
+def test_drive_event_brain_normalizes_chord_anchor_fields(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    result = engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "curiosity",
+        "intensity": 0.5,
+        "confidence": 0.8,
+        "agency": 0.8,
+        "event_label": "outward_release",
+        "brain": {
+            "target": "external",
+            "release_pressure": 1.4,
+            "novelty_pull": 0.7,
+        },
+    })
+
+    event = engine.state()["drive_events"][0]
+    assert result["suppressed"] is False
+    assert event["source"] == "dialogue_residue"
+    assert event["brain"]["release_pressure"] == 1.0
+    assert event["brain"]["anchor_target"] == "outside"
+
+
+def test_normalize_drive_event_brain_keeps_explicit_anchor():
+    brain = normalize_drive_event_brain({"target": "external", "anchor_target": "boundary"})
+
+    assert brain["anchor_target"] == "boundary"
 
 
 def test_low_agency_event_is_suppressed_but_auditable(tmp_path):

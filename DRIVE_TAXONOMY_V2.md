@@ -97,6 +97,8 @@ The canonical feed shape is `drive_event_v2`:
     "grounding": "悬",
     "inward_pull": 0.75,
     "tension_load": 0.4,
+    "release_pressure": 0.2,
+    "anchor_target": "self",
     "memory_resonance": "continuity"
   },
   "evidence": ["short source evidence"],
@@ -106,6 +108,15 @@ The canonical feed shape is `drive_event_v2`:
 
 Legacy `drives` and `brain_signals` are accepted only as migration input. They
 are folded into one event and do not pulse separately.
+
+Chord Chemistry reads two optional brain fields directly:
+
+- `release_pressure`: 0-1, whether the event has an outlet / wants release.
+- `anchor_target`: `jiajia | house | self | boundary | outside | memory | none`,
+  where the event's force is anchored.
+
+These fields tint Chord Chemistry / Gravity, but do not directly choose Current
+Chord and do not reverse-write Drive.
 
 First-hand thoughts and feel-derived drive events should come from Nox's CLI
 analyzer, not from DP. DP may refine `speech_event_state` asynchronously and may

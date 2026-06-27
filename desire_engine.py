@@ -140,6 +140,37 @@ def normalize_drive_values(values: dict | None) -> dict:
     return normalized
 
 
+def normalize_anchor_target(value: str = "", target: str = "") -> str:
+    raw = str(value or "").strip()
+    lowered = raw.lower()
+    if raw in ANCHOR_TARGET_ALIASES:
+        return ANCHOR_TARGET_ALIASES[raw]
+    if lowered in ANCHOR_TARGET_ALIASES:
+        return ANCHOR_TARGET_ALIASES[lowered]
+    if lowered in ANCHOR_TARGETS:
+        return lowered
+    inferred = str(target or "").strip()
+    inferred_lower = inferred.lower()
+    if inferred in ANCHOR_TARGET_ALIASES:
+        return ANCHOR_TARGET_ALIASES[inferred]
+    if inferred_lower in ANCHOR_TARGET_ALIASES:
+        return ANCHOR_TARGET_ALIASES[inferred_lower]
+    if inferred_lower in {"jiajia", "house", "self", "boundary", "outside", "memory"}:
+        return inferred_lower
+    return "none"
+
+
+def normalize_drive_event_brain(brain: dict | None) -> dict:
+    normalized = dict(brain) if isinstance(brain, dict) else {}
+    if "release_pressure" in normalized:
+        normalized["release_pressure"] = round(_clamp(normalized.get("release_pressure", 0.0)), 3)
+    normalized["anchor_target"] = normalize_anchor_target(
+        normalized.get("anchor_target", ""),
+        normalized.get("target", ""),
+    )
+    return normalized
+
+
 def normalize_possessiveness_channels(value: dict | None) -> dict:
     data = dict(POSSESSIVENESS_CHANNEL_DEFAULT)
     if isinstance(value, dict):
@@ -348,6 +379,7 @@ DRIVE_EVENT_SOURCE_WEIGHTS = {
     "touch": 0.70,
     "external": 0.45,
     "analyze_nocturne_entry": 0.55,
+    "dialogue_residue": 0.50,
     "legacy_feed": 0.60,
     "manual": 0.75,
 }
@@ -362,6 +394,27 @@ DRIVE_EVENT_BRAIN_FEATURES = {
     "expression_pressure": ("social", 0.50, 0.0),
     "energy_cost": ("fatigue", 0.50, 0.0),
     "tension_load": ("stress", 0.55, 0.0),
+}
+
+ANCHOR_TARGETS = {"jiajia", "house", "self", "boundary", "outside", "memory", "none"}
+ANCHOR_TARGET_ALIASES = {
+    "jiaja": "jiajia",
+    "嘉嘉": "jiajia",
+    "she": "jiajia",
+    "her": "jiajia",
+    "cat_house": "house",
+    "cat house": "house",
+    "猫屋": "house",
+    "nox_self": "self",
+    "nox": "self",
+    "me": "self",
+    "guard": "boundary",
+    "territory": "boundary",
+    "territorial": "boundary",
+    "external": "outside",
+    "outward": "outside",
+    "world": "outside",
+    "nocturne": "memory",
 }
 
 LEGACY_BRANCH_DRIVE = {
@@ -813,7 +866,10 @@ def classify_chord_situation(core: dict, route: dict, derived: dict | None = Non
         return "grip"
     if st == "high" and ch != "high" and cl != "high":
         return "taut"
-    if vector == "outward" and charge >= 0.50:
+    if vector == "outward" and (
+        charge >= 0.50
+        or (str((route or {}).get("event_vector") or "") == "outward" and charge >= 0.46)
+    ):
         return "scout"
     if ch == "high" and vector != "outward" and cl != "high" and st != "high":
         return "spark"
@@ -833,8 +889,77 @@ def choose_chord_gravity(situation: str, route: dict, core: dict,
     return available[int(digest[:8], 16) % len(available)]
 
 
+def chord_event_tint_from_drive_events(events: list | None) -> dict:
+    if not isinstance(events, list):
+        return {}
+    event = None
+    for item in events:
+        if not isinstance(item, dict) or item.get("suppressed"):
+            continue
+        brain = item.get("brain")
+        if isinstance(brain, dict) and brain:
+            event = item
+            break
+    if not event:
+        return {}
+
+    brain = normalize_drive_event_brain(event.get("brain"))
+    release = _feature_value(brain, "release_pressure")
+    closeness = _feature_value(brain, "closeness_pull")
+    territorial = _feature_value(brain, "territorial_alarm")
+    inward = _feature_value(brain, "inward_pull")
+    house = _feature_value(brain, "house_need")
+    novelty = _feature_value(brain, "novelty_pull")
+    expression = _feature_value(brain, "expression_pressure")
+    energy = _feature_value(brain, "energy_cost")
+    tension = _feature_value(brain, "tension_load")
+    discernment = _feature_value(brain, "discernment_alarm")
+    heat = _feature_value(brain, "body_heat")
+    anchor = normalize_anchor_target(brain.get("anchor_target"), brain.get("target"))
+    grounding = str(brain.get("grounding") or "").strip()
+
+    blocked_release = release * max(tension, discernment)
+    core = {
+        "charge": round(_clamp(
+            0.16 + 0.36 * release + 0.22 * novelty + 0.18 * expression + 0.12 * heat - 0.22 * energy
+        ), 3),
+        "clutch": round(_clamp(
+            0.12 + 0.34 * territorial + 0.20 * closeness + 0.16 * house
+            + (0.16 if anchor in {"jiajia", "house", "boundary"} else 0.0)
+        ), 3),
+        "strain": round(_clamp(
+            0.10 + 0.34 * tension + 0.24 * discernment + 0.18 * blocked_release
+            + (0.08 if grounding == "悬" else 0.0) + (0.12 if grounding == "空" else 0.0)
+        ), 3),
+    }
+    route_scores = {
+        "toward_jiajia": _clamp((0.75 if anchor == "jiajia" else 0.0) + 0.22 * closeness),
+        "toward_house": _clamp((0.72 if anchor == "house" else 0.0) + 0.30 * house),
+        "outward": _clamp((0.72 if anchor == "outside" else 0.0) + 0.28 * novelty + 0.14 * release),
+        "inward": _clamp((0.68 if anchor in {"self", "memory"} else 0.0) + 0.28 * inward),
+        "guard": _clamp((0.76 if anchor == "boundary" else 0.0) + 0.28 * territorial + 0.18 * house),
+        "hover": _clamp((0.68 if anchor == "none" else 0.0) + 0.16 * (1.0 - release)),
+    }
+    vector = max(route_scores, key=route_scores.get)
+    return {
+        "core": core,
+        "route": {
+            "vector": vector,
+            "scores": {k: round(v, 3) for k, v in route_scores.items()},
+        },
+        "source": event.get("source", ""),
+        "event_label": event.get("event_label", ""),
+        "ledger_id": event.get("id"),
+        "brain": {
+            "release_pressure": round(release, 3),
+            "anchor_target": anchor,
+        },
+    }
+
+
 def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 0.0,
-                             recent_gravity: list | None = None, now: float = None) -> dict:
+                             recent_gravity: list | None = None, now: float = None,
+                             event_tint: dict | None = None) -> dict:
     """
     Chord Chemistry v1.0.
     Core is continuous force; route is directional. Derived texture is readout only.
@@ -920,14 +1045,57 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
         "drift": round(drift, 3),
     }
 
-    core = {
+    baseline_core = {
         "charge": round(charge, 3),
         "clutch": round(clutch, 3),
         "strain": round(strain, 3),
     }
-    route = {
+    baseline_route = {
         "vector": vector,
         "scores": {k: round(v, 3) for k, v in route_scores.items()},
+    }
+    core = dict(baseline_core)
+    route = dict(baseline_route)
+    event_tint = event_tint if isinstance(event_tint, dict) else {}
+    event_core = event_tint.get("core") if isinstance(event_tint.get("core"), dict) else {}
+    event_route = event_tint.get("route") if isinstance(event_tint.get("route"), dict) else {}
+    if event_core:
+        event_weight = 0.30
+        for key in ("charge", "clutch", "strain"):
+            core[key] = round(_clamp(
+                baseline_core.get(key, 0.0) * (1.0 - event_weight)
+                + float(event_core.get(key, 0.0) or 0.0) * event_weight
+            ), 3)
+    if event_route:
+        event_vector = str(event_route.get("vector") or "").strip()
+        event_scores = event_route.get("scores") if isinstance(event_route.get("scores"), dict) else {}
+        if event_vector and event_vector != "hover" and max([float(v or 0.0) for v in event_scores.values()] or [0.0]) >= 0.52:
+            route["vector"] = event_vector
+        route["event_vector"] = event_vector
+        route["baseline_vector"] = baseline_route["vector"]
+    charge = core["charge"]
+    clutch = core["clutch"]
+    strain = core["strain"]
+    vector = route["vector"]
+    depth = _clamp(strain * (0.70 if vector == "inward" else 0.44) + reflection * 0.24 - charge * 0.10)
+    pull = _clamp(
+        (0.62 * clutch + 0.38 * attachment)
+        if vector in {"toward_jiajia", "toward_house"}
+        else 0.45 * clutch * attachment
+    )
+    guard = _clamp(
+        (0.58 * clutch + 0.42 * stewardship)
+        if vector == "guard"
+        else 0.34 * clutch * stewardship
+    )
+    spark = _clamp(charge * (1.0 - strain * 0.45) * (1.0 - fatigue * 0.35))
+    drift = _clamp((1.0 - charge) * (1.0 - clutch) * (1.0 - strain) + (0.18 if vector == "hover" else 0.0))
+    derived = {
+        "depth": round(depth, 3),
+        "pull": round(pull, 3),
+        "guard": round(guard, 3),
+        "spark": round(spark, 3),
+        "drift": round(drift, 3),
     }
     situation = classify_chord_situation(core, route, derived)
     gravity_line = choose_chord_gravity(situation, route, core, recent_gravity, now)
@@ -936,6 +1104,8 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
         "core": core,
         "route": route,
         "situation": situation,
+        "baseline": {"core": baseline_core, "route": baseline_route},
+        "event_tint": event_tint,
         "derived_texture": derived,
         "derived": derived,
         "gravity_line": gravity_line,
@@ -2730,7 +2900,8 @@ class DesireEngine:
                 self.store.save_state(state)
         return pa_na
 
-    def _weather_readout(self, state: DriveState, now: float = None) -> dict:
+    def _weather_readout(self, state: DriveState, now: float = None,
+                         drive_events: list | None = None) -> dict:
         now = now if now is not None else time.time()
         base = pa_na_snapshot(state.drives)
         residue = self.weather.load(now, decay=True)
@@ -2738,7 +2909,10 @@ class DesireEngine:
         effective_na = _clamp(float(base["NA"]) + float(residue.get("shadow_residue", 0.0)))
         recent_gravity = residue.get("recent_gravity_lines")
         recent_gravity = recent_gravity if isinstance(recent_gravity, list) else []
-        chemistry = chord_chemistry_snapshot(state.drives, effective_pa, effective_na, recent_gravity, now)
+        event_tint = chord_event_tint_from_drive_events(drive_events)
+        chemistry = chord_chemistry_snapshot(
+            state.drives, effective_pa, effective_na, recent_gravity, now, event_tint
+        )
         gravity_line = chemistry["gravity_line"]
         if gravity_line and (not recent_gravity or recent_gravity[0] != gravity_line):
             residue["recent_gravity_lines"] = [gravity_line] + [
@@ -2963,7 +3137,7 @@ class DesireEngine:
         """Drive Event v2: one semantic event, one canonical route into drives."""
         event = event if isinstance(event, dict) else {}
         now = time.time()
-        brain = dict(event.get("brain")) if isinstance(event.get("brain"), dict) else {}
+        brain = normalize_drive_event_brain(event.get("brain"))
         primary = normalize_drive_key(event.get("primary_drive"))
         secondary = event.get("secondary_drives") if isinstance(event.get("secondary_drives"), dict) else {}
         source = str(event.get("source") or brain.get("source") or "feed").strip() or "feed"
@@ -3202,7 +3376,7 @@ class DesireEngine:
             "attachment_rebound": normalize_attachment_rebound(state.attachment_rebound),
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
-            "effective_pa_na": self._weather_readout(state),
+            "effective_pa_na": self._weather_readout(state, drive_events=drive_events),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts": [
@@ -3260,7 +3434,7 @@ class DesireEngine:
             "attachment_rebound": normalize_attachment_rebound(state.attachment_rebound),
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
-            "effective_pa_na": self._weather_readout(state),
+            "effective_pa_na": self._weather_readout(state, drive_events=drive_events),
             "tick_count": state.tick_count,
             "intent": intent,
             "thoughts_count": len(thoughts),

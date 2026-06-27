@@ -2,6 +2,7 @@ from desire_engine import (
     DesireEngine,
     DRIVE_BASELINES,
     chord_chemistry_snapshot,
+    chord_event_tint_from_drive_events,
     classify_chord_situation,
     current_weather_chord,
     pa_na_snapshot,
@@ -222,6 +223,34 @@ def test_chord_gravity_stays_stable_until_reaction_changes():
     assert first["situation"] == later["situation"]
     assert first["route"]["vector"] == later["route"]["vector"]
     assert first["gravity"] == later["gravity"]
+
+
+def test_drive_event_brain_tints_chord_chemistry_without_changing_chord():
+    drives = {**DRIVE_BASELINES, "fatigue": 0.12}
+    event_tint = chord_event_tint_from_drive_events([
+        {
+            "id": 7,
+            "source": "dialogue_residue",
+            "event_label": "outside_hook",
+            "suppressed": False,
+            "brain": {
+                "release_pressure": 0.9,
+                "anchor_target": "outside",
+                "novelty_pull": 0.8,
+                "tension_load": 0.1,
+            },
+        }
+    ])
+    chemistry = chord_chemistry_snapshot(
+        drives, warmth=0.52, shadow=0.18, event_tint=event_tint, now=1000
+    )
+
+    assert current_weather_chord(0.52, 0.18) == "Fmaj7"
+    assert event_tint["brain"]["release_pressure"] == 0.9
+    assert chemistry["route"]["event_vector"] == "outward"
+    assert chemistry["route"]["vector"] == "outward"
+    assert chemistry["event_tint"]["source"] == "dialogue_residue"
+    assert chemistry["situation"] in {"scout", "spark"}
 
 
 def test_soothe_needs_shadow_context(tmp_path):
