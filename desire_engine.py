@@ -400,6 +400,8 @@ LEGACY_BRANCH_DRIVE = {
 # 拒绝惩罚：同一个intent刚被拒绝过，下次pick_intent时有效分打折
 REFUSAL_PENALTY = 0.15
 REFUSAL_PENALTY_WINDOW_SEC = 600   # 10分钟内的拒绝记录有效
+PASS_PENALTY = 0.06
+PASS_PENALTY_WINDOW_SEC = 4 * 3600
 
 def pulse_gain(current: float, base_delta: float) -> float:
     return base_delta * math.sqrt(max(0.0, 1.0 - current))
@@ -1275,14 +1277,22 @@ def pick_intent(state: DriveState, refractory: dict,
     """
     选出当前最想做的事，使用有效分（已被per-drive疲劳压制）。
     全局fatigue极高时强制歇着。
-    recently_refused: 近期被拒绝过的drive_key集合，有效分减REFUSAL_PENALTY。
+    recently_refused: 近期被拒绝/pass过的drive_key集合或penalty dict。
     """
     if recently_refused is None:
         recently_refused = set()
     state.drives = normalize_drive_values(state.drives)
     state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
     refractory = {normalize_drive_key(k, k): v for k, v in (refractory or {}).items()}
-    recently_refused = {normalize_drive_key(k, k) for k in recently_refused}
+    if isinstance(recently_refused, dict):
+        intent_penalties = {
+            normalize_drive_key(k, k): max(0.0, float(v or 0.0))
+            for k, v in recently_refused.items()
+        }
+        recently_refused = set(intent_penalties)
+    else:
+        recently_refused = {normalize_drive_key(k, k) for k in recently_refused}
+        intent_penalties = {k: REFUSAL_PENALTY for k in recently_refused}
 
     global_fatigue = state.drives.get("fatigue", 0.0)
     if global_fatigue >= FATIGUE_HARD_GATE:
@@ -1304,7 +1314,7 @@ def pick_intent(state: DriveState, refractory: dict,
         eff = effective_score(raw, local_fat)
         # 刚被拒绝过→有效分打折
         if k in recently_refused:
-            eff = max(0.0, eff - REFUSAL_PENALTY)
+            eff = max(0.0, eff - intent_penalties.get(k, REFUSAL_PENALTY))
         scores[k] = eff
 
     if not scores:
@@ -1319,7 +1329,7 @@ def pick_intent(state: DriveState, refractory: dict,
     raw_val = state.drives.get(best_key, 0.0)
     local_fat = state.local_fatigue.get(best_key, 0.0)
     eff_before_penalty = effective_score(raw_val, local_fat)
-    penalty_note = f"，-{REFUSAL_PENALTY} 拒绝折扣" if best_key in recently_refused else ""
+    penalty_note = f"，-{round(intent_penalties.get(best_key, REFUSAL_PENALTY), 3)} pass/refuse折扣" if best_key in recently_refused else ""
 
     return {
         "drive_key": best_key,
@@ -2236,6 +2246,27 @@ class DesireStore:
             ).fetchall()
         return {normalize_drive_key(r[0], r[0]) for r in rows}
 
+    def load_intent_penalties(self) -> dict:
+        """返回近期pass/refuse对intent选择的轻量折扣。pass更轻但持续更久。"""
+        now = time.time()
+        cutoff = now - max(REFUSAL_PENALTY_WINDOW_SEC, PASS_PENALTY_WINDOW_SEC)
+        penalties: dict[str, float] = {}
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT drive_key, reason, ts FROM refusals WHERE ts >= ?",
+                (cutoff,)
+            ).fetchall()
+        for key, reason, ts in rows:
+            drive_key = normalize_drive_key(key, key)
+            age = now - float(ts or 0.0)
+            reason_text = str(reason or "")
+            if reason_text.startswith("pass:"):
+                if age <= PASS_PENALTY_WINDOW_SEC:
+                    penalties[drive_key] = max(penalties.get(drive_key, 0.0), PASS_PENALTY)
+            elif age <= REFUSAL_PENALTY_WINDOW_SEC:
+                penalties[drive_key] = max(penalties.get(drive_key, 0.0), REFUSAL_PENALTY)
+        return penalties
+
     def record_drive_event(self, event: dict) -> int:
         with self._conn() as conn:
             cur = conn.execute(
@@ -2582,10 +2613,27 @@ class DesireEngine:
             "thoughts_preserved": True,
         }
 
+    def pass_intent(self, drive_key: str, reason: Optional[str] = None) -> dict:
+        """
+        让这一条念头自然过去。
+        不改Drive，不进refractory，只给同drive的后续intent一个轻微、短期的优先级折扣。
+        """
+        drive_key = normalize_drive_key(drive_key, drive_key)
+        state = self.store.load_state()
+        self.store.record_refusal(drive_key, f"pass:{reason or '没感觉'}")
+        return {
+            "passed": drive_key,
+            "reason": reason or "没感觉",
+            "new_drive_value": round(state.drives.get(drive_key, 0.0), 3),
+            "drive_unchanged": True,
+            "hook_affinity": "slightly_lowered",
+            "thoughts_preserved": True,
+        }
+
     def intent(self) -> Optional[dict]:
         state = self.store.load_state()
         refractory = self.store.load_refractory()
-        recently_refused = self.store.load_recently_refused()
+        recently_refused = self.store.load_intent_penalties()
         return pick_intent(state, refractory, recently_refused)
 
     def intent_with_thought(self) -> Optional[dict]:

@@ -2212,6 +2212,15 @@ def desire_refuse(drive_key: str, reason: str = "") -> dict:
     return _desire.refuse(drive_key, reason=reason if reason.strip() else None)
 
 
+@mcp.tool()
+def desire_pass(drive_key: str, reason: str = "") -> dict:
+    """
+    这一刻没感觉，让念头自然过去。
+    不改Drive，不进refractory；只让同类心跳在短时间内优先级略低。
+    """
+    return _desire.pass_intent(drive_key, reason=reason if reason.strip() else None)
+
+
 # =============================================================
 # Tool 2: hold — Hold on to this
 # 工具 2：hold — 握住，留下来
@@ -4193,6 +4202,25 @@ async def api_desire_intent_ack(request):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     return JSONResponse({"acked": drive_key, "result": result},
+                       headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/desire/intent/pass", methods=["POST"])
+async def api_desire_intent_pass(request):
+    """轻轻放过当前intent：不改Drive，只降短期hook/intent优先级。"""
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    drive_key = body.get("drive_key", "")
+    if not drive_key:
+        return JSONResponse({"error": "drive_key required"}, status_code=400)
+    try:
+        result = _desire.pass_intent(drive_key, reason=body.get("reason") or None)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse({"passed": drive_key, "result": result},
                        headers={"Access-Control-Allow-Origin": "*"})
 
 
