@@ -945,6 +945,15 @@ label {
   letter-spacing: 0;
   text-transform: none;
 }
+.drift-chemistry-line {
+  margin-top: .45rem;
+  color: var(--ink-soft);
+  font: 300 .76rem/1.45 var(--font-body);
+}
+.drift-chemistry-line b {
+  color: var(--accent-deep);
+  font-weight: 300;
+}
 .drift-undertow {
   display: flex;
   flex-wrap: wrap;
@@ -2199,6 +2208,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
             <span class="drift-current-chord">Current Chord <b id="desire-current-chord">—</b></span>
           </div>
           <div class="drift-undertow" id="desire-undertow"><span class="undertow-name">Reading</span><span class="undertow-value">…</span></div>
+          <div class="drift-chemistry-line" id="desire-chord-chemistry" style="display:none"></div>
         </div>
         <div class="drift-weather-values">
           <div class="drift-weather-mini weather-warm">
@@ -2760,6 +2770,26 @@ function currentWeatherChord(warmth, shadow) {
   return 'C6';
 }
 
+function renderChordChemistry(weather) {
+  const target = document.getElementById('desire-chord-chemistry');
+  if (!target) return;
+  const chemistry = weather?.chord_chemistry || {};
+  const core = chemistry.core || weather?.chemistry_core || {};
+  const route = chemistry.route || weather?.chemistry_route || {};
+  const vector = route.vector || '';
+  const gravity = chemistry.gravity_line || weather?.gravity_line || '';
+  if (!gravity && !vector) {
+    target.style.display = 'none';
+    target.textContent = '';
+    return;
+  }
+  const charge = finiteNumber(core.charge).toFixed(2);
+  const clutch = finiteNumber(core.clutch).toFixed(2);
+  const strain = finiteNumber(core.strain).toFixed(2);
+  target.style.display = '';
+  target.innerHTML = `<b>${esc(vector || 'hover')}</b> · 电荷 ${charge} · 锚束 ${clutch} · 弦压 ${strain}<br>${esc(gravity)}`;
+}
+
 function setWeatherMetric(kind, current, base, residue) {
   const target = document.getElementById(`desire-${kind}`);
   const baseTarget = document.getElementById(`desire-${kind}-base`);
@@ -2817,6 +2847,7 @@ async function loadDesire(button) {
     setWeatherProgress('longing', longingNow);
     const currentChord = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
     document.getElementById('desire-current-chord').textContent = weather.chord_display || currentChord;
+    renderChordChemistry(weather);
     document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSpeechTrace(speechEvent);

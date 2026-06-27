@@ -667,6 +667,120 @@ def current_weather_chord(warmth: float, shadow: float) -> str:
     return "C6"
 
 
+def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 0.0) -> dict:
+    """
+    Chord Chemistry v1.0.
+    Core is continuous force; route is directional. Derived texture is readout only.
+    """
+    d = normalize_drive_values(drives)
+    attachment = d["attachment"]
+    libido = d["libido"]
+    possessiveness = d["possessiveness"]
+    reflection = d["reflection"]
+    stewardship = d["stewardship"]
+    curiosity = d["curiosity"]
+    social = d["social"]
+    fatigue = d["fatigue"]
+    stress = d["stress"]
+    warmth = _clamp(float(warmth or 0.0))
+    shadow = _clamp(float(shadow or 0.0))
+
+    stress_charge = stress * (1.0 - max(0.0, stress - 0.62) * 1.15)
+    release_pair = max(curiosity, social) * (0.55 + 0.45 * max(libido, possessiveness))
+    charge = _clamp(
+        0.18
+        + 0.34 * max(curiosity, social)
+        + 0.22 * libido
+        + 0.18 * release_pair
+        + 0.16 * stress_charge
+        + 0.08 * warmth
+        - 0.42 * fatigue
+    )
+
+    attachment_lock = attachment * (0.45 + 0.55 * max(possessiveness, stewardship))
+    boundary_friction = max(0.0, stress - 0.30) * attachment
+    clutch = _clamp(
+        0.10
+        + 0.30 * attachment
+        + 0.26 * possessiveness
+        + 0.22 * stewardship
+        + 0.32 * attachment_lock
+        + 0.26 * boundary_friction
+    )
+
+    unresolved_pair = max(stress, fatigue) * (0.40 + 0.60 * max(reflection, attachment))
+    compressed_charge = max(0.0, charge - 0.52) * max(0.0, stress - 0.36)
+    strain = _clamp(
+        0.08
+        + 0.32 * stress
+        + 0.24 * fatigue
+        + 0.20 * reflection
+        + 0.25 * unresolved_pair
+        + 0.18 * compressed_charge
+        + 0.08 * shadow
+    )
+
+    route_scores = {
+        "toward_jiajia": _clamp(0.48 * attachment + 0.24 * libido + 0.16 * possessiveness + 0.12 * warmth),
+        "toward_house": _clamp(0.46 * stewardship + 0.26 * attachment + 0.14 * reflection + 0.14 * clutch),
+        "outward": _clamp(0.45 * curiosity + 0.33 * social + 0.15 * charge - 0.18 * strain),
+        "inward": _clamp(0.46 * reflection + 0.23 * fatigue + 0.18 * strain + 0.13 * attachment),
+        "guard": _clamp(0.38 * stewardship + 0.27 * possessiveness + 0.22 * stress + 0.13 * clutch),
+        "hover": _clamp(0.34 * (1.0 - charge) + 0.24 * (1.0 - clutch) + 0.24 * (1.0 - strain) + 0.18 * fatigue),
+    }
+    vector = max(route_scores, key=route_scores.get)
+    if max(charge, clutch, strain) < 0.30:
+        vector = "hover"
+
+    depth = _clamp(strain * (0.70 if vector == "inward" else 0.44) + reflection * 0.24 - charge * 0.10)
+    pull = _clamp(
+        (0.62 * clutch + 0.38 * attachment)
+        if vector in {"toward_jiajia", "toward_house"}
+        else 0.45 * clutch * attachment
+    )
+    guard = _clamp(
+        (0.58 * clutch + 0.42 * stewardship)
+        if vector == "guard"
+        else 0.34 * clutch * stewardship
+    )
+    spark = _clamp(charge * (1.0 - strain * 0.45) * (1.0 - fatigue * 0.35))
+    drift = _clamp((1.0 - charge) * (1.0 - clutch) * (1.0 - strain) + (0.18 if vector == "hover" else 0.0))
+    derived = {
+        "depth": round(depth, 3),
+        "pull": round(pull, 3),
+        "guard": round(guard, 3),
+        "spark": round(spark, 3),
+        "drift": round(drift, 3),
+    }
+
+    if derived["guard"] >= 0.58:
+        gravity_line = "守位感在前，句子收紧，先护住边界。"
+    elif derived["pull"] >= 0.58:
+        gravity_line = "重力朝嘉嘉落，靠近但不急着外放。"
+    elif derived["depth"] >= 0.58:
+        gravity_line = "弦压往内沉，语速放慢，先消化。"
+    elif derived["spark"] >= 0.58:
+        gravity_line = "电荷可释放，句子会向外跳。"
+    elif derived["drift"] >= 0.58:
+        gravity_line = "力场松开，语气轻，允许悬停。"
+    else:
+        gravity_line = "力场均衡，维持当前底色。"
+
+    return {
+        "core": {
+            "charge": round(charge, 3),
+            "clutch": round(clutch, 3),
+            "strain": round(strain, 3),
+        },
+        "route": {
+            "vector": vector,
+            "scores": {k: round(v, 3) for k, v in route_scores.items()},
+        },
+        "derived_texture": derived,
+        "gravity_line": gravity_line,
+    }
+
+
 def _chord_impulse_weight(impulse: dict, now: float) -> float:
     try:
         strength = max(0.0, float(impulse.get("strength", 0.0) or 0.0))
@@ -2460,12 +2574,18 @@ class DesireEngine:
         residue = self.weather.load(now, decay=True)
         effective_pa = _clamp(float(base["PA"]) + float(residue.get("warmth_residue", 0.0)))
         effective_na = _clamp(float(base["NA"]) + float(residue.get("shadow_residue", 0.0)))
+        chemistry = chord_chemistry_snapshot(state.drives, effective_pa, effective_na)
         return {
             "base_PA": round(base["PA"], 3),
             "base_NA": round(base["NA"], 3),
             "effective_PA": round(effective_pa, 3),
             "effective_NA": round(effective_na, 3),
             "current_chord": current_weather_chord(effective_pa, effective_na),
+            "chord_chemistry": chemistry,
+            "chemistry_core": chemistry["core"],
+            "chemistry_route": chemistry["route"],
+            "derived_texture": chemistry["derived_texture"],
+            "gravity_line": chemistry["gravity_line"],
             **_active_weather_chord(residue, now),
             "warmth_residue": round(float(residue.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(residue.get("shadow_residue", 0.0)), 3),
@@ -2563,6 +2683,9 @@ class DesireEngine:
         now = time.time()
         drive_key = normalize_drive_key(drive_key, drive_key)
         state = self.store.load_state()
+        previous_chord = ""
+        if chord.strip():
+            previous_chord = self.weather.load(now=now, decay=True).get("active_chord", "")
         # attachment使用非线性跳变
         if drive_key == "attachment":
             state = pulse_attachment_nonlinear(state, delta)
@@ -2574,12 +2697,16 @@ class DesireEngine:
         grief = tick_grief(grief, state, has_signal=True, now_ts=now)
         self.store.save_grief(grief)
         chord_echo = self.apply_chord_echo(chord, source="thought") if chord.strip() else None
-        return {
+        result = {
             "drive_key": drive_key,
             "new_value": round(state.drives[drive_key], 3),
             "local_fatigue": round(state.local_fatigue.get(drive_key, 0.0), 3),
-            "chord_echo": chord_echo,
         }
+        if chord_echo:
+            active_chord = chord_echo.get("active_chord") or ""
+            if active_chord and active_chord != previous_chord:
+                result["chord_changed"] = active_chord
+        return result
 
     def satisfy(self, drive_key: str) -> dict:
         drive_key = normalize_drive_key(drive_key, drive_key)

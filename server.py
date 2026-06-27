@@ -3887,6 +3887,8 @@ async def api_desire_state(request):
             "active_chord_source": weather.get("active_chord_source", ""),
             "active_chord_weight": weather.get("active_chord_weight", 0.0),
             "source_stack": weather.get("source_stack", []),
+            "chord_chemistry": weather.get("chord_chemistry", {}),
+            "gravity_line": weather.get("gravity_line", ""),
         }
         state["pulse_weather"] = {
             "undertow": top_drive,
@@ -3899,6 +3901,11 @@ async def api_desire_state(request):
             "active_chord_weight": weather.get("active_chord_weight", 0.0),
             "source_stack": weather.get("source_stack", []),
             "chord_display": _weather_chord_display(weather),
+            "chord_chemistry": weather.get("chord_chemistry", {}),
+            "chemistry_core": weather.get("chemistry_core", {}),
+            "chemistry_route": weather.get("chemistry_route", {}),
+            "derived_texture": weather.get("derived_texture", {}),
+            "gravity_line": weather.get("gravity_line", ""),
             "warmth_residue": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(weather.get("shadow_residue", 0.0)), 3),
             "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
