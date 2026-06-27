@@ -51,6 +51,16 @@ def test_state_includes_effective_drives(tmp_path):
     assert "confidence" in state["drive_outputs"]["reflection"]
 
 
+def test_satisfy_returns_compact_ack(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    result = engine.satisfy("attachment")
+
+    assert result["satisfied"] == "attachment"
+    assert set(result) == {"satisfied", "value", "delta", "refractory"}
+    assert result["delta"] < 0
+    assert result["refractory"] is True
+
+
 def test_drive_event_ledger_keeps_source_metadata(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     engine.apply_drive_event({

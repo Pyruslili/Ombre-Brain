@@ -3551,13 +3551,16 @@ class DesireEngine:
     def satisfy(self, drive_key: str) -> dict:
         drive_key = normalize_drive_key(drive_key, drive_key)
         state = self.store.load_state()
+        before = state.drives.get(drive_key, DRIVE_BASELINES.get(drive_key, 0.0))
         state = satisfy(state, drive_key)
         self.store.save_state(state)
         self.store.set_refractory(drive_key)
+        after = state.drives.get(drive_key, before)
         return {
             "satisfied": drive_key,
-            "drives": {k: round(v, 3) for k, v in state.drives.items()},
-            "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
+            "value": round(after, 3),
+            "delta": round(after - before, 3),
+            "refractory": True,
         }
 
     def refuse(self, drive_key: str, reason: Optional[str] = None) -> dict:

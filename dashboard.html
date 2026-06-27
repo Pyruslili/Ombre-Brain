@@ -1176,6 +1176,21 @@ label {
   padding: .08rem;
   justify-content: center;
 }
+.drive-source-icon.cli {
+  color: #92b2d2;
+  border-color: rgba(146,178,210,.24);
+  background: rgba(146,178,210,.07);
+}
+.drive-source-icon.nox {
+  color: var(--accent-deep);
+  border-color: rgba(232,149,79,.24);
+  background: rgba(232,149,79,.06);
+}
+.drive-source-icon.collision {
+  color: #d9bd8f;
+  border-color: rgba(217,189,143,.24);
+  background: rgba(217,189,143,.06);
+}
 .drive-source-icon .thought-icon {
   width: 15px;
   height: 15px;
@@ -3000,19 +3015,23 @@ function driveSourceLabel(source, sourceType = '') {
 
 function driveSourceChip(source, sourceType = '') {
   const label = driveSourceLabel(source, sourceType);
+  const isCli = label === 'CLI';
   const isNox = label === 'Nox念头';
   const isCollision = label === 'DP碰撞';
   const isSpeech = label === 'Speech Trace';
   const isDialogue = label === 'Dialogue Residue';
-  const icon = isNox
-    ? thoughtSourceIcon('self')
+  const icon = isCli
+    ? thoughtSourceIcon('cli')
+    : (isNox
+      ? thoughtSourceIcon('self')
     : (isCollision
       ? thoughtSourceIcon('collision')
       : (isSpeech
         ? `<span class="thought-icon" title="Speech Trace" aria-label="Speech Trace">${ICONS.speech}</span>`
-        : (isDialogue ? `<span class="thought-icon" title="Dialogue Residue" aria-label="Dialogue Residue">${ICONS.dialogue}</span>` : '')));
-  return isNox || isCollision || isSpeech || isDialogue
-    ? `<span class="drive-summary-chip neutral drive-source-icon">${icon}</span>`
+        : (isDialogue ? `<span class="thought-icon" title="Dialogue Residue" aria-label="Dialogue Residue">${ICONS.dialogue}</span>` : ''))));
+  const tone = isCli ? 'cli' : isNox ? 'nox' : isCollision ? 'collision' : '';
+  return isCli || isNox || isCollision || isSpeech || isDialogue
+    ? `<span class="drive-summary-chip neutral drive-source-icon ${tone}">${icon}</span>`
     : `<span class="drive-summary-chip neutral"><strong>${esc(label)}</strong></span>`;
 }
 
