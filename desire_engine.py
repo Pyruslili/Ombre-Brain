@@ -828,9 +828,7 @@ def choose_chord_gravity(situation: str, route: dict, core: dict,
         candidates = CHORD_GRAVITY_POOLS.get(situation) or CHORD_GRAVITY_POOLS["drift"]
     recent_set = {str(x) for x in (recent or []) if x}
     available = [line for line in candidates if line not in recent_set] or list(candidates)
-    seed = f"{situation}:{vector}:{round(float((core or {}).get('charge', 0) or 0), 2)}:"
-    seed += f"{round(float((core or {}).get('clutch', 0) or 0), 2)}:"
-    seed += f"{round(float((core or {}).get('strain', 0) or 0), 2)}:{int((now or time.time()) // 1800)}"
+    seed = f"{situation}:{vector}"
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     return available[int(digest[:8], 16) % len(available)]
 

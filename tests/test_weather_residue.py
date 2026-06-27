@@ -207,6 +207,23 @@ def test_chord_gravity_uses_force_line_not_instruction():
     assert "应该" not in chemistry["gravity"]
 
 
+def test_chord_gravity_stays_stable_until_reaction_changes():
+    drives = {
+        **DRIVE_BASELINES,
+        "curiosity": 0.80,
+        "social": 0.62,
+        "fatigue": 0.05,
+        "stress": 0.16,
+    }
+
+    first = chord_chemistry_snapshot(drives, warmth=0.58, shadow=0.18, recent_gravity=[], now=1000)
+    later = chord_chemistry_snapshot(drives, warmth=0.58, shadow=0.18, recent_gravity=[], now=9000)
+
+    assert first["situation"] == later["situation"]
+    assert first["route"]["vector"] == later["route"]["vector"]
+    assert first["gravity"] == later["gravity"]
+
+
 def test_soothe_needs_shadow_context(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 
