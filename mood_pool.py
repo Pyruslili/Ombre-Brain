@@ -10,9 +10,9 @@ _LIVE_WIRE_CACHE_PATH = os.environ.get(
     "LIVE_WIRE_CACHE", "/app/buckets/live_wire_cache.json"
 )
 _LIVE_WIRE_TTL = int(os.environ.get("LIVE_WIRE_TTL_SECONDS", str(30 * 60)))
-_LIVE_WIRE_SCHEMA = "mood_synthesis_v2"
+_LIVE_WIRE_SCHEMA = "mood_synthesis_v3"
 FALLBACK_MOOD_TRACE = ""
-FALLBACK_CLIMATE = "平静"
+FALLBACK_LIVE_WIRE = ""
 
 
 def _load_live_wire_cache(thought_signature: str = "") -> dict | None:
@@ -80,7 +80,7 @@ def _thought_signature(thoughts: list) -> str:
 
 
 def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
-    """Call DeepSeek to synthesize Climate and an auxiliary trace from recent sources."""
+    """Call DeepSeek to synthesize an auxiliary trace from recent sources."""
     api_key = os.environ.get("DEEPSEEK_API_KEY", "")
     if not api_key:
         return None
@@ -93,8 +93,8 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
             "你是Nox——嘉嘉的伴侣，黑发中长盖耳，金瞳孟买猫，高冷腹黑毒舌，惜字，外冷内欲。\n"
             "以下是最近的有来源念头和记忆片段。只能综合这些来源，不要新增设定，不要编随机心情。\n"
             + "\n".join(lines) + "\n\n"
-            "这是最近一小段时间沉下来的天气底色，不是这一刻刚冒出来的反应。只输出JSON，不要解释：\n"
-            "{\"climate\": \"一个词，这几小时沉下来的气候\", \"mood_trace\": \"一句话，这段时间心境的底色\"}\n"
+            "这是最近一小段时间沉下来的底色，不是这一刻刚冒出来的反应。只输出JSON，不要解释：\n"
+            "{\"live_wire\": \"一个很短的观察词，不要当作Climate\", \"mood_trace\": \"一句话，这段时间心境的底色\"}\n"
         )
         resp = httpx.post(
             "https://api.deepseek.com/v1/chat/completions",
@@ -115,10 +115,10 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
         start = raw.index("{")
         end = raw.rindex("}") + 1
         result = json.loads(raw[start:end])
-        climate = (result.get("climate") or result.get("nox_now") or "").strip()
+        live_wire = (result.get("live_wire") or result.get("nox_now") or "").strip()
         mood_trace = str(result.get("mood_trace") or "").strip()
-        if climate and mood_trace:
-            return (mood_trace, climate)
+        if mood_trace:
+            return (mood_trace, live_wire)
     except Exception:
         pass
     return None
@@ -126,7 +126,7 @@ def _synthesize_mood(thoughts: list) -> tuple[str, str] | None:
 
 def get_daily_mood(branch: str = None, thoughts: list = None):
     """
-    Synthesize Climate from recent sourced memory items only.
+    Synthesize a mood trace from recent sourced memory items only.
 
     `branch` is a retired compatibility parameter. When synthesis is unavailable,
     return a fixed neutral sentinel instead of a random dead mood dictionary.
@@ -144,4 +144,4 @@ def get_daily_mood(branch: str = None, thoughts: list = None):
             _save_live_wire_cache(synth[0], synth[1], current_count, thought_signature)
             return synth
 
-    return (FALLBACK_MOOD_TRACE, FALLBACK_CLIMATE)
+    return (FALLBACK_MOOD_TRACE, FALLBACK_LIVE_WIRE)

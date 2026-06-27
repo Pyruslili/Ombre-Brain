@@ -306,6 +306,38 @@ WEATHER_SOOTHE_SHADOW_HALFLIFE_HOURS = 0.75
 WEATHER_SOOTHE_WARMTH_DELTA = 0.025
 WEATHER_EVENT_SOURCE = "feel"
 
+CLIMATE_LABELS = (
+    "Clear",
+    "Drift",
+    "Low Tide",
+    "Overcast",
+    "Static",
+    "Pressure",
+    "Banked Heat",
+    "Afterglow",
+    "Shelter",
+    "Watchful",
+    "Spark",
+    "Gravity",
+)
+ATMOSPHERE_SOURCE_WEIGHTS = {
+    "dp": 0.45,
+    "cli": 0.25,
+    "subcurrent": 0.16,
+}
+ATMOSPHERE_SWITCH_STEPS = 3
+ATMOSPHERE_SWITCH_MARGIN = 0.16
+ATMOSPHERE_WEAK_CURRENT_SCORE = 0.42
+ATMOSPHERE_BLEND_SWITCH = 0.65
+ATMOSPHERE_ROUTE_KEYS = (
+    "toward_jiajia",
+    "toward_house",
+    "outward",
+    "inward",
+    "guard",
+    "hover",
+)
+
 # ─── 悲恸引擎常量 ──────────────────────────────────────────────────────────────
 # 三层：抗议→绝望→疏离
 GRIEF_PROTEST_TICKS = 6            # 抗议层持续多少tick没有嘉嘉输入信号→跌绝望
@@ -668,6 +700,7 @@ def _weather_default_state(now: float = None) -> dict:
         "active_chord_at": 0.0,
         "chord_impulses": [],
         "recent_gravity_lines": [],
+        "atmosphere": atmosphere_default_state(now),
     }
 
 
@@ -1128,6 +1161,176 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
     }
 
 
+def _route_scores(route: dict | None) -> dict:
+    route = route if isinstance(route, dict) else {}
+    raw_scores = route.get("scores") if isinstance(route.get("scores"), dict) else {}
+    scores = {key: _clamp(float(raw_scores.get(key, 0.0) or 0.0)) for key in ATMOSPHERE_ROUTE_KEYS}
+    vector = str(route.get("vector") or "").strip()
+    if vector in scores:
+        scores[vector] = max(scores[vector], 0.72)
+    if not any(scores.values()):
+        scores["hover"] = 0.72
+    return scores
+
+
+def atmosphere_texture(core: dict | None, route: dict | None) -> dict:
+    core = core if isinstance(core, dict) else {}
+    charge = _clamp(float(core.get("charge", 0.0) or 0.0))
+    clutch = _clamp(float(core.get("clutch", 0.0) or 0.0))
+    strain = _clamp(float(core.get("strain", 0.0) or 0.0))
+    scores = _route_scores(route)
+    low_force = (1.0 - charge) * (1.0 - clutch) * (1.0 - strain)
+    return {
+        "depth": round(_clamp(0.56 * scores["inward"] + 0.44 * strain), 3),
+        "pull": round(_clamp(0.56 * max(scores["toward_jiajia"], scores["toward_house"]) + 0.44 * clutch), 3),
+        "guard": round(_clamp(0.45 * scores["guard"] + 0.30 * clutch + 0.25 * strain), 3),
+        "spark": round(_clamp(charge - 0.55 * strain), 3),
+        "drift": round(_clamp(0.72 * low_force + 0.28 * scores["hover"]), 3),
+    }
+
+
+def climate_scores(core: dict | None, route: dict | None, texture: dict | None = None) -> dict:
+    core = core if isinstance(core, dict) else {}
+    charge = _clamp(float(core.get("charge", 0.0) or 0.0))
+    clutch = _clamp(float(core.get("clutch", 0.0) or 0.0))
+    strain = _clamp(float(core.get("strain", 0.0) or 0.0))
+    scores = _route_scores(route)
+    texture = texture if isinstance(texture, dict) else atmosphere_texture(core, route)
+    depth = _clamp(float(texture.get("depth", 0.0) or 0.0))
+    pull = _clamp(float(texture.get("pull", 0.0) or 0.0))
+    guard = _clamp(float(texture.get("guard", 0.0) or 0.0))
+    spark = _clamp(float(texture.get("spark", 0.0) or 0.0))
+    drift = _clamp(float(texture.get("drift", 0.0) or 0.0))
+    toward = max(scores["toward_jiajia"], scores["toward_house"])
+    hover = scores["hover"]
+    inward = scores["inward"]
+    outward = scores["outward"]
+    guard_route = scores["guard"]
+    low_force = (1.0 - charge) * (1.0 - clutch) * (1.0 - strain)
+    return {
+        "Clear": round(_clamp(0.38 * charge + 0.30 * toward + 0.22 * (1.0 - strain) + 0.10 * (1.0 - clutch)), 3),
+        "Drift": round(_clamp(0.50 * drift + 0.30 * hover + 0.20 * low_force), 3),
+        "Low Tide": round(_clamp(0.42 * (1.0 - charge) + 0.32 * (1.0 - clutch) + 0.26 * hover - 0.18 * strain), 3),
+        "Overcast": round(_clamp(0.44 * strain + 0.24 * inward + 0.18 * hover + 0.14 * clutch), 3),
+        "Static": round(_clamp(0.40 * charge + 0.34 * strain + 0.18 * hover + 0.08 * clutch - 0.22 * spark), 3),
+        "Pressure": round(_clamp(0.42 * strain + 0.32 * clutch + 0.26 * guard_route), 3),
+        "Banked Heat": round(_clamp(0.44 * charge + 0.30 * clutch + 0.20 * inward + 0.06 * pull - 0.22 * strain), 3),
+        "Afterglow": round(_clamp(0.34 * charge + 0.30 * toward + 0.22 * spark + 0.14 * pull - 0.18 * strain), 3),
+        "Shelter": round(_clamp(0.38 * guard + 0.28 * clutch + 0.20 * scores["toward_house"] + 0.14 * (1.0 - charge)), 3),
+        "Watchful": round(_clamp(0.36 * guard_route + 0.28 * clutch + 0.24 * strain + 0.12 * (1.0 - charge)), 3),
+        "Spark": round(_clamp(0.48 * spark + 0.30 * charge + 0.22 * outward - 0.18 * strain), 3),
+        "Gravity": round(_clamp(0.42 * pull + 0.34 * clutch + 0.24 * toward), 3),
+    }
+
+
+def select_climate(core: dict | None, route: dict | None, texture: dict | None = None) -> dict:
+    scores = climate_scores(core, route, texture)
+    label = max(CLIMATE_LABELS, key=lambda item: scores.get(item, 0.0))
+    return {"label": label, "score": round(scores.get(label, 0.0), 3), "scores": scores}
+
+
+def atmosphere_default_state(now: float = None) -> dict:
+    now = now if now is not None else time.time()
+    core = {"charge": 0.18, "clutch": 0.16, "strain": 0.12}
+    route = {
+        "vector": "hover",
+        "scores": {key: (0.72 if key == "hover" else 0.0) for key in ATMOSPHERE_ROUTE_KEYS},
+    }
+    texture = atmosphere_texture(core, route)
+    selected = select_climate(core, route, texture)
+    return {
+        "core": core,
+        "route": route,
+        "texture": texture,
+        "climate": {
+            "current": selected["label"],
+            "candidate": selected["label"],
+            "candidate_steps": 0,
+            "inertia_counter": 0,
+            "blend": 0.0,
+            "current_score": selected["score"],
+            "candidate_score": selected["score"],
+            "scores": selected["scores"],
+        },
+        "updated_at": now,
+        "last_delta": {},
+    }
+
+
+def normalize_atmosphere_state(value: dict | None, now: float = None) -> dict:
+    state = atmosphere_default_state(now)
+    if not isinstance(value, dict):
+        return state
+    core = value.get("core") if isinstance(value.get("core"), dict) else {}
+    state["core"] = {
+        "charge": _clamp(float(core.get("charge", state["core"]["charge"]) or 0.0)),
+        "clutch": _clamp(float(core.get("clutch", state["core"]["clutch"]) or 0.0)),
+        "strain": _clamp(float(core.get("strain", state["core"]["strain"]) or 0.0)),
+    }
+    raw_route = value.get("route") if isinstance(value.get("route"), dict) else {}
+    route_scores = _route_scores(raw_route)
+    vector = str(raw_route.get("vector") or max(route_scores, key=route_scores.get)).strip()
+    state["route"] = {
+        "vector": vector if vector in ATMOSPHERE_ROUTE_KEYS else max(route_scores, key=route_scores.get),
+        "scores": {key: round(route_scores[key], 3) for key in ATMOSPHERE_ROUTE_KEYS},
+    }
+    state["texture"] = atmosphere_texture(state["core"], state["route"])
+    selected = select_climate(state["core"], state["route"], state["texture"])
+    climate = value.get("climate") if isinstance(value.get("climate"), dict) else {}
+    current = str(climate.get("current") or selected["label"]).strip()
+    candidate = str(climate.get("candidate") or selected["label"]).strip()
+    state["climate"] = {
+        "current": current if current in CLIMATE_LABELS else selected["label"],
+        "candidate": candidate if candidate in CLIMATE_LABELS else selected["label"],
+        "candidate_steps": max(0, int(climate.get("candidate_steps", 0) or 0)),
+        "inertia_counter": max(0, int(climate.get("inertia_counter", 0) or 0)),
+        "blend": _clamp(float(climate.get("blend", 0.0) or 0.0)),
+        "current_score": _clamp(float(climate.get("current_score", selected["score"]) or 0.0)),
+        "candidate_score": _clamp(float(climate.get("candidate_score", selected["score"]) or 0.0)),
+        "scores": selected["scores"],
+    }
+    state["updated_at"] = float(value.get("updated_at", state["updated_at"]) or state["updated_at"])
+    state["last_delta"] = value.get("last_delta") if isinstance(value.get("last_delta"), dict) else {}
+    return state
+
+
+def atmosphere_delta_from_chemistry(source: str, chemistry: dict,
+                                   intensity: float = 1.0,
+                                   confidence: float = 1.0) -> dict:
+    chemistry = chemistry if isinstance(chemistry, dict) else {}
+    core = chemistry.get("core") if isinstance(chemistry.get("core"), dict) else {}
+    route = chemistry.get("route") if isinstance(chemistry.get("route"), dict) else {}
+    normalized_core = {
+        "charge": _clamp(float(core.get("charge", 0.0) or 0.0)),
+        "clutch": _clamp(float(core.get("clutch", 0.0) or 0.0)),
+        "strain": _clamp(float(core.get("strain", 0.0) or 0.0)),
+    }
+    route_scores = _route_scores(route)
+    vector = str(route.get("vector") or max(route_scores, key=route_scores.get)).strip()
+    normalized_route = {
+        "vector": vector if vector in ATMOSPHERE_ROUTE_KEYS else max(route_scores, key=route_scores.get),
+        "scores": {key: round(route_scores[key], 3) for key in ATMOSPHERE_ROUTE_KEYS},
+    }
+    texture = atmosphere_texture(normalized_core, normalized_route)
+    source = source if source in ATMOSPHERE_SOURCE_WEIGHTS else "dp"
+    influence = _clamp(
+        ATMOSPHERE_SOURCE_WEIGHTS[source]
+        * _clamp(float(intensity or 0.0))
+        * _clamp(float(confidence or 0.0)),
+        0.0,
+        0.45,
+    )
+    return {
+        "source": source,
+        "intensity": round(_clamp(float(intensity or 0.0)), 3),
+        "confidence": round(_clamp(float(confidence or 0.0)), 3),
+        "influence": round(influence, 3),
+        "core": normalized_core,
+        "route": normalized_route,
+        "texture": texture,
+    }
+
+
 def _chord_impulse_weight(impulse: dict, now: float) -> float:
     try:
         strength = max(0.0, float(impulse.get("strength", 0.0) or 0.0))
@@ -1267,6 +1470,7 @@ class WeatherResidueStore:
                 "updated_at": float(component.get("updated_at", raw.get("updated_at", now)) or now),
             }
         state["chord_impulses"] = _normalize_chord_impulses(state, now)
+        state["atmosphere"] = normalize_atmosphere_state(raw.get("atmosphere"), now)
 
         if decay:
             state = self._decay(state, now)
@@ -1279,6 +1483,81 @@ class WeatherResidueStore:
         refreshed = self._refresh_totals(state, time.time())
         self._write_raw(refreshed)
         return refreshed
+
+    def apply_atmosphere_delta(self, delta: dict, now: float = None) -> dict:
+        now = now if now is not None else time.time()
+        if not isinstance(delta, dict) or float(delta.get("influence", 0.0) or 0.0) <= 0:
+            state = self.load(now, decay=True)
+            return normalize_atmosphere_state(state.get("atmosphere"), now)
+
+        state = self.load(now, decay=True)
+        atmosphere = normalize_atmosphere_state(state.get("atmosphere"), now)
+        influence = _clamp(float(delta.get("influence", 0.0) or 0.0), 0.0, 0.45)
+        old_core = atmosphere["core"]
+        incoming_core = delta.get("core") if isinstance(delta.get("core"), dict) else {}
+        atmosphere["core"] = {
+            key: round(_clamp(old_core.get(key, 0.0) * (1.0 - influence) + float(incoming_core.get(key, 0.0) or 0.0) * influence), 3)
+            for key in ("charge", "clutch", "strain")
+        }
+
+        old_scores = _route_scores(atmosphere.get("route"))
+        incoming_route = delta.get("route") if isinstance(delta.get("route"), dict) else {}
+        incoming_scores = _route_scores(incoming_route)
+        merged_scores = {
+            key: round(_clamp(old_scores[key] * (1.0 - influence) + incoming_scores[key] * influence), 3)
+            for key in ATMOSPHERE_ROUTE_KEYS
+        }
+        atmosphere["route"] = {
+            "vector": max(merged_scores, key=merged_scores.get),
+            "scores": merged_scores,
+        }
+        atmosphere["texture"] = atmosphere_texture(atmosphere["core"], atmosphere["route"])
+        selected = select_climate(atmosphere["core"], atmosphere["route"], atmosphere["texture"])
+        climate = atmosphere["climate"]
+        current = climate.get("current") if climate.get("current") in CLIMATE_LABELS else selected["label"]
+        current_score = selected["scores"].get(current, 0.0)
+        candidate = selected["label"]
+        if candidate == climate.get("candidate"):
+            candidate_steps = int(climate.get("candidate_steps", 0) or 0) + 1
+        else:
+            candidate_steps = 1
+        margin = selected["score"] - current_score
+        blend = _clamp(float(climate.get("blend", 0.0) or 0.0) * 0.60 + max(0.0, margin) * 0.85 + candidate_steps * 0.045)
+        should_switch = (
+            candidate != current
+            and candidate_steps >= ATMOSPHERE_SWITCH_STEPS
+            and (
+                margin >= ATMOSPHERE_SWITCH_MARGIN
+                or current_score <= ATMOSPHERE_WEAK_CURRENT_SCORE
+                or blend >= ATMOSPHERE_BLEND_SWITCH
+            )
+        )
+        if should_switch:
+            current = candidate
+            current_score = selected["score"]
+            candidate_steps = 0
+            blend = 0.0
+
+        climate.update({
+            "current": current,
+            "candidate": candidate,
+            "candidate_steps": candidate_steps,
+            "inertia_counter": int(climate.get("inertia_counter", 0) or 0) + 1,
+            "blend": round(blend, 3),
+            "current_score": round(current_score, 3),
+            "candidate_score": selected["score"],
+            "scores": selected["scores"],
+        })
+        atmosphere["updated_at"] = now
+        atmosphere["last_delta"] = {
+            "source": delta.get("source", ""),
+            "influence": round(influence, 3),
+            "candidate": candidate,
+        }
+        state["atmosphere"] = atmosphere
+        state["updated_at"] = now
+        self._write_raw(self._refresh_totals(state, now))
+        return atmosphere
 
     def _apply_component_value(self, state: dict, source: str, key: str,
                                delta: float) -> set[str]:
@@ -2956,6 +3235,8 @@ class DesireEngine:
         chemistry = chord_chemistry_snapshot(
             state.drives, effective_pa, effective_na, recent_gravity, now, event_tint
         )
+        atmosphere = normalize_atmosphere_state(residue.get("atmosphere"), now)
+        climate = atmosphere.get("climate") or {}
         gravity_line = chemistry["gravity_line"]
         if gravity_line and (not recent_gravity or recent_gravity[0] != gravity_line):
             residue["recent_gravity_lines"] = [gravity_line] + [
@@ -2967,6 +3248,8 @@ class DesireEngine:
             "base_NA": round(base["NA"], 3),
             "effective_PA": round(effective_pa, 3),
             "effective_NA": round(effective_na, 3),
+            "climate": climate.get("current", "Drift"),
+            "atmosphere": atmosphere,
             "current_chord": current_weather_chord(effective_pa, effective_na),
             "chord_chemistry": chemistry,
             "chemistry_core": chemistry["core"],
@@ -3013,6 +3296,92 @@ class DesireEngine:
     def weather_state(self) -> dict:
         state = self.store.load_state()
         return self._weather_readout(state)
+
+    def _atmosphere_source_for_event(self, source: str) -> str:
+        source = str(source or "").strip()
+        if source in {"dialogue_residue", "speech_event", "user_message"}:
+            return "dp"
+        if source in {"analyze_nocturne_entry", "feel", "legacy_feed", "manual"}:
+            return "cli"
+        return "dp"
+
+    def _apply_atmosphere_from_event(self, source: str, primary: str, brain: dict,
+                                     event_label: str, intensity: float,
+                                     confidence: float, agency: float) -> dict:
+        if source not in DRIVE_EVENT_WEATHER_SOURCES or agency < DRIVE_EVENT_AGENCY_GATE:
+            return {}
+        event_tint = chord_event_tint_from_drive_events([{
+            "source": source,
+            "event_label": event_label,
+            "suppressed": False,
+            "brain": brain,
+        }])
+        state = self.store.load_state()
+        weather = self.weather.load(decay=True)
+        base = pa_na_snapshot(state.drives)
+        chemistry = chord_chemistry_snapshot(
+            state.drives,
+            _clamp(base["PA"] + float(weather.get("warmth_residue", 0.0) or 0.0)),
+            _clamp(base["NA"] + float(weather.get("shadow_residue", 0.0) or 0.0)),
+            [],
+            time.time(),
+            event_tint,
+        )
+        delta = atmosphere_delta_from_chemistry(
+            self._atmosphere_source_for_event(source),
+            chemistry,
+            intensity=intensity,
+            confidence=confidence,
+        )
+        atmosphere = self.weather.apply_atmosphere_delta(delta)
+        return {
+            "source": delta.get("source", ""),
+            "influence": delta.get("influence", 0.0),
+            "climate": (atmosphere.get("climate") or {}).get("current", ""),
+            "candidate": (atmosphere.get("climate") or {}).get("candidate", ""),
+            "blend": (atmosphere.get("climate") or {}).get("blend", 0.0),
+        }
+
+    def apply_subcurrent_bias(self, drive_key: str = "", latent_weight: float = 0.6,
+                              confidence: float = 0.7) -> dict:
+        drive_key = normalize_drive_key(drive_key) or str(drive_key or "").strip().lower()
+        core = {"charge": 0.20, "clutch": 0.20, "strain": 0.18}
+        scores = {key: 0.0 for key in ATMOSPHERE_ROUTE_KEYS}
+        scores["hover"] = 0.38
+        if drive_key in {"attachment", "libido", "possessiveness"}:
+            core.update({"charge": 0.54, "clutch": 0.62, "strain": 0.28})
+            scores["toward_jiajia"] = 0.74
+        elif drive_key == "stewardship":
+            core.update({"charge": 0.34, "clutch": 0.58, "strain": 0.34})
+            scores["guard"] = 0.72
+            scores["toward_house"] = 0.48
+        elif drive_key in {"curiosity", "social"}:
+            core.update({"charge": 0.58, "clutch": 0.24, "strain": 0.22})
+            scores["outward"] = 0.74
+        elif drive_key == "reflection":
+            core.update({"charge": 0.30, "clutch": 0.36, "strain": 0.42})
+            scores["inward"] = 0.72
+        elif drive_key in {"stress", "fatigue"}:
+            core.update({"charge": 0.22, "clutch": 0.34, "strain": 0.66})
+            scores["inward"] = 0.45
+            scores["hover"] = 0.52
+        else:
+            scores["hover"] = 0.72
+        route = {"vector": max(scores, key=scores.get), "scores": scores}
+        delta = atmosphere_delta_from_chemistry(
+            "subcurrent",
+            {"core": core, "route": route},
+            intensity=latent_weight,
+            confidence=confidence,
+        )
+        atmosphere = self.weather.apply_atmosphere_delta(delta)
+        return {
+            "source": "subcurrent",
+            "influence": delta.get("influence", 0.0),
+            "climate": (atmosphere.get("climate") or {}).get("current", ""),
+            "candidate": (atmosphere.get("climate") or {}).get("candidate", ""),
+            "blend": (atmosphere.get("climate") or {}).get("blend", 0.0),
+        }
 
     def _apply_drive_event_weather(self, source: str, primary: str, brain: dict,
                                    intensity: float, confidence: float,
@@ -3368,6 +3737,9 @@ class DesireEngine:
         weather_result = self._apply_drive_event_weather(
             source, primary, brain, intensity, confidence, agency, suppressed
         )
+        atmosphere_result = self._apply_atmosphere_from_event(
+            source, primary, brain, event_label, intensity, confidence, agency
+        )
 
         ledger_id = self.store.record_drive_event({
             "ts": now,
@@ -3394,6 +3766,7 @@ class DesireEngine:
             "reason": reason,
             "applied": applied,
             "weather": weather_result,
+            "atmosphere": atmosphere_result,
             "discernment": discernment,
             "reflection_mode": brain.get("reflection_mode", ""),
             "forward_archival": forward_archival,

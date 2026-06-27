@@ -286,7 +286,7 @@ def test_reflection_forward_archival_stays_under_reflection(tmp_path):
     assert event["brain"]["forward_archival"]["display"] == "留痕"
 
 
-def test_mood_pool_has_no_unsourced_dictionary_fallback(monkeypatch, tmp_path):
+def test_mood_pool_no_longer_falls_back_to_climate_word(monkeypatch, tmp_path):
     monkeypatch.setenv("LIVE_WIRE_CACHE", str(tmp_path / "live_wire_cache.json"))
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
@@ -299,7 +299,7 @@ def test_mood_pool_has_no_unsourced_dictionary_fallback(monkeypatch, tmp_path):
         {"text": "another sourced thought", "drive": "curiosity", "strength": 0.7},
     ])
 
-    assert result == ("", "平静")
+    assert result == ("", "")
     assert not (tmp_path / "live_wire_cache.json").exists()
 
 

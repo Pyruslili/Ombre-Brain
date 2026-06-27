@@ -1,4 +1,5 @@
 from desire_engine import (
+    CLIMATE_LABELS,
     DesireEngine,
     DRIVE_BASELINES,
     chord_chemistry_snapshot,
@@ -156,6 +157,51 @@ def test_chord_chemistry_keeps_vector_as_route():
     assert chemistry["situation"] == "guard"
     assert chemistry["derived_texture"]["guard"] > 0.55
     assert chemistry["gravity"]
+
+
+def test_atmosphere_climate_uses_fixed_labels_and_hysteresis(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    before = engine.weather_state()["climate"]
+
+    payload = {
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "stress",
+        "intensity": 1.0,
+        "confidence": 1.0,
+        "agency": 1.0,
+        "event_label": "pressure_weather",
+        "brain": {
+            "source": "dialogue_residue",
+            "tension_load": 0.95,
+            "territorial_alarm": 0.70,
+            "anchor_target": "boundary",
+        },
+    }
+    first = engine.apply_drive_event(payload)
+    second = engine.apply_drive_event(payload)
+    third = engine.apply_drive_event(payload)
+    weather = engine.weather_state()
+
+    assert before in CLIMATE_LABELS
+    assert first["atmosphere"]["climate"] == before
+    assert second["atmosphere"]["climate"] == before
+    assert third["atmosphere"]["climate"] in CLIMATE_LABELS
+    assert weather["climate"] == third["atmosphere"]["climate"]
+    assert weather["atmosphere"]["climate"]["candidate_steps"] >= 0
+
+
+def test_subcurrent_bias_does_not_directly_switch_climate(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    before = engine.weather_state()["climate"]
+
+    result = engine.apply_subcurrent_bias("stress", latent_weight=1.0, confidence=1.0)
+    weather = engine.weather_state()
+
+    assert result["source"] == "subcurrent"
+    assert result["influence"] <= 0.16
+    assert weather["climate"] == before
+    assert weather["atmosphere"]["last_delta"]["source"] == "subcurrent"
 
 
 def test_chord_chemistry_uses_interactions_not_plain_drive_aliases():

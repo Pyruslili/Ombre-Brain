@@ -2150,8 +2150,8 @@ async def nocturne_breath(
             if top_drive:
                 lines.append(f"Undertow：{top_drive} {undertow_value:.2f}")
             lines.extend([f"Warmth：{warmth:.2f}", f"Shadow：{abs(shadow):.2f}"])
-            if mood_entry[1]:
-                lines.append(f"Climate：{mood_entry[1]}")
+            if weather.get("climate"):
+                lines.append(f"Climate：{weather.get('climate')}")
             if mood_trace:
                 lines.append(f"Mood Trace：{mood_trace}")
             soma = _fresh_soma_state()
@@ -4060,9 +4060,10 @@ async def api_desire_state(request):
         undertow_value = float(state.get("drives", {}).get(top_drive, 0)) if top_drive else 0.0
         state["latest_thought"] = latest_thought
         state["mood_trace"] = latest_thought
+        climate = str(weather.get("climate") or "Drift").strip()
         state["synthesized_mood_trace"] = mood_entry[0]
-        state["mood_word"] = mood_entry[1]
-        state["climate"] = mood_entry[1]
+        state["mood_word"] = climate
+        state["climate"] = climate
         state["weather_residue"] = {
             "warmth": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow": round(float(weather.get("shadow_residue", 0.0)), 3),
@@ -4077,6 +4078,8 @@ async def api_desire_state(request):
             "chord_situation": weather.get("chord_situation", ""),
             "gravity_line": weather.get("gravity_line", ""),
             "gravity": weather.get("gravity", ""),
+            "atmosphere": weather.get("atmosphere", {}),
+            "climate": climate,
         }
         state["pulse_weather"] = {
             "undertow": top_drive,
@@ -4089,6 +4092,8 @@ async def api_desire_state(request):
             "active_chord_weight": weather.get("active_chord_weight", 0.0),
             "source_stack": weather.get("source_stack", []),
             "chord_display": _weather_chord_display(weather),
+            "climate": climate,
+            "atmosphere": weather.get("atmosphere", {}),
             "chord_chemistry": weather.get("chord_chemistry", {}),
             "chemistry_core": weather.get("chemistry_core", {}),
             "chemistry_route": weather.get("chemistry_route", {}),
@@ -4101,8 +4106,7 @@ async def api_desire_state(request):
             "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
             "base_shadow": round(float(weather.get("base_NA", 0.0)), 3),
             "longing": round(float(state.get("longing", 0)), 3),
-            "nox_now": mood_entry[1],
-            "climate": mood_entry[1],
+            "nox_now": climate,
             "mood_trace": latest_thought,
             "synthesized_mood_trace": mood_entry[0],
         }
@@ -4141,6 +4145,14 @@ async def api_heartbeat_latent_note(request):
     drive_key = request.query_params.get("drive_key", "")
     approved_note = _select_approved_latent_note(exclude_ids, drive_key=drive_key)
     if approved_note:
+        try:
+            approved_note["atmosphere_bias"] = _desire.apply_subcurrent_bias(
+                approved_note.get("drive_tag") or drive_key,
+                latent_weight=float(approved_note.get("score", 1.0) or 1.0),
+                confidence=0.7,
+            )
+        except Exception as e:
+            logger.warning(f"approved latent atmosphere bias failed: {e}")
         return JSONResponse(
             {"note": approved_note, "source": "approved_pool", "candidate_count": 1},
             headers={"Access-Control-Allow-Origin": "*"},
@@ -4170,6 +4182,14 @@ async def api_heartbeat_latent_note(request):
         pick_pool = strong_candidates or candidates
         weights = [max(0.01, c.get("score", 0.01)) for c in pick_pool]
         note = random.choices(pick_pool, weights=weights, k=1)[0]
+        try:
+            note["atmosphere_bias"] = _desire.apply_subcurrent_bias(
+                note.get("drive_tag") or drive_key,
+                latent_weight=float(note.get("score", 0.6) or 0.6),
+                confidence=0.65,
+            )
+        except Exception as e:
+            logger.warning(f"latent atmosphere bias failed: {e}")
         return JSONResponse(
             {
                 "note": note,
