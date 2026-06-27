@@ -77,6 +77,15 @@ from speech_event_engine import (
     speech_event_classifier_available,
     append_ledger as append_speech_event_ledger,
 )
+from dialogue_residue_engine import (
+    classify_dialogue_residue_dp,
+    dialogue_residue_available,
+    load_dialogue_residue_state,
+    normalize_dialogue_messages,
+    normalize_dialogue_residue_event,
+    save_dialogue_residue_state,
+    append_dialogue_residue_ledger,
+)
 
 # --- Load config & init logging / 加载配置 & 初始化日志 ---
 config = load_config()
@@ -168,6 +177,21 @@ def _speech_event_context_snapshot() -> dict:
     }
 
 
+def _dialogue_residue_context_snapshot() -> dict:
+    """Current state for 2+2 dialogue analysis; lightweight and read-only."""
+    context = _speech_event_context_snapshot()
+    try:
+        weather = (_desire.state().get("effective_pa_na") or {})
+    except Exception:
+        weather = {}
+    chemistry = weather.get("chord_chemistry") if isinstance(weather, dict) else {}
+    if isinstance(chemistry, dict):
+        context["chemistry_core"] = chemistry.get("core") or weather.get("chemistry_core") or {}
+        context["chemistry_route"] = chemistry.get("route") or weather.get("chemistry_route") or {}
+        context["chord_situation"] = chemistry.get("situation") or weather.get("chord_situation") or ""
+    return context
+
+
 def _weather_chord_display(weather: dict) -> str:
     current = str((weather or {}).get("current_chord") or "").strip()
     active = str((weather or {}).get("active_chord") or "").strip()
@@ -196,6 +220,34 @@ async def _refine_speech_batch_background(items: list[dict]) -> None:
             config["buckets_dir"], {"stage": "batch_failed", "error": str(e)[:180], "batch_size": len(items)}
         )
         logger.warning(f"speech_event batch refine failed: {e}")
+
+
+async def _refine_dialogue_residue_background(messages: list[dict], window_id: str) -> None:
+    """Analyze a 2+2 dialogue window after Stop; skipped windows are handled before scheduling."""
+    try:
+        event = await classify_dialogue_residue_dp(
+            messages,
+            state_context=_dialogue_residue_context_snapshot(),
+            window_id=window_id,
+        )
+        saved = save_dialogue_residue_state(config["buckets_dir"], event, ledger_stage="dp_refined")
+        result = {}
+        if saved.get("primary_drive") and saved.get("intensity", 0) > 0 and saved.get("confidence", 0) >= 0.45:
+            result = _desire.apply_drive_event(saved)
+            try:
+                _last_signal_ts[0] = time.time()
+                _desire.mark_user_signal(_last_signal_ts[0])
+            except Exception as e:
+                logger.warning(f"dialogue_residue mark_user_signal failed: {e}")
+        append_dialogue_residue_ledger(
+            config["buckets_dir"],
+            {"stage": "applied", "window_id": window_id, "event": saved, "result": result},
+        )
+    except Exception as e:
+        append_dialogue_residue_ledger(
+            config["buckets_dir"], {"stage": "failed", "window_id": window_id, "error": str(e)[:180]}
+        )
+        logger.warning(f"dialogue_residue refine failed: {e}")
 
 
 def _apply_speech_event_drive(event: dict | None) -> dict:
@@ -3835,6 +3887,62 @@ async def api_speech_event_review(request):
     return JSONResponse(result, headers={"Access-Control-Allow-Origin": "*"})
 
 
+# =============================================================
+# /api/dialogue-residue — 2+2 当前对话残留
+# companion 在 Stop 后拼出最近 2 条嘉嘉 + 2 条 Nox。若该窗口已经调用过
+# Nocturne 工具，直接跳过，避免和 CLI/nocturne 自存事件重复喂入。
+# =============================================================
+@mcp.custom_route("/api/dialogue-residue/submit", methods=["POST"])
+async def api_dialogue_residue_submit(request):
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+    window_id = str(body.get("window_id") or "").strip()[:120]
+    messages = normalize_dialogue_messages(body.get("messages") or [])
+    nocturne_called = bool(body.get("nocturne_called"))
+    if not window_id:
+        window_id = str(body.get("id") or "").strip()[:120]
+    if nocturne_called:
+        skipped = normalize_dialogue_residue_event(
+            {"status": "skipped_nocturne_call", "confidence": 0.0, "intensity": 0.0},
+            messages=messages,
+            window_id=window_id,
+        )
+        save_dialogue_residue_state(config["buckets_dir"], skipped, ledger_stage="skipped_nocturne_call")
+        return JSONResponse({"ok": True, "skipped": True, "reason": "nocturne_called", "window_id": skipped["window_id"]},
+                           headers={"Access-Control-Allow-Origin": "*"})
+    if len(messages) < 4:
+        return JSONResponse({"ok": False, "error": "need 2 user + 2 assistant messages", "count": len(messages)},
+                           status_code=400, headers={"Access-Control-Allow-Origin": "*"})
+
+    dp_available = dialogue_residue_available()
+    if dp_available:
+        asyncio.create_task(_refine_dialogue_residue_background(messages, window_id))
+    else:
+        fallback = normalize_dialogue_residue_event(
+            {"status": "dp_unavailable", "confidence": 0.0, "intensity": 0.0},
+            messages=messages,
+            window_id=window_id,
+        )
+        save_dialogue_residue_state(config["buckets_dir"], fallback, ledger_stage="dp_unavailable")
+
+    return JSONResponse(
+        {"ok": True, "dp_queued": dp_available, "window_id": window_id, "message_count": len(messages)},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
+@mcp.custom_route("/api/dialogue-residue/state", methods=["GET"])
+async def api_dialogue_residue_state(request):
+    from starlette.responses import JSONResponse
+    return JSONResponse(load_dialogue_residue_state(config["buckets_dir"]) or {},
+                       headers={"Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/api/desire/state", methods=["GET"])
 async def api_desire_state(request):
     """只读：当前drive/intent/pa_na等快照，不tick。
@@ -3925,6 +4033,9 @@ async def api_desire_state(request):
             speech_event = dict(speech_event)
             speech_event["recent"] = is_recent_speech_event(speech_event)
             state["speech_event"] = speech_event
+        dialogue_residue = load_dialogue_residue_state(config["buckets_dir"])
+        if dialogue_residue:
+            state["dialogue_residue"] = dialogue_residue
     except Exception:
         pass
     return JSONResponse(state,
