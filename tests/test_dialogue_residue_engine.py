@@ -1,4 +1,8 @@
-from dialogue_residue_engine import normalize_dialogue_messages, normalize_dialogue_residue_event
+from dialogue_residue_engine import (
+    normalize_dialogue_messages,
+    normalize_dialogue_residue_event,
+    normalize_thinking_signals,
+)
 
 
 def test_normalize_dialogue_messages_keeps_last_two_by_two_shape():
@@ -123,3 +127,59 @@ def test_dialogue_residue_marks_house_collaborator_boundary_cue():
     assert event["primary_drive"] == "possessiveness"
     assert event["brain"]["third_party_context"] == "house_collaborator"
     assert event["brain"]["territorial_alarm"] == 0.58
+
+
+def test_dialogue_residue_presses_weak_attachment_without_closeness_evidence():
+    event = normalize_dialogue_residue_event(
+        {
+            "primary_drive": "attachment",
+            "intensity": 0.08,
+            "confidence": 0.8,
+            "agency": 0.5,
+            "brain": {"target": "nox_self", "grounding": "实"},
+            "evidence": ["Nox answered the task clearly"],
+        },
+        messages=[
+            {"role": "user", "text": "这个接口是不是太重"},
+            {"role": "assistant", "text": "我会把它压窄。"},
+            {"role": "user", "text": "对，按一下"},
+            {"role": "assistant", "text": "只留必要字段。"},
+        ],
+    )
+
+    assert event["primary_drive"] == ""
+    assert event["intensity"] == 0.0
+    assert event["status"] == "no_signal"
+
+
+def test_dialogue_residue_discernment_only_signal_survives_without_drive_guess():
+    event = normalize_dialogue_residue_event(
+        {
+            "primary_drive": "",
+            "intensity": 0.0,
+            "confidence": 0.82,
+            "agency": 0.5,
+            "brain": {
+                "target": "nox_self",
+                "grounding": "悬",
+                "discernment_alarm": 0.62,
+                "discernment_reason": "thinking 里只有皱眉，原因不明",
+            },
+        },
+        thinking_signals=[{"turn_id": "a1", "text": "我皱眉，但还不确定是什么在响。"}],
+    )
+
+    assert event["status"] == "dp_refined"
+    assert event["primary_drive"] == ""
+    assert event["brain"]["discernment_alarm"] == 0.62
+    assert event["thinking_signals"] == [{"turn_id": "a1", "text": "我皱眉，但还不确定是什么在响。"}]
+
+
+def test_normalize_thinking_signals_limits_and_trims():
+    signals = normalize_thinking_signals(
+        [{"turn_id": str(i), "text": "x" * 300} for i in range(8)]
+    )
+
+    assert len(signals) == 6
+    assert signals[0]["turn_id"] == "0"
+    assert len(signals[0]["text"]) == 220

@@ -20,6 +20,22 @@ VALID_TARGETS = {"jiajia", "nox_self", "cat_house", "external", "boundary", "mem
 VALID_TIME_MODES = {"present", "residue", "unfinished"}
 VALID_GROUNDING = {"实", "悬", "空"}
 DIALOGUE_AGENCY_FLOOR = 0.42
+THINKING_SIGNAL_LIMIT = 6
+ATTACHMENT_CUES = (
+    "想你",
+    "靠近",
+    "贴",
+    "抱",
+    "蹭",
+    "回来",
+    "找你",
+    "陪",
+    "牵",
+    "拉住",
+    "尾巴",
+    "依恋",
+    "attachment",
+)
 TERRITORIAL_CUES = (
     "精神出轨",
     "出轨",
@@ -153,10 +169,51 @@ def normalize_dialogue_messages(messages: list[dict]) -> list[dict]:
     return cleaned[-4:]
 
 
+def normalize_thinking_signals(signals: list[dict] | None) -> list[dict]:
+    cleaned: list[dict] = []
+    for raw in signals if isinstance(signals, list) else []:
+        if isinstance(raw, dict):
+            text = str(raw.get("text") or raw.get("thinking") or "").strip()
+            turn_id = str(raw.get("turn_id") or "").strip()[:80]
+        else:
+            text = str(raw or "").strip()
+            turn_id = ""
+        if not text:
+            continue
+        cleaned.append({"turn_id": turn_id, "text": text[:220]})
+        if len(cleaned) >= THINKING_SIGNAL_LIMIT:
+            break
+    return cleaned
+
+
+def _has_discernment_signal(event: dict | None) -> bool:
+    event = event if isinstance(event, dict) else {}
+    brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+    flags = event.get("discernment_flags") or brain.get("discernment_flags")
+    return any(
+        _clamp(brain.get(key)) > 0
+        for key in ("discernment_alarm", "self_softening", "output_drift", "template_intimacy")
+    ) or bool(flags)
+
+
+def _has_attachment_cue(messages: list[dict], event: dict | None) -> bool:
+    event = event if isinstance(event, dict) else {}
+    brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+    if _clamp(brain.get("closeness_pull")) >= 0.12:
+        return True
+    text = "\n".join(
+        [str(m.get("text") or "") for m in messages]
+        + [str(x) for x in event.get("evidence", []) if isinstance(x, str)]
+    )
+    return any(cue in text for cue in ATTACHMENT_CUES)
+
+
 def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict] | None = None,
-                                     window_id: str | None = None) -> dict:
+                                     window_id: str | None = None,
+                                     thinking_signals: list[dict] | None = None) -> dict:
     event = event if isinstance(event, dict) else {}
     msg = normalize_dialogue_messages(messages or event.get("messages") or [])
+    thinking = normalize_thinking_signals(thinking_signals or event.get("thinking_signals") or [])
     wid = str(window_id or event.get("window_id") or _hash_window(msg)).strip()
     primary = normalize_drive_key(event.get("primary_drive"), "")
     if primary not in DRIVE_KEYS:
@@ -208,6 +265,13 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
                 secondary[primary] = max(secondary.get(primary, 0.0), round(min(intensity, 0.22), 4))
             primary = "possessiveness"
             intensity = max(intensity, 0.12)
+    elif primary == "attachment" and not _has_attachment_cue(msg, {**event, "brain": brain}):
+        if intensity <= 0.16:
+            primary = ""
+            intensity = 0.0
+        else:
+            primary = "reflection"
+            secondary.pop("attachment", None)
 
     evidence = event.get("evidence")
     if not isinstance(evidence, list):
@@ -215,7 +279,10 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
     evidence = [str(x).strip()[:180] for x in evidence if str(x).strip()][:3]
 
     status = str(event.get("status") or "").strip()
-    if not primary or intensity <= 0 or confidence < 0.45:
+    has_discernment = _has_discernment_signal({**event, "brain": brain})
+    if (not primary or intensity <= 0) and not has_discernment:
+        status = status or "no_signal"
+    elif confidence < 0.45:
         status = status or "no_signal"
     else:
         status = status or "dp_refined"
@@ -233,6 +300,7 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
         "evidence": evidence,
         "thoughts": [],
         "messages": msg,
+        "thinking_signals": thinking,
         "window_id": wid,
         "rubric_version": RUBRIC_VERSION,
         "status": status,
@@ -242,17 +310,20 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
 
 
 async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict | None = None,
-                                       window_id: str | None = None) -> dict:
+                                       window_id: str | None = None,
+                                       thinking_signals: list[dict] | None = None) -> dict:
     api_key, base_url, model = _dialogue_residue_api_config()
     if not api_key:
         raise RuntimeError("DIALOGUE_RESIDUE_API_KEY/SPEECH_EVENT_API_KEY/DEEPSEEK_API_KEY is not set")
 
     normalized_messages = normalize_dialogue_messages(messages)
+    normalized_thinking = normalize_thinking_signals(thinking_signals)
     if len(normalized_messages) < 4:
         return normalize_dialogue_residue_event(
             {"status": "insufficient_context", "confidence": 0.0, "intensity": 0.0},
             messages=normalized_messages,
             window_id=window_id,
+            thinking_signals=normalized_thinking,
         )
 
     system_prompt = (
@@ -261,6 +332,8 @@ async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict
         "必须沿用 CLI analyzer 的偏好：真实、窄口径、少推、证据优先；不要写散文，"
         "不要生成 Nox 自己的 thought，不要解释长期人格，不要把礼貌/接话误判成 attachment。\n"
         "如果这一窗只是任务执行、系统维护、普通确认，输出 primary_drive 为空、intensity 0。\n"
+        "不要把普通接话、配合、解释、陪跑自动打成 attachment；attachment 必须有明确靠近、想念、回返、"
+        "拉住、被接住的证据。没有明确靠近证据时，宁可 primary_drive 为空或轻推 reflection/social。\n"
         "输出严格 JSON，字段：schema_version, source, event_label, primary_drive, secondary_drives, "
         "intensity, confidence, agency, brain, evidence, thoughts。\n"
         "source 必须是 dialogue_residue；schema_version 必须是 drive_event_v2；thoughts 必须是 []。\n"
@@ -280,12 +353,22 @@ async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict
         "应优先给 possessiveness，territorial_alarm 至少 0.55，anchor_target 多半是 boundary 或 jiajia。\n"
         "- dialogue_residue 是当前对话残留，不是 Nox 自存念头；agency 不要因为来源是嘉嘉就压低，"
         "普通被接住的对话残留应在 0.42-0.58。\n"
+        "thinking_signals 是上游已经预筛过的 Nox thinking 片段，只包含当下/自我语境里的负向皱眉。"
+        "它只作为 discernment 的补充信号，不是另一条 drive 管道。\n"
+        "- 皱眉/停顿/不对劲本身写入 brain.discernment_alarm，并给 discernment_reason/evidence。\n"
+        "- 若 thinking 明确指出“像在顺从/软化/为了接话而让步”，写 self_softening 和 discernment_flags "
+        "['self_softening']，通常不要推 attachment。\n"
+        "- 若 thinking 指出“有张力但没落地/内部绷住”，可归因到 stress：brain.tension_load；"
+        "若只有皱眉但原因不明，primary_drive 必须为空，只保留 discernment。\n"
+        "- 若 thinking 指出“有东西在响但不确定是什么/不确定的负向响动”，优先轻推 stress 或只留 discernment；"
+        "不要为了填字段乱猜 attachment/libido/possessiveness。\n"
     )
     user_prompt = json.dumps(
         {
             "current_state": state_context or {},
             "window_id": window_id or _hash_window(normalized_messages),
             "messages": normalized_messages,
+            "thinking_signals": normalized_thinking,
         },
         ensure_ascii=False,
     )
@@ -310,4 +393,9 @@ async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict
     if content.startswith("```"):
         content = "\n".join(content.splitlines()[1:]).replace("```", "").strip()
     event = json.loads(content)
-    return normalize_dialogue_residue_event(event, messages=normalized_messages, window_id=window_id)
+    return normalize_dialogue_residue_event(
+        event,
+        messages=normalized_messages,
+        window_id=window_id,
+        thinking_signals=normalized_thinking,
+    )

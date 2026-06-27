@@ -90,6 +90,7 @@ from dialogue_residue_engine import (
     load_dialogue_residue_state,
     normalize_dialogue_messages,
     normalize_dialogue_residue_event,
+    normalize_thinking_signals,
     save_dialogue_residue_state,
     append_dialogue_residue_ledger,
 )
@@ -276,6 +277,7 @@ def _compact_desire_state(state: dict) -> dict:
             "thought": _short_state_text(intent.get("thought_text") or intent.get("thought"), 160),
         }
 
+    compact_thoughts = [_compact_thought(t) for t in thoughts[:8] if isinstance(t, dict)]
     return {
         "drives": state.get("drives", {}),
         "effective_drives": state.get("effective_drives", {}),
@@ -294,6 +296,10 @@ def _compact_desire_state(state: dict) -> dict:
             "mood_trace": _short_state_text(weather.get("mood_trace"), 160),
             "current_chord": weather.get("current_chord"),
             "chord_display": weather.get("chord_display") or _weather_chord_display(effective),
+            "chemistry_core": weather.get("chemistry_core") or (weather.get("chord_chemistry") or {}).get("core"),
+            "chemistry_route": weather.get("chemistry_route") or (weather.get("chord_chemistry") or {}).get("route"),
+            "chord_situation": weather.get("chord_situation", ""),
+            "derived_texture": weather.get("derived_texture", {}),
             "gravity": _short_state_text(weather.get("gravity") or weather.get("gravity_line"), 160),
         },
         "speech_event": {
@@ -310,7 +316,8 @@ def _compact_desire_state(state: dict) -> dict:
             "confidence": dialogue.get("confidence"),
             "event_label": dialogue.get("event_label"),
         } if dialogue else {},
-        "recent_thoughts": [_compact_thought(t) for t in thoughts[:8] if isinstance(t, dict)],
+        "thoughts": compact_thoughts,
+        "recent_thoughts": compact_thoughts,
         "recent_drive_events": [_compact_event(e) for e in drive_events[:5] if isinstance(e, dict)],
         "recent_refusals": state.get("recent_refusals", []),
         "counts": {
@@ -342,17 +349,38 @@ async def _refine_speech_batch_background(items: list[dict]) -> None:
         logger.warning(f"speech_event batch refine failed: {e}")
 
 
-async def _refine_dialogue_residue_background(messages: list[dict], window_id: str) -> None:
+def _dialogue_residue_should_apply(event: dict) -> bool:
+    if event.get("confidence", 0) < 0.45:
+        return False
+    brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+    has_primary = bool(event.get("primary_drive")) and event.get("intensity", 0) > 0
+
+    def _positive_brain_value(key: str) -> bool:
+        try:
+            return float(brain.get(key, 0.0) or 0.0) > 0
+        except (TypeError, ValueError):
+            return False
+
+    has_discernment = any(
+        _positive_brain_value(key)
+        for key in ("discernment_alarm", "self_softening", "output_drift", "template_intimacy")
+    ) or bool(brain.get("discernment_flags") or event.get("discernment_flags"))
+    return has_primary or has_discernment
+
+
+async def _refine_dialogue_residue_background(messages: list[dict], window_id: str,
+                                              thinking_signals: list[dict] | None = None) -> None:
     """Analyze a 2+2 dialogue window after Stop; skipped windows are handled before scheduling."""
     try:
         event = await classify_dialogue_residue_dp(
             messages,
             state_context=_dialogue_residue_context_snapshot(),
             window_id=window_id,
+            thinking_signals=thinking_signals,
         )
         saved = save_dialogue_residue_state(config["buckets_dir"], event, ledger_stage="dp_refined")
         result = {}
-        if saved.get("primary_drive") and saved.get("intensity", 0) > 0 and saved.get("confidence", 0) >= 0.45:
+        if _dialogue_residue_should_apply(saved):
             result = _desire.apply_drive_event(saved)
             try:
                 _last_signal_ts[0] = time.time()
@@ -3994,6 +4022,7 @@ async def api_dialogue_residue_submit(request):
 
     window_id = str(body.get("window_id") or "").strip()[:120]
     messages = normalize_dialogue_messages(body.get("messages") or [])
+    thinking_signals = normalize_thinking_signals(body.get("thinking_signals") or [])
     nocturne_called = bool(body.get("nocturne_called"))
     if not window_id:
         window_id = str(body.get("id") or "").strip()[:120]
@@ -4002,6 +4031,7 @@ async def api_dialogue_residue_submit(request):
             {"status": "skipped_nocturne_call", "confidence": 0.0, "intensity": 0.0},
             messages=messages,
             window_id=window_id,
+            thinking_signals=thinking_signals,
         )
         save_dialogue_residue_state(config["buckets_dir"], skipped, ledger_stage="skipped_nocturne_call")
         return JSONResponse({"ok": True, "skipped": True, "reason": "nocturne_called", "window_id": skipped["window_id"]},
@@ -4012,17 +4042,24 @@ async def api_dialogue_residue_submit(request):
 
     dp_available = dialogue_residue_available()
     if dp_available:
-        asyncio.create_task(_refine_dialogue_residue_background(messages, window_id))
+        asyncio.create_task(_refine_dialogue_residue_background(messages, window_id, thinking_signals))
     else:
         fallback = normalize_dialogue_residue_event(
             {"status": "dp_unavailable", "confidence": 0.0, "intensity": 0.0},
             messages=messages,
             window_id=window_id,
+            thinking_signals=thinking_signals,
         )
         save_dialogue_residue_state(config["buckets_dir"], fallback, ledger_stage="dp_unavailable")
 
     return JSONResponse(
-        {"ok": True, "dp_queued": dp_available, "window_id": window_id, "message_count": len(messages)},
+        {
+            "ok": True,
+            "dp_queued": dp_available,
+            "window_id": window_id,
+            "message_count": len(messages),
+            "thinking_signal_count": len(thinking_signals),
+        },
         headers={"Access-Control-Allow-Origin": "*"},
     )
 
@@ -4135,7 +4172,10 @@ async def api_desire_state(request):
             state["dialogue_residue"] = dialogue_residue
     except Exception:
         pass
-    return JSONResponse(state,
+    full_requested = str(request.query_params.get("full", "")).strip().lower() in {"1", "true", "yes"}
+    full_allowed = os.environ.get("OMBRE_DESIRE_STATE_FULL", "").strip().lower() in {"1", "true", "yes", "on"}
+    payload = state if full_requested and full_allowed else _compact_desire_state(state)
+    return JSONResponse(payload,
                        headers={"Access-Control-Allow-Origin": "*"})
 
 
