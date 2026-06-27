@@ -2822,8 +2822,18 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
     marks_by_bucket = _load_all_marks()
     q = (query or "").strip().lower()
 
+    def query_terms(raw_query: str) -> list[str]:
+        import re as _re
+        raw_query = (raw_query or "").strip().lower()
+        if not raw_query:
+            return []
+        terms = [part.strip() for part in _re.split(r"[\s,，、]+", raw_query) if part.strip()]
+        return terms or [raw_query]
+
+    q_terms = query_terms(q)
+
     def matches_query(bucket: dict) -> bool:
-        if not q:
+        if not q_terms:
             return True
         meta = bucket.get("metadata", {})
         haystack = "\n".join([
@@ -2833,7 +2843,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             " ".join(str(x) for x in meta.get("tags", []) if x),
             bucket.get("content", ""),
         ]).lower()
-        return q in haystack
+        return any(term in haystack for term in q_terms)
 
     def visible(bucket: dict) -> bool:
         if mode == "private":
