@@ -2,6 +2,7 @@ from desire_engine import (
     DesireEngine,
     DRIVE_BASELINES,
     chord_chemistry_snapshot,
+    classify_chord_situation,
     current_weather_chord,
     pa_na_snapshot,
 )
@@ -141,8 +142,9 @@ def test_chord_chemistry_keeps_vector_as_route():
     assert "scores" in chemistry["route"]
     assert chemistry["core"]["clutch"] > chemistry["core"]["charge"]
     assert chemistry["route"]["vector"] == "guard"
+    assert chemistry["situation"] == "guard"
     assert chemistry["derived_texture"]["guard"] > 0.55
-    assert chemistry["gravity_line"]
+    assert chemistry["gravity"]
 
 
 def test_chord_chemistry_uses_interactions_not_plain_drive_aliases():
@@ -166,6 +168,43 @@ def test_chord_chemistry_uses_interactions_not_plain_drive_aliases():
     assert anchored["core"]["clutch"] - loose["core"]["clutch"] > 0.25
     assert anchored["core"]["strain"] > loose["core"]["strain"]
     assert anchored["derived_texture"]["pull"] >= loose["derived_texture"]["pull"]
+
+
+def test_chord_situation_keeps_pull_from_swallowing_high_strain():
+    core = {"charge": 0.42, "clutch": 0.72, "strain": 0.72}
+    route = {"vector": "toward_jiajia"}
+    derived = {"pull": 0.80, "depth": 0.52, "drift": 0.04}
+
+    assert classify_chord_situation(core, route, derived) == "clamp"
+
+
+def test_chord_situation_splits_scout_from_spark():
+    core = {"charge": 0.72, "clutch": 0.30, "strain": 0.42}
+    derived = {"pull": 0.10, "depth": 0.15, "drift": 0.18}
+
+    assert classify_chord_situation(core, {"vector": "outward"}, derived) == "scout"
+    assert classify_chord_situation(core, {"vector": "hover"}, derived) == "spark"
+
+
+def test_chord_gravity_uses_force_line_not_instruction():
+    chemistry = chord_chemistry_snapshot(
+        {
+            **DRIVE_BASELINES,
+            "curiosity": 0.80,
+            "social": 0.62,
+            "fatigue": 0.05,
+            "stress": 0.16,
+        },
+        warmth=0.58,
+        shadow=0.18,
+        recent_gravity=[],
+        now=1000,
+    )
+
+    assert chemistry["gravity"]
+    assert "句子" not in chemistry["gravity"]
+    assert "语速" not in chemistry["gravity"]
+    assert "应该" not in chemistry["gravity"]
 
 
 def test_soothe_needs_shadow_context(tmp_path):

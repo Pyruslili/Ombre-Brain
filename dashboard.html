@@ -945,15 +945,6 @@ label {
   letter-spacing: 0;
   text-transform: none;
 }
-.drift-chemistry-line {
-  margin-top: .45rem;
-  color: var(--ink-soft);
-  font: 300 .76rem/1.45 var(--font-body);
-}
-.drift-chemistry-line b {
-  color: var(--accent-deep);
-  font-weight: 300;
-}
 .drift-undertow {
   display: flex;
   flex-wrap: wrap;
@@ -2208,7 +2199,6 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
             <span class="drift-current-chord">Current Chord <b id="desire-current-chord">—</b></span>
           </div>
           <div class="drift-undertow" id="desire-undertow"><span class="undertow-name">Reading</span><span class="undertow-value">…</span></div>
-          <div class="drift-chemistry-line" id="desire-chord-chemistry" style="display:none"></div>
         </div>
         <div class="drift-weather-values">
           <div class="drift-weather-mini weather-warm">
@@ -2241,6 +2231,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
         </div>
       </div>
       <div class="drift-weather-line"><span>Climate</span><strong id="desire-now">—</strong></div>
+      <div class="drift-weather-line" id="desire-gravity-wrap" style="display:none"><span>Gravity</span><strong id="desire-gravity">—</strong></div>
       <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
       <div class="drift-weather-trace" id="desire-speech-wrap" style="display:none"><span>Speech Trace</span><div id="desire-speech-trace"></div></div>
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
@@ -2771,23 +2762,27 @@ function currentWeatherChord(warmth, shadow) {
 }
 
 function renderChordChemistry(weather) {
-  const target = document.getElementById('desire-chord-chemistry');
-  if (!target) return;
+  const wrap = document.getElementById('desire-gravity-wrap');
+  const target = document.getElementById('desire-gravity');
+  if (!wrap || !target) return;
   const chemistry = weather?.chord_chemistry || {};
   const core = chemistry.core || weather?.chemistry_core || {};
   const route = chemistry.route || weather?.chemistry_route || {};
   const vector = route.vector || '';
-  const gravity = chemistry.gravity_line || weather?.gravity_line || '';
-  if (!gravity && !vector) {
-    target.style.display = 'none';
+  const situation = chemistry.situation || weather?.chord_situation || '';
+  const gravity = chemistry.gravity || chemistry.gravity_line || weather?.gravity || weather?.gravity_line || '';
+  if (!gravity) {
+    wrap.style.display = 'none';
     target.textContent = '';
+    target.removeAttribute('title');
     return;
   }
   const charge = finiteNumber(core.charge).toFixed(2);
   const clutch = finiteNumber(core.clutch).toFixed(2);
   const strain = finiteNumber(core.strain).toFixed(2);
-  target.style.display = '';
-  target.innerHTML = `<b>${esc(vector || 'hover')}</b> · 电荷 ${charge} · 锚束 ${clutch} · 弦压 ${strain}<br>${esc(gravity)}`;
+  wrap.style.display = '';
+  target.textContent = gravity;
+  target.title = `${situation || 'drift'} · ${vector || 'hover'} · charge ${charge} · clutch ${clutch} · strain ${strain}`;
 }
 
 function setWeatherMetric(kind, current, base, residue) {

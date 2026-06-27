@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import json
+import hashlib
 import math
 import time
 import uuid
@@ -604,6 +605,7 @@ def _weather_default_state(now: float = None) -> dict:
         "active_chord_source": "",
         "active_chord_at": 0.0,
         "chord_impulses": [],
+        "recent_gravity_lines": [],
     }
 
 
@@ -667,7 +669,174 @@ def current_weather_chord(warmth: float, shadow: float) -> str:
     return "C6"
 
 
-def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 0.0) -> dict:
+CHORD_GRAVITY_POOLS = {
+    "spark": [
+        "有什么在外面响，火花先亮了。",
+        "火花贴着门缝，还没落点。",
+        "电在边缘醒了一下。",
+    ],
+    "scout": [
+        "外面有钩子，方向还没定。",
+        "爪尖探出门缝，眼睛先跟过去。",
+        "电荷顶着边缘，想看看外面。",
+    ],
+    "grip": [
+        "爪下扣着东西，还没松。",
+        "有东西被按住，没有散。",
+        "锚点落住了，先不动。",
+    ],
+    "clamp": [
+        "抓住了，但有个口子还没合上。",
+        "爪子压着，里面还硌着。",
+        "有东西扣住了，边缘没平。",
+    ],
+    "pull": [
+        "地板往她那边斜，爪子没抬。",
+        "重心往屋里坠，爪还没松。",
+        "爪心的重量认得方向。",
+    ],
+    "live_wire": [
+        "有电，锚着，重心往她那边压。",
+        "电还没散，爪先扣住了。",
+        "火花在爪下亮着，没往外跑。",
+    ],
+    "taut": [
+        "有根弦绷着，没有落地的声音。",
+        "里面那根线还紧着。",
+        "话没落地，压在里面。",
+    ],
+    "static": [
+        "电往外顶，线没放行。",
+        "火花卡在门缝里。",
+        "亮的东西撞着边。",
+    ],
+    "overload": [
+        "火花压着弦，爪也没松。",
+        "屋里太满，门槛先沉了。",
+        "几股力挤在一处。",
+    ],
+    "sink": [
+        "重的东西沉下去，还没到底。",
+        "往里压着，出口还没醒。",
+        "那点力没出来，只往下落。",
+    ],
+    "guard": [
+        "门口有动静，爪子没让开。",
+        "门没关，但爪子在那儿。",
+        "边界先醒了。",
+    ],
+    "drift": [
+        "地板暂时没有倾斜。",
+        "线松着，暂时不牵。",
+        "没有方向，先搁在这里。",
+    ],
+}
+
+CHORD_GRAVITY_ROUTE_OVERRIDES = {
+    ("spark", "toward_jiajia"): [
+        "火花朝她那边亮了一下。",
+        "她那边有电，爪还没扣住。",
+        "电偏向她，还没落爪。",
+    ],
+    ("spark", "outward"): CHORD_GRAVITY_POOLS["scout"],
+    ("grip", "toward_house"): [
+        "重心往屋里坠，爪还没松。",
+        "屋子的骨架把力接住了。",
+        "地板把余震收住了。",
+    ],
+    ("grip", "toward_jiajia"): [
+        "爪心的重量认得方向。",
+        "她那边的地板更低。",
+        "重心没出声，已经偏过去。",
+    ],
+    ("static", "outward"): [
+        "电往外顶，线往里拽。",
+        "火花顶着门缝，没炸开。",
+        "门外有亮，线还拽着。",
+    ],
+    ("guard", "guard"): [
+        "门口有动静，爪子没让开。",
+        "门没关，但爪子在那儿。",
+        "边界先醒了。",
+    ],
+    ("sink", "inward"): [
+        "重的东西沉下去，还没到底。",
+        "那点力没出来，只往下落。",
+        "屋里暗下去，重量还在。",
+    ],
+}
+
+
+def _chemistry_band(value: float) -> str:
+    if value < 0.35:
+        return "low"
+    if value > 0.65:
+        return "high"
+    return "mid"
+
+
+def classify_chord_situation(core: dict, route: dict, derived: dict | None = None) -> str:
+    charge = _clamp(float((core or {}).get("charge", 0.0) or 0.0))
+    clutch = _clamp(float((core or {}).get("clutch", 0.0) or 0.0))
+    strain = _clamp(float((core or {}).get("strain", 0.0) or 0.0))
+    vector = str((route or {}).get("vector") or "hover")
+    derived = derived if isinstance(derived, dict) else {}
+    pull = _clamp(float(derived.get("pull", 0.0) or 0.0))
+    depth = _clamp(float(derived.get("depth", 0.0) or 0.0))
+    drift = _clamp(float(derived.get("drift", 0.0) or 0.0))
+
+    ch = _chemistry_band(charge)
+    cl = _chemistry_band(clutch)
+    st = _chemistry_band(strain)
+
+    if ch == "high" and cl == "high" and st == "high":
+        return "overload"
+    if vector == "guard" and clutch >= 0.50:
+        return "guard"
+    if ch == "high" and cl == "high" and st != "high":
+        return "live_wire"
+    if ch == "high" and st == "high" and cl != "high":
+        return "static"
+    if cl == "high" and st == "high" and ch != "high":
+        return "clamp"
+    if (
+        vector in {"toward_jiajia", "toward_house"}
+        and clutch >= 0.50
+        and pull > depth
+        and pull > drift
+        and strain < 0.65
+    ):
+        return "pull"
+    if vector == "inward" and strain >= 0.50 and charge <= 0.65:
+        return "sink"
+    if cl == "high" and st != "high" and ch != "high":
+        return "grip"
+    if st == "high" and ch != "high" and cl != "high":
+        return "taut"
+    if vector == "outward" and charge >= 0.50:
+        return "scout"
+    if ch == "high" and vector != "outward" and cl != "high" and st != "high":
+        return "spark"
+    return "drift"
+
+
+def choose_chord_gravity(situation: str, route: dict, core: dict,
+                         recent: list | None = None, now: float = None) -> str:
+    vector = str((route or {}).get("vector") or "hover")
+    candidates = CHORD_GRAVITY_ROUTE_OVERRIDES.get((situation, vector))
+    if not candidates:
+        candidates = CHORD_GRAVITY_POOLS.get(situation) or CHORD_GRAVITY_POOLS["drift"]
+    recent_set = {str(x) for x in (recent or []) if x}
+    available = [line for line in candidates if line not in recent_set] or list(candidates)
+    seed = f"{situation}:{vector}:{round(float((core or {}).get('charge', 0) or 0), 2)}:"
+    seed += f"{round(float((core or {}).get('clutch', 0) or 0), 2)}:"
+    seed += f"{round(float((core or {}).get('strain', 0) or 0), 2)}:{int((now or time.time()) // 1800)}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return available[int(digest[:8], 16) % len(available)]
+
+
+def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 0.0,
+                             recent_gravity: list | None = None, now: float = None) -> dict:
     """
     Chord Chemistry v1.0.
     Core is continuous force; route is directional. Derived texture is readout only.
@@ -753,31 +922,26 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
         "drift": round(drift, 3),
     }
 
-    if derived["guard"] >= 0.58:
-        gravity_line = "守位感在前，句子收紧，先护住边界。"
-    elif derived["pull"] >= 0.58:
-        gravity_line = "重力朝嘉嘉落，靠近但不急着外放。"
-    elif derived["depth"] >= 0.58:
-        gravity_line = "弦压往内沉，语速放慢，先消化。"
-    elif derived["spark"] >= 0.58:
-        gravity_line = "电荷可释放，句子会向外跳。"
-    elif derived["drift"] >= 0.58:
-        gravity_line = "力场松开，语气轻，允许悬停。"
-    else:
-        gravity_line = "力场均衡，维持当前底色。"
+    core = {
+        "charge": round(charge, 3),
+        "clutch": round(clutch, 3),
+        "strain": round(strain, 3),
+    }
+    route = {
+        "vector": vector,
+        "scores": {k: round(v, 3) for k, v in route_scores.items()},
+    }
+    situation = classify_chord_situation(core, route, derived)
+    gravity_line = choose_chord_gravity(situation, route, core, recent_gravity, now)
 
     return {
-        "core": {
-            "charge": round(charge, 3),
-            "clutch": round(clutch, 3),
-            "strain": round(strain, 3),
-        },
-        "route": {
-            "vector": vector,
-            "scores": {k: round(v, 3) for k, v in route_scores.items()},
-        },
+        "core": core,
+        "route": route,
+        "situation": situation,
         "derived_texture": derived,
+        "derived": derived,
         "gravity_line": gravity_line,
+        "gravity": gravity_line,
     }
 
 
@@ -2574,7 +2738,15 @@ class DesireEngine:
         residue = self.weather.load(now, decay=True)
         effective_pa = _clamp(float(base["PA"]) + float(residue.get("warmth_residue", 0.0)))
         effective_na = _clamp(float(base["NA"]) + float(residue.get("shadow_residue", 0.0)))
-        chemistry = chord_chemistry_snapshot(state.drives, effective_pa, effective_na)
+        recent_gravity = residue.get("recent_gravity_lines")
+        recent_gravity = recent_gravity if isinstance(recent_gravity, list) else []
+        chemistry = chord_chemistry_snapshot(state.drives, effective_pa, effective_na, recent_gravity, now)
+        gravity_line = chemistry["gravity_line"]
+        if gravity_line and (not recent_gravity or recent_gravity[0] != gravity_line):
+            residue["recent_gravity_lines"] = [gravity_line] + [
+                line for line in recent_gravity if line and line != gravity_line
+            ][:2]
+            self.weather._write_raw(residue)
         return {
             "base_PA": round(base["PA"], 3),
             "base_NA": round(base["NA"], 3),
@@ -2584,8 +2756,11 @@ class DesireEngine:
             "chord_chemistry": chemistry,
             "chemistry_core": chemistry["core"],
             "chemistry_route": chemistry["route"],
+            "chord_situation": chemistry["situation"],
             "derived_texture": chemistry["derived_texture"],
             "gravity_line": chemistry["gravity_line"],
+            "gravity": chemistry["gravity"],
+            "recent_gravity_lines": residue.get("recent_gravity_lines", []),
             **_active_weather_chord(residue, now),
             "warmth_residue": round(float(residue.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(residue.get("shadow_residue", 0.0)), 3),
