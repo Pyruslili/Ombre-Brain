@@ -1029,6 +1029,31 @@ label {
 .drift-weather-line span,
 .drift-weather-trace span { display: block; margin-bottom: .28rem; color: var(--mute); font: 300 .56rem/1.3 var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
 .drift-weather-line strong { color: var(--ink); font: 300 .92rem/1.25 var(--font-display); }
+.gravity-chemistry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .38rem;
+  margin-top: .58rem;
+}
+.gravity-chemistry span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: .32rem;
+  margin: 0;
+  padding: .18rem .42rem;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 224, 186, .035);
+  color: var(--mute);
+  font: 300 .56rem/1.25 var(--font-mono);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.gravity-chemistry b {
+  color: var(--ink-soft);
+  font-weight: 300;
+  letter-spacing: 0;
+  text-transform: none;
+}
 .drift-weather-trace { margin-top: .8rem; padding-top: .9rem; border-top: 1px solid var(--line-soft); }
 .drift-weather-trace div { color: var(--ink); font: 300 .92rem/1.62 var(--font-display); }
 .drift-weather-trace.primary div { color: var(--accent-deep); font-size: 1rem; }
@@ -2231,7 +2256,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
         </div>
       </div>
       <div class="drift-weather-line"><span>Climate</span><strong id="desire-now">—</strong></div>
-      <div class="drift-weather-line" id="desire-gravity-wrap" style="display:none"><span>Gravity</span><strong id="desire-gravity">—</strong></div>
+      <div class="drift-weather-line" id="desire-gravity-wrap" style="display:none"><span>Gravity</span><strong id="desire-gravity">—</strong><div class="gravity-chemistry" id="desire-gravity-chemistry"></div></div>
       <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
       <div class="drift-weather-trace" id="desire-speech-wrap" style="display:none"><span>Speech Trace</span><div id="desire-speech-trace"></div></div>
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
@@ -2766,6 +2791,7 @@ function currentWeatherChord(warmth, shadow) {
 function renderChordChemistry(weather) {
   const wrap = document.getElementById('desire-gravity-wrap');
   const target = document.getElementById('desire-gravity');
+  const detail = document.getElementById('desire-gravity-chemistry');
   if (!wrap || !target) return;
   const chemistry = weather?.chord_chemistry || {};
   const core = chemistry.core || weather?.chemistry_core || {};
@@ -2780,13 +2806,23 @@ function renderChordChemistry(weather) {
     wrap.style.display = 'none';
     target.textContent = '';
     target.removeAttribute('title');
+    if (detail) detail.innerHTML = '';
     return;
   }
   const charge = finiteNumber(core.charge).toFixed(2);
   const clutch = finiteNumber(core.clutch).toFixed(2);
   const strain = finiteNumber(core.strain).toFixed(2);
   wrap.style.display = '';
-  target.textContent = `${gravity}${source && source !== '来源' ? ` · ${source}` : ''}`;
+  target.textContent = gravity;
+  if (detail) {
+    const sourceText = source && source !== '来源' ? source : (eventLabel || 'baseline');
+    detail.innerHTML = [
+      `<span>Source <b>${esc(sourceText)}</b></span>`,
+      `<span>Charge <b>${charge}</b></span>`,
+      `<span>Clutch <b>${clutch}</b></span>`,
+      `<span>Strain <b>${strain}</b></span>`,
+    ].join('');
+  }
   target.title = [
     `${situation || 'drift'} · ${vector || 'hover'}`,
     `charge ${charge}`,
