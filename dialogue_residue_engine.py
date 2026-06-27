@@ -35,6 +35,21 @@ TERRITORIAL_CUES = (
     "占有",
     "归属",
 )
+HOUSE_COLLABORATOR_CUES = (
+    "Moss",
+    "moss",
+    "Ink",
+    "ink",
+    "Ash",
+    "ash",
+    "Codex",
+    "codex",
+    "Grok",
+    "grok",
+    "布偶",
+    "阿比西尼亚",
+    "挪威森林",
+)
 
 
 def _now_iso() -> str:
@@ -180,11 +195,14 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
 
     combined_text = "\n".join(m.get("text", "") for m in msg)
     has_territorial_cue = any(cue in combined_text for cue in TERRITORIAL_CUES)
+    has_house_collaborator = any(cue in combined_text for cue in HOUSE_COLLABORATOR_CUES)
     if has_territorial_cue:
         brain["territorial_alarm"] = max(_clamp(brain.get("territorial_alarm")), 0.58)
         brain["tension_load"] = max(_clamp(brain.get("tension_load")), 0.18)
         brain["closeness_pull"] = max(_clamp(brain.get("closeness_pull")), 0.18)
         brain["anchor_target"] = "boundary"
+        if has_house_collaborator:
+            brain["third_party_context"] = "house_collaborator"
         if primary in {"", "attachment", "social", "reflection"}:
             if primary and primary != "possessiveness":
                 secondary[primary] = max(secondary.get(primary, 0.0), round(min(intensity, 0.22), 4))

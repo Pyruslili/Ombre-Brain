@@ -180,6 +180,36 @@ def test_possessiveness_requires_territorial_alarm(tmp_path):
     assert high["suppressed"] is False
 
 
+def test_house_collaborator_territorial_signal_is_softened(tmp_path):
+    external_engine = DesireEngine(str(tmp_path / "external.db"))
+    house_engine = DesireEngine(str(tmp_path / "house.db"))
+    base_event = {
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "possessiveness",
+        "intensity": 0.12,
+        "confidence": 0.85,
+        "agency": 0.50,
+        "event_label": "third_party_position",
+        "brain": {"source": "dialogue_residue", "territorial_alarm": 0.58, "closeness_pull": 0.18},
+    }
+
+    external = external_engine.apply_drive_event(base_event)
+    house = house_engine.apply_drive_event({
+        **base_event,
+        "brain": {
+            **base_event["brain"],
+            "third_party_context": "house_collaborator",
+        },
+    })
+
+    external_delta = external["applied"]["possessiveness"]["raw_delta"]
+    house_delta = house["applied"]["possessiveness"]["raw_delta"]
+    assert external["suppressed"] is False
+    assert house["suppressed"] is False
+    assert house_delta < external_delta * 0.55
+
+
 def test_dialogue_negative_event_tints_weather(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     engine.apply_weather_delta(warmth_delta=0.08, source="feel")

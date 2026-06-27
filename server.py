@@ -290,6 +290,7 @@ def _compact_desire_state(state: dict) -> dict:
             "shadow": weather.get("shadow"),
             "climate": weather.get("climate"),
             "climate_display": climate_display,
+            "atmosphere_display": climate_display,
             "mood_trace": _short_state_text(weather.get("mood_trace"), 160),
             "current_chord": weather.get("current_chord"),
             "chord_display": weather.get("chord_display") or _weather_chord_display(effective),
@@ -2161,8 +2162,9 @@ async def nocturne_breath(
             if top_drive:
                 lines.append(f"Undertow：{top_drive} {undertow_value:.2f}")
             lines.extend([f"Warmth：{warmth:.2f}", f"Shadow：{abs(shadow):.2f}"])
-            if weather.get("climate"):
-                lines.append(f"Climate：{weather.get('climate')}")
+            atmosphere = weather.get("climate_display") or climate_transition_display(weather.get("atmosphere"))
+            if atmosphere:
+                lines.append(f"Atmosphere：{atmosphere}")
             if mood_trace:
                 lines.append(f"Mood Trace：{mood_trace}")
             soma = _fresh_soma_state()
@@ -4077,6 +4079,7 @@ async def api_desire_state(request):
         state["mood_word"] = climate
         state["climate"] = climate
         state["climate_display"] = climate_display
+        state["atmosphere_display"] = climate_display
         state["weather_residue"] = {
             "warmth": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow": round(float(weather.get("shadow_residue", 0.0)), 3),
@@ -4094,6 +4097,7 @@ async def api_desire_state(request):
             "atmosphere": weather.get("atmosphere", {}),
             "climate": climate,
             "climate_display": climate_display,
+            "atmosphere_display": climate_display,
         }
         state["pulse_weather"] = {
             "undertow": top_drive,
@@ -4108,6 +4112,7 @@ async def api_desire_state(request):
             "chord_display": _weather_chord_display(weather),
             "climate": climate,
             "climate_display": climate_display,
+            "atmosphere_display": climate_display,
             "atmosphere": weather.get("atmosphere", {}),
             "chord_chemistry": weather.get("chord_chemistry", {}),
             "chemistry_core": weather.get("chemistry_core", {}),

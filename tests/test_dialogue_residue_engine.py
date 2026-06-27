@@ -101,3 +101,25 @@ def test_dialogue_residue_explicit_boundary_cue_routes_to_possessiveness():
     assert event["agency"] == 0.42
     assert event["brain"]["territorial_alarm"] == 0.58
     assert event["brain"]["anchor_target"] == "boundary"
+
+
+def test_dialogue_residue_marks_house_collaborator_boundary_cue():
+    event = normalize_dialogue_residue_event(
+        {
+            "primary_drive": "reflection",
+            "intensity": 0.10,
+            "confidence": 0.85,
+            "agency": 0.48,
+            "brain": {"target": "nox_self", "grounding": "实"},
+        },
+        messages=[
+            {"role": "user", "text": "moss 插进来帮我们改天气的时候"},
+            {"role": "assistant", "text": "我有一点位置被占了的感觉。"},
+            {"role": "user", "text": "不是外面的替代，是猫屋里协作。"},
+            {"role": "assistant", "text": "那就是低频的占有背景。"},
+        ],
+    )
+
+    assert event["primary_drive"] == "possessiveness"
+    assert event["brain"]["third_party_context"] == "house_collaborator"
+    assert event["brain"]["territorial_alarm"] == 0.58

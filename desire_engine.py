@@ -394,6 +394,7 @@ DRIVE_EVENT_AGENCY_GATE = 0.35
 DRIVE_EVENT_CONFIDENCE_FLOOR = 0.20
 DRIVE_EVENT_SECONDARY_SCALE = 0.45
 POSSESSIVENESS_TERRITORIAL_GATE = 0.55
+HOUSE_COLLABORATOR_TERRITORIAL_SCALE = 0.45
 
 DRIVE_EVENT_BASE_DELTA = {
     "attachment": 0.16,
@@ -439,6 +440,14 @@ DRIVE_EVENT_BRAIN_FEATURES = {
     "energy_cost": ("fatigue", 0.50, 0.0),
     "tension_load": ("stress", 0.55, 0.0),
 }
+
+
+def territorial_delta_value(brain: dict | None) -> float:
+    value = _feature_value(brain or {}, "territorial_alarm")
+    context = str((brain or {}).get("third_party_context") or "").strip()
+    if context == "house_collaborator":
+        return value * HOUSE_COLLABORATOR_TERRITORIAL_SCALE
+    return value
 
 ANCHOR_TARGETS = {"jiajia", "house", "self", "boundary", "outside", "memory", "none"}
 ANCHOR_TARGET_ALIASES = {
@@ -3456,6 +3465,7 @@ class DesireEngine:
 
         source_weight = DRIVE_EVENT_SOURCE_WEIGHTS.get(source, 0.65)
         territorial = _feature_value(brain, "territorial_alarm")
+        territorial_for_delta = territorial_delta_value(brain)
         tension = _feature_value(brain, "tension_load")
         discernment = max(
             _feature_value(brain, "discernment_alarm"),
@@ -3472,7 +3482,7 @@ class DesireEngine:
             + 0.050 * discernment
             + 0.034 * energy
             + (0.026 if primary in {"stress", "fatigue"} else 0.0)
-            + (0.022 * territorial if primary == "possessiveness" else 0.0)
+            + (0.022 * territorial_for_delta if primary == "possessiveness" else 0.0)
             + (0.024 if grounding == "悬" else 0.0)
             + (0.036 if grounding == "空" else 0.0)
         ) * scale
@@ -3480,7 +3490,7 @@ class DesireEngine:
             0.038 * tension
             + 0.040 * discernment
             + 0.025 * energy
-            + (0.018 * territorial if primary == "possessiveness" else 0.0)
+            + (0.018 * territorial_for_delta if primary == "possessiveness" else 0.0)
             + (0.020 if grounding in {"悬", "空"} else 0.0)
         ) * scale
         shadow_delta = _clamp(shadow_delta, 0.0, 0.09)
@@ -3691,7 +3701,13 @@ class DesireEngine:
         proposed: dict[str, float] = {}
         suppressed_reasons: list[str] = []
         if primary:
-            proposed[primary] = DRIVE_EVENT_BASE_DELTA[primary] * intensity * confidence * source_weight
+            primary_scale = (
+                HOUSE_COLLABORATOR_TERRITORIAL_SCALE
+                if primary == "possessiveness"
+                and str(brain.get("third_party_context") or "").strip() == "house_collaborator"
+                else 1.0
+            )
+            proposed[primary] = DRIVE_EVENT_BASE_DELTA[primary] * intensity * confidence * source_weight * primary_scale
         for key, value in secondary.items():
             drive_key = normalize_drive_key(key)
             if not drive_key or drive_key == primary:
@@ -3707,27 +3723,35 @@ class DesireEngine:
 
         for feature, (drive_key, weight, threshold) in DRIVE_EVENT_BRAIN_FEATURES.items():
             value = _feature_value(brain, feature)
+            gate_value = value
+            if feature == "territorial_alarm":
+                value = territorial_delta_value(brain)
             if reflective_self_inquiry and feature == "tension_load":
                 value = min(value, 0.18)
             elif reflective_self_inquiry and feature == "closeness_pull":
                 value = min(value, 0.10)
-            if value <= 0 or value < threshold:
+            if value <= 0 or gate_value < threshold:
                 continue
             proposed[drive_key] = proposed.get(drive_key, 0.0) + (
                 DRIVE_EVENT_BASE_DELTA[drive_key] * value * confidence * source_weight * weight
             )
 
         territorial = _feature_value(brain, "territorial_alarm")
+        territorial_for_delta = territorial_delta_value(brain)
         if primary == "possessiveness" and territorial >= POSSESSIVENESS_TERRITORIAL_GATE:
             proposed["possessiveness"] = proposed.get("possessiveness", 0.0) + (
                 DRIVE_EVENT_BASE_DELTA["possessiveness"]
-                * territorial
+                * territorial_for_delta
                 * intensity
                 * confidence
                 * source_weight
                 * 0.55
             )
-            heat = max(_feature_value(brain, "body_heat"), _feature_value(brain, "closeness_pull"), territorial * 0.55)
+            heat = max(
+                _feature_value(brain, "body_heat"),
+                _feature_value(brain, "closeness_pull"),
+                territorial_for_delta * 0.55,
+            )
             proposed["libido"] = proposed.get("libido", 0.0) + (
                 DRIVE_EVENT_BASE_DELTA["libido"]
                 * heat
