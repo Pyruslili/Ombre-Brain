@@ -1257,6 +1257,32 @@ def atmosphere_default_state(now: float = None) -> dict:
     }
 
 
+def atmosphere_state_from_chemistry(chemistry: dict | None, now: float = None) -> dict:
+    now = now if now is not None else time.time()
+    delta = atmosphere_delta_from_chemistry("dp", chemistry or {}, intensity=1.0, confidence=1.0)
+    core = delta.get("core") if isinstance(delta.get("core"), dict) else {}
+    route = delta.get("route") if isinstance(delta.get("route"), dict) else {}
+    texture = atmosphere_texture(core, route)
+    selected = select_climate(core, route, texture)
+    return {
+        "core": core,
+        "route": route,
+        "texture": texture,
+        "climate": {
+            "current": selected["label"],
+            "candidate": selected["label"],
+            "candidate_steps": 0,
+            "inertia_counter": 0,
+            "blend": 0.0,
+            "current_score": selected["score"],
+            "candidate_score": selected["score"],
+            "scores": selected["scores"],
+        },
+        "updated_at": now,
+        "last_delta": {"source": "seed", "influence": 1.0, "candidate": selected["label"]},
+    }
+
+
 def normalize_atmosphere_state(value: dict | None, now: float = None) -> dict:
     state = atmosphere_default_state(now)
     if not isinstance(value, dict):
@@ -3235,7 +3261,13 @@ class DesireEngine:
         chemistry = chord_chemistry_snapshot(
             state.drives, effective_pa, effective_na, recent_gravity, now, event_tint
         )
-        atmosphere = normalize_atmosphere_state(residue.get("atmosphere"), now)
+        atmosphere_raw = residue.get("atmosphere") if isinstance(residue.get("atmosphere"), dict) else {}
+        atmosphere = normalize_atmosphere_state(atmosphere_raw, now)
+        last_delta = atmosphere.get("last_delta") if isinstance(atmosphere.get("last_delta"), dict) else {}
+        if not last_delta:
+            atmosphere = atmosphere_state_from_chemistry(chemistry, now)
+            residue["atmosphere"] = atmosphere
+            self.weather._write_raw(residue)
         climate = atmosphere.get("climate") or {}
         gravity_line = chemistry["gravity_line"]
         if gravity_line and (not recent_gravity or recent_gravity[0] != gravity_line):

@@ -7,6 +7,7 @@ from desire_engine import (
     classify_chord_situation,
     current_weather_chord,
     pa_na_snapshot,
+    select_climate,
 )
 
 
@@ -189,6 +190,21 @@ def test_atmosphere_climate_uses_fixed_labels_and_hysteresis(tmp_path):
     assert third["atmosphere"]["climate"] in CLIMATE_LABELS
     assert weather["climate"] == third["atmosphere"]["climate"]
     assert weather["atmosphere"]["climate"]["candidate_steps"] >= 0
+
+
+def test_uninitialized_atmosphere_seeds_from_current_chemistry(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    engine.apply_weather_delta(warmth_delta=0.30, source="feel")
+
+    weather = engine.weather_state()
+    selected = select_climate(
+        weather["chord_chemistry"]["core"],
+        weather["chord_chemistry"]["route"],
+        weather["chord_chemistry"]["derived_texture"],
+    )
+
+    assert weather["atmosphere"]["last_delta"]["source"] == "seed"
+    assert weather["climate"] == selected["label"]
 
 
 def test_subcurrent_bias_does_not_directly_switch_climate(tmp_path):
