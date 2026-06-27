@@ -304,6 +304,7 @@ WEATHER_RECENT_LOW_CHORD_SEC = 3 * 3600
 WEATHER_SOOTHE_DURATION_SEC = 30 * 60
 WEATHER_SOOTHE_SHADOW_HALFLIFE_HOURS = 0.75
 WEATHER_SOOTHE_WARMTH_DELTA = 0.025
+WEATHER_EVENT_SOURCE = "feel"
 
 # ─── 悲恸引擎常量 ──────────────────────────────────────────────────────────────
 # 三层：抗议→绝望→疏离
@@ -362,13 +363,21 @@ POSSESSIVENESS_TERRITORIAL_GATE = 0.55
 DRIVE_EVENT_BASE_DELTA = {
     "attachment": 0.16,
     "libido": 0.13,
-    "possessiveness": 0.12,
+    "possessiveness": 0.15,
     "reflection": 0.13,
     "stewardship": 0.13,
     "curiosity": 0.12,
     "social": 0.12,
     "fatigue": 0.12,
     "stress": 0.13,
+}
+
+DRIVE_EVENT_WEATHER_SOURCES = {
+    "analyze_nocturne_entry",
+    "dialogue_residue",
+    "feel",
+    "legacy_feed",
+    "speech_event",
 }
 
 DRIVE_EVENT_SOURCE_WEIGHTS = {
@@ -1271,6 +1280,42 @@ class WeatherResidueStore:
         self._write_raw(refreshed)
         return refreshed
 
+    def _apply_component_value(self, state: dict, source: str, key: str,
+                               delta: float) -> set[str]:
+        touched = set()
+        if not delta:
+            return touched
+        cap_key = f"{key}_cap"
+        if delta > 0:
+            component = state["components"][source]
+            caps = WEATHER_COMPONENTS[source]
+            component[key] = _clamp(
+                float(component.get(key, 0.0) or 0.0) + delta,
+                0.0,
+                caps[cap_key],
+            )
+            touched.add(source)
+            return touched
+
+        remaining = abs(delta)
+        ordered = [source] + sorted(
+            [name for name in WEATHER_COMPONENTS if name != source],
+            key=lambda name: float(state["components"][name].get(key, 0.0) or 0.0),
+            reverse=True,
+        )
+        for name in ordered:
+            component = state["components"][name]
+            current = max(0.0, float(component.get(key, 0.0) or 0.0))
+            if current <= 0:
+                continue
+            take = min(current, remaining)
+            component[key] = round(current - take, 6)
+            touched.add(name)
+            remaining -= take
+            if remaining <= 1e-9:
+                break
+        return touched
+
     def apply_delta(self, warmth_delta: float = 0.0, shadow_delta: float = 0.0,
                     source: str = "keyword", soothe: bool = False,
                     now: float = None) -> dict:
@@ -1292,19 +1337,11 @@ class WeatherResidueStore:
             else:
                 warmth_delta = max(float(warmth_delta or 0.0), WEATHER_SOOTHE_WARMTH_DELTA / 2)
 
-        component = state["components"][source]
-        caps = WEATHER_COMPONENTS[source]
-        component["warmth"] = _clamp(
-            float(component.get("warmth", 0.0) or 0.0) + max(0.0, float(warmth_delta or 0.0)),
-            0.0,
-            caps["warmth_cap"],
-        )
-        component["shadow"] = _clamp(
-            float(component.get("shadow", 0.0) or 0.0) + max(0.0, float(shadow_delta or 0.0)),
-            0.0,
-            caps["shadow_cap"],
-        )
-        component["updated_at"] = now
+        touched = set()
+        touched.update(self._apply_component_value(state, source, "warmth", float(warmth_delta or 0.0)))
+        touched.update(self._apply_component_value(state, source, "shadow", float(shadow_delta or 0.0)))
+        for name in touched or {source}:
+            state["components"][name]["updated_at"] = now
         state["updated_at"] = now
         state["last_soothe_active"] = active_soothe
         return self.save(state)
@@ -2977,6 +3014,55 @@ class DesireEngine:
         state = self.store.load_state()
         return self._weather_readout(state)
 
+    def _apply_drive_event_weather(self, source: str, primary: str, brain: dict,
+                                   intensity: float, confidence: float,
+                                   agency: float, suppressed: bool) -> dict:
+        if source not in DRIVE_EVENT_WEATHER_SOURCES:
+            return {}
+        if agency < DRIVE_EVENT_AGENCY_GATE or confidence < DRIVE_EVENT_CONFIDENCE_FLOOR:
+            return {}
+        if suppressed and not (brain.get("discernment") or _feature_value(brain, "discernment_alarm") > 0):
+            return {}
+
+        source_weight = DRIVE_EVENT_SOURCE_WEIGHTS.get(source, 0.65)
+        territorial = _feature_value(brain, "territorial_alarm")
+        tension = _feature_value(brain, "tension_load")
+        discernment = max(
+            _feature_value(brain, "discernment_alarm"),
+            _feature_value(brain, "template_intimacy"),
+            _feature_value(brain, "source_mismatch"),
+            _feature_value(brain, "self_softening"),
+            _feature_value(brain, "output_drift"),
+        )
+        energy = _feature_value(brain, "energy_cost")
+        grounding = str(brain.get("grounding") or "").strip()
+        scale = intensity * confidence * source_weight
+        shadow_delta = (
+            0.055 * tension
+            + 0.050 * discernment
+            + 0.034 * energy
+            + (0.026 if primary in {"stress", "fatigue"} else 0.0)
+            + (0.022 * territorial if primary == "possessiveness" else 0.0)
+            + (0.024 if grounding == "悬" else 0.0)
+            + (0.036 if grounding == "空" else 0.0)
+        ) * scale
+        warmth_drop = (
+            0.038 * tension
+            + 0.040 * discernment
+            + 0.025 * energy
+            + (0.018 * territorial if primary == "possessiveness" else 0.0)
+            + (0.020 if grounding in {"悬", "空"} else 0.0)
+        ) * scale
+        shadow_delta = _clamp(shadow_delta, 0.0, 0.09)
+        warmth_delta = -_clamp(warmth_drop, 0.0, 0.06)
+        if shadow_delta <= 0 and warmth_delta >= 0:
+            return {}
+        return self.apply_weather_delta(
+            warmth_delta=warmth_delta,
+            shadow_delta=shadow_delta,
+            source=WEATHER_EVENT_SOURCE,
+        )
+
     def _mark_real_user_message(self, state: DriveState, now: float) -> DriveState:
         hours = max(0.0, (now - state.last_user_message_at) / 3600.0)
         longing_before = longing_value(hours, state.drives.get("attachment", 0.0))
@@ -3198,6 +3284,26 @@ class DesireEngine:
                 DRIVE_EVENT_BASE_DELTA[drive_key] * value * confidence * source_weight * weight
             )
 
+        territorial = _feature_value(brain, "territorial_alarm")
+        if primary == "possessiveness" and territorial >= POSSESSIVENESS_TERRITORIAL_GATE:
+            proposed["possessiveness"] = proposed.get("possessiveness", 0.0) + (
+                DRIVE_EVENT_BASE_DELTA["possessiveness"]
+                * territorial
+                * intensity
+                * confidence
+                * source_weight
+                * 0.55
+            )
+            heat = max(_feature_value(brain, "body_heat"), _feature_value(brain, "closeness_pull"), territorial * 0.55)
+            proposed["libido"] = proposed.get("libido", 0.0) + (
+                DRIVE_EVENT_BASE_DELTA["libido"]
+                * heat
+                * intensity
+                * confidence
+                * source_weight
+                * 0.34
+            )
+
         grounding = str(brain.get("grounding") or "").strip()
         if grounding == "悬":
             if reflective_self_inquiry:
@@ -3211,7 +3317,6 @@ class DesireEngine:
             proposed["attachment"] = proposed.get("attachment", 0.0) + 0.020 * confidence * source_weight
             proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * source_weight
 
-        territorial = _feature_value(brain, "territorial_alarm")
         if "possessiveness" in proposed and territorial < POSSESSIVENESS_TERRITORIAL_GATE:
             if primary == "possessiveness":
                 suppressed_reasons.append("territorial_alarm below gate")
@@ -3260,6 +3365,10 @@ class DesireEngine:
                 suppressed = not (discernment["state"] != "clear" or forward_archival)
                 reason = "modifier/readout only" if not suppressed else "all deltas zero"
 
+        weather_result = self._apply_drive_event_weather(
+            source, primary, brain, intensity, confidence, agency, suppressed
+        )
+
         ledger_id = self.store.record_drive_event({
             "ts": now,
             "schema_version": DRIVE_EVENT_SCHEMA,
@@ -3284,6 +3393,7 @@ class DesireEngine:
             "suppressed": suppressed,
             "reason": reason,
             "applied": applied,
+            "weather": weather_result,
             "discernment": discernment,
             "reflection_mode": brain.get("reflection_mode", ""),
             "forward_archival": forward_archival,

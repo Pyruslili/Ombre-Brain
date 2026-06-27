@@ -21,6 +21,16 @@ def test_weather_delta_adds_to_effective_pa_na(tmp_path):
     assert weather["effective_NA"] == round(base["NA"], 3)
 
 
+def test_weather_delta_can_cool_existing_warmth(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+
+    engine.apply_weather_delta(warmth_delta=0.08, source="feel")
+    cooled = engine.apply_weather_delta(warmth_delta=-0.03, shadow_delta=0.02, source="feel")
+
+    assert cooled["warmth_residue"] == 0.05
+    assert cooled["shadow_residue"] == 0.02
+
+
 def test_chord_echo_routes_by_source_and_chord(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 

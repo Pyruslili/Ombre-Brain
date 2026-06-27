@@ -613,57 +613,40 @@ Drive Ledger 中 Speech Trace 来源用 icon 表示，和 Nox 念头 / DP 碰撞
 
 `mini / big cat / summon -> soma report -> Soma Trace / Chord Impulse / weather residue`
 
+latest_touch_event() 把 mini / big / summon 三条时间线压成一条，避免多源冲突。
+soma_trace_stage(elapsed_min, fresh_boundary_min) 用时间直接切 fresh / residue / fading / clear
+
 特点：
 
+- 有触摸衰减和soma余波
 - 触摸可以快速改变 Active Chord。
 - 触摸余波会退潮。
 - 没有触摸时 Soma Trace 可以隐藏。
+- 防抖设计。
 
----
 
-## 11. 目前最值得继续观察的点
+### 11.4 Chord
 
-### 11.1 Speech Batch 准确度
+Chemistry Core
+- charge：动能密度
+- clutch：锚束抓力
+- strain：内部弦压
 
-需要观察：
+Chemistry Route
+- vector：
+  - toward_jiajia
+  - toward_house
+  - outward
+  - inward
+  - guard
+  - hover
 
-- 5 条是否刚好
-- 是否需要改成 4 或 6
-- 是否需要把最近 1-2 条 Nox 回复作为只读上下文
-- DP 是否稳定区分 attachment / social / reflection / stewardship
-
-暂时不要急着把 Nox 回复同权放进 batch。
-
-### 11.2 satisfy / refuse 回落
-
-需要观察：
-
-- satisfy 是否回落过多
-- refuse 是否回落过少
-- 不同 Drive 是否应该有不同回落曲线
-
-### 11.3 Heartbeat 频率
-
-当前目标是一天约 6 次。
-
-需要观察：
-
-- 是否太吵
-- 是否太少
-- 是否对 idle 判断太敏感
-- 是否需要按 Drive 类型调整阈值
-
-### 11.4 Chord 词汇与 Active Flow
-
-当前已扩 chord 词汇，并接入 Chord Impulse。
-
-暂不做：
-
-- chord 浓度
-- chord 关系语义
-- chord 直接影响 Drive
-
-先观察 `Active→Baseline` 是否有感知价值。
+Derived Texture
+- depth：inward + strain 的沉潜
+- pull：toward_jiajia / toward_house + clutch 的向心
+- guard：guard route + clutch / stewardship 的守位
+- spark：charge 高且 release 可用的火花
+- drift：charge 低、clutch 低、strain 低或 hover 的漂移
 
 ---
 

@@ -142,6 +142,7 @@ def test_low_agency_event_is_suppressed_but_auditable(tmp_path):
 def test_possessiveness_requires_territorial_alarm(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     before = engine.state()["drives"]["possessiveness"]
+    before_libido = engine.state()["drives"]["libido"]
     low = engine.apply_drive_event({
         "schema_version": "drive_event_v2",
         "source": "speech_event",
@@ -165,7 +166,29 @@ def test_possessiveness_requires_territorial_alarm(tmp_path):
 
     assert low["suppressed"] is True
     assert engine.state()["drives"]["possessiveness"] > before
+    assert engine.state()["drives"]["libido"] > before_libido
     assert high["suppressed"] is False
+
+
+def test_dialogue_negative_event_tints_weather(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    engine.apply_weather_delta(warmth_delta=0.08, source="feel")
+
+    result = engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "stress",
+        "intensity": 0.9,
+        "confidence": 0.9,
+        "agency": 0.9,
+        "event_label": "dialogue_shadow",
+        "brain": {"source": "dialogue_residue", "tension_load": 0.85, "grounding": "悬"},
+    })
+
+    weather = engine.weather_state()
+    assert result["weather"]["shadow_residue"] > 0
+    assert result["weather"]["warmth_residue"] < 0.08
+    assert weather["shadow_residue"] > 0
 
 
 def test_possessiveness_tracks_event_spike_and_baseline_channels(tmp_path):
