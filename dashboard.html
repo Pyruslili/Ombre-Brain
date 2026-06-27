@@ -2905,7 +2905,7 @@ async function loadDesire(button) {
     const currentChord = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
     document.getElementById('desire-current-chord').textContent = weather.chord_display || currentChord;
     renderChordChemistry(weather);
-    document.getElementById('desire-now').textContent = weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
+    document.getElementById('desire-now').textContent = weather.climate_display || d.climate_display || d.weather_residue?.climate_display || weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSpeechTrace({});
     renderSomaTrace(soma);

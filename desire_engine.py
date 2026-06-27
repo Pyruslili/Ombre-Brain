@@ -329,6 +329,9 @@ ATMOSPHERE_SWITCH_STEPS = 3
 ATMOSPHERE_SWITCH_MARGIN = 0.16
 ATMOSPHERE_WEAK_CURRENT_SCORE = 0.42
 ATMOSPHERE_BLEND_SWITCH = 0.65
+CLIMATE_LEAN_BLEND = 0.25
+CLIMATE_ARROW_BLEND = 0.60
+CLIMATE_VISIBLE_STEPS = 2
 ATMOSPHERE_ROUTE_KEYS = (
     "toward_jiajia",
     "toward_house",
@@ -1227,6 +1230,31 @@ def select_climate(core: dict | None, route: dict | None, texture: dict | None =
     scores = climate_scores(core, route, texture)
     label = max(CLIMATE_LABELS, key=lambda item: scores.get(item, 0.0))
     return {"label": label, "score": round(scores.get(label, 0.0), 3), "scores": scores}
+
+
+def climate_transition_display(atmosphere: dict | None) -> str:
+    climate = atmosphere.get("climate") if isinstance(atmosphere, dict) else {}
+    if not isinstance(climate, dict):
+        return "Drift"
+    current = str(climate.get("current") or "Drift").strip()
+    candidate = str(climate.get("candidate") or "").strip()
+    if current not in CLIMATE_LABELS:
+        current = "Drift"
+    if candidate not in CLIMATE_LABELS or candidate == current:
+        return current
+    try:
+        blend = float(climate.get("blend", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        blend = 0.0
+    try:
+        steps = int(climate.get("candidate_steps", 0) or 0)
+    except (TypeError, ValueError):
+        steps = 0
+    if steps < CLIMATE_VISIBLE_STEPS or blend < CLIMATE_LEAN_BLEND:
+        return current
+    if blend < CLIMATE_ARROW_BLEND:
+        return f"{current} · leaning {candidate}"
+    return f"{current} → {candidate}"
 
 
 def atmosphere_default_state(now: float = None) -> dict:
@@ -3281,6 +3309,7 @@ class DesireEngine:
             "effective_PA": round(effective_pa, 3),
             "effective_NA": round(effective_na, 3),
             "climate": climate.get("current", "Drift"),
+            "climate_display": climate_transition_display(atmosphere),
             "atmosphere": atmosphere,
             "current_chord": current_weather_chord(effective_pa, effective_na),
             "chord_chemistry": chemistry,

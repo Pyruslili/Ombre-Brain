@@ -62,7 +62,14 @@ from decay_engine import DecayEngine
 from embedding_engine import EmbeddingEngine
 from import_memory import ImportEngine
 from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx, now_iso
-from desire_engine import DRIVE_KEYS, DRIVE_EVENT_SCHEMA, DesireEngine, normalize_drive_key, _legacy_brain_to_event
+from desire_engine import (
+    DRIVE_KEYS,
+    DRIVE_EVENT_SCHEMA,
+    DesireEngine,
+    climate_transition_display,
+    normalize_drive_key,
+    _legacy_brain_to_event,
+)
 from speech_event_engine import (
     append_pending_batch,
     apply_speech_event_review,
@@ -210,6 +217,9 @@ def _compact_desire_state(state: dict) -> dict:
     state = state if isinstance(state, dict) else {}
     weather = state.get("pulse_weather") if isinstance(state.get("pulse_weather"), dict) else {}
     effective = state.get("effective_pa_na") if isinstance(state.get("effective_pa_na"), dict) else {}
+    climate_display = weather.get("climate_display") or climate_transition_display(
+        weather.get("atmosphere") or effective.get("atmosphere")
+    )
     intent = state.get("intent") if isinstance(state.get("intent"), dict) else None
     thoughts = state.get("thoughts") if isinstance(state.get("thoughts"), list) else []
     drive_events = state.get("drive_events") if isinstance(state.get("drive_events"), list) else []
@@ -279,6 +289,7 @@ def _compact_desire_state(state: dict) -> dict:
             "warmth": weather.get("warmth"),
             "shadow": weather.get("shadow"),
             "climate": weather.get("climate"),
+            "climate_display": climate_display,
             "mood_trace": _short_state_text(weather.get("mood_trace"), 160),
             "current_chord": weather.get("current_chord"),
             "chord_display": weather.get("chord_display") or _weather_chord_display(effective),
@@ -4061,9 +4072,11 @@ async def api_desire_state(request):
         state["latest_thought"] = latest_thought
         state["mood_trace"] = latest_thought
         climate = str(weather.get("climate") or "Drift").strip()
+        climate_display = weather.get("climate_display") or climate_transition_display(weather.get("atmosphere"))
         state["synthesized_mood_trace"] = mood_entry[0]
         state["mood_word"] = climate
         state["climate"] = climate
+        state["climate_display"] = climate_display
         state["weather_residue"] = {
             "warmth": round(float(weather.get("warmth_residue", 0.0)), 3),
             "shadow": round(float(weather.get("shadow_residue", 0.0)), 3),
@@ -4080,6 +4093,7 @@ async def api_desire_state(request):
             "gravity": weather.get("gravity", ""),
             "atmosphere": weather.get("atmosphere", {}),
             "climate": climate,
+            "climate_display": climate_display,
         }
         state["pulse_weather"] = {
             "undertow": top_drive,
@@ -4093,6 +4107,7 @@ async def api_desire_state(request):
             "source_stack": weather.get("source_stack", []),
             "chord_display": _weather_chord_display(weather),
             "climate": climate,
+            "climate_display": climate_display,
             "atmosphere": weather.get("atmosphere", {}),
             "chord_chemistry": weather.get("chord_chemistry", {}),
             "chemistry_core": weather.get("chemistry_core", {}),

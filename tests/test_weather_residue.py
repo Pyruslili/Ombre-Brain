@@ -5,6 +5,7 @@ from desire_engine import (
     chord_chemistry_snapshot,
     chord_event_tint_from_drive_events,
     classify_chord_situation,
+    climate_transition_display,
     current_weather_chord,
     pa_na_snapshot,
     select_climate,
@@ -205,6 +206,31 @@ def test_uninitialized_atmosphere_seeds_from_current_chemistry(tmp_path):
 
     assert weather["atmosphere"]["last_delta"]["source"] == "seed"
     assert weather["climate"] == selected["label"]
+
+
+def test_climate_transition_display_respects_blend_and_steps():
+    atmosphere = {
+        "climate": {
+            "current": "Low Tide",
+            "candidate": "Shelter",
+            "candidate_steps": 1,
+            "blend": 0.70,
+        }
+    }
+    assert climate_transition_display(atmosphere) == "Low Tide"
+
+    atmosphere["climate"]["candidate_steps"] = 2
+    atmosphere["climate"]["blend"] = 0.24
+    assert climate_transition_display(atmosphere) == "Low Tide"
+
+    atmosphere["climate"]["blend"] = 0.25
+    assert climate_transition_display(atmosphere) == "Low Tide · leaning Shelter"
+
+    atmosphere["climate"]["blend"] = 0.60
+    assert climate_transition_display(atmosphere) == "Low Tide → Shelter"
+
+    atmosphere["climate"]["candidate"] = "Low Tide"
+    assert climate_transition_display(atmosphere) == "Low Tide"
 
 
 def test_subcurrent_bias_does_not_directly_switch_climate(tmp_path):
