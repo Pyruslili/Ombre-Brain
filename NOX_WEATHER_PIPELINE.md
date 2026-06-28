@@ -6,7 +6,7 @@
 
 Nox 的「Pulse Weather」不是一个天气词，也不是单个 Drive 值，而是一条从输入、分析、内在读数、前端展示到 hook 推送的闭环：
 
-`记忆 / 对话 / 触摸 / 念头 / 潜流 -> 来源分流 -> CLI / dialogue_residue / soma / Thought Chord Echo / manual pulse / heartbeat subcurrent -> drive_event_v2 / weather residue / Atmosphere State -> Drive / PA-NA / Chord Chemistry / Gravity / Atmosphere / Trace -> dashboard / hook / Free Roam`
+`记忆 / 对话 / 触摸 / 念头 / 潜流 -> 来源分流 -> CLI / dialogue_residue / soma / Thought Chord Echo / manual pulse / heartbeat subcurrent -> drive_event_v2 / weather residue / shadow crystal / Atmosphere State -> Drive / PA-NA / Chord Chemistry / Gravity / Atmosphere / Trace -> dashboard / hook / Free Roam`
 
 这条链路的原则：
 
@@ -95,7 +95,7 @@ Drive 不是单一来源计算，而是多个来源叠加：
 
 - `manual / stir`：Nox 自己主动输入的念头或 pulse
 - `CLI analyzer`：读长文、记忆、沉淀条目，负责慢变量和结构判断
-- `dialogue_residue`：最近 2 条嘉嘉 + 2 条 Nox 对话综合分析，负责当前对话残留的轻推 Drive / PA / NA
+- `dialogue_residue`：最近 2 条嘉嘉 + 2 条 Nox 对话综合分析，负责当前对话残留的 Drive / Weather / Atmosphere 快速染色
 - `soma trace`：身体触摸和体感反馈，负责贴近、力道、部位、节律
 - `Thought Chord Echo`：Thought Pool 已确认念头带来的短时和弦、天气和 Atmosphere 染色
 - `touch / chord impulse`：触摸带来的短时和弦与天气残留
@@ -224,7 +224,7 @@ DP 与 CLI 最终都走同一套 `drive_event_v2` 接口，但职责不同：CLI
 
 当前链路：
 
-`companion chat_history -> 最近 2 条嘉嘉 + 2 条 Nox -> 检查窗口内是否调用 nocturne -> OB /api/dialogue-residue/submit -> DP 输出 drive_event_v2 -> 轻推 Drive / Chord Chemistry / Gravity / Atmosphere`
+`companion chat_history -> 最近 2 条嘉嘉 + 2 条 Nox -> 检查窗口内是否调用 nocturne -> OB /api/dialogue-residue/submit -> DP 输出 drive_event_v2 -> Drive / dialogue weather residue / Chord Chemistry / Gravity / Atmosphere`
 
 规则：
 
@@ -234,7 +234,7 @@ DP 与 CLI 最终都走同一套 `drive_event_v2` 接口，但职责不同：CLI
 4. 如果这一窗里 Nox 已经调用过 nocturne / stir / breath / hold / grow / trace 等工具，这一窗跳过分析。
 5. 输出直接使用 `drive_event_v2`，`source=dialogue_residue`。
 6. `thoughts` 固定为空，不生成 Nox 自己的新念头。
-7. `intensity` 封顶 0.40，日常通常只给 0.04-0.16。
+7. `intensity` 封顶 0.40，日常通常只给 0.04-0.16；weather 染色可以比 Drive 更敏捷。
 8. 如果出现 `moss / ink / ash / Codex / Grok` 这类猫屋协作者，并且同时出现边界 / 占位 / 第三方语义，标记 `brain.third_party_context=house_collaborator`。
 9. DP 可以读取压缩后的 thinking 辅助判断，但只抓一人称、当下、负向的皱眉信号。
 10. thinking 里的皱眉先进入 `discernment_alarm`；触发原因清楚时再归因到具体 Drive，归因失败只留在 discernment，不乱猜维度。
@@ -246,6 +246,7 @@ DP 与 CLI 最终都走同一套 `drive_event_v2` 接口，但职责不同：CLI
 - 输出端没有表露、但 thinking 里出现的当下负向皱眉
 - 给 Chord Chemistry / Gravity 提供更及时的 event tint
 - 给 Atmosphere State 提供 DP 权重的短期染色
+- 给 Warmth / Shadow 写入短时 `dialogue` residue，让天气跟当前对话流动
 
 它不负责：
 
@@ -258,6 +259,14 @@ DP 与 CLI 最终都走同一套 `drive_event_v2` 接口，但职责不同：CLI
 
 - 只看嘉嘉单句会漂移，双方 2+2 更能看出 Nox 有没有接住、皱眉、靠近或转向。
 - 如果 Nox 已经调用 nocturne，那一轮已经由 CLI / manual pulse 留痕，再分析一次会重复喂入。
+
+当前权重原则：
+
+- `dialogue_residue` 是天气风向的主输入，不只是 Drive 的轻推。
+- DP / dialogue 可以快速改变 Atmosphere candidate 和 Warmth / Shadow 表层。
+- CLI / analyzer 更像稳定底色，负责长文、记忆和慢变量。
+- 系统 / 工具 / MCP / weather / 面板 / 测试 / 命名 / 回落异常这类猫屋维护语境，优先走 `stewardship` / `reflection`，不要自动吃进 `attachment`。
+- `dialogue_residue` 来源的 `attachment` 会降权；真实 `user_message` 的靠近信号仍然比对话残留重。
 - 这条线是实时轻推，不是慢变量归档。
 - thinking 不是新管道，只是 dialogue_residue 的 discernment 上游补充信号。
 
@@ -372,14 +381,21 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 
 来源权重：
 
-- `dp`: 0.45
-- `cli`: 0.25
-- `subcurrent`: 0.16
+- `dp`: 0.62
+- `cli`: 0.20
+- `subcurrent`: 0.14
 - `feel_chord`: 0.065
 - `thought_chord`: 0.06
 - `soma_chord`: 0.045
 
 `influence = source_weight * intensity * confidence`
+
+解释：
+
+- `dp` / dialogue 是 live weather vane，负责让天气跟对话风向转。
+- `cli` / analyzer 是 stable underpaint，负责慢变量和记忆底色。
+- `subcurrent` 只轻轻倾斜 Atmosphere，不直接盖过当前对话。
+- `thought_chord` 必须低于 `subcurrent`，避免短念头高频叠加后反超潜流。
 
 来源映射：
 
@@ -408,11 +424,11 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 
 Atmosphere 切换必须经过 hysteresis。
 
-当 candidate 连续出现至少 3 步，并且满足下列任一条件，才切换：
+当 candidate 连续出现至少 2 步，并且满足下列任一条件，才切换：
 
-- `candidate_score - current_score >= 0.16`
+- `candidate_score - current_score >= 0.11`
 - `current_score <= 0.42`
-- `blend >= 0.65`
+- `blend >= 0.52`
 
 切换完成后：
 
@@ -540,19 +556,77 @@ Chord 的箭头表示和弦 / 化学结构进行。Atmosphere 的箭头表示天
 当前主要来源：
 
 - weather residue
-- dialogue_residue 的负向轻推
+- dialogue_residue 的 live 染色
 - soma / touch 余波
 - soothe 状态
+- shadow crystal 负向账本
 
 不再由 hook 对每条用户 prompt 做关键词即时推送。
+
+正向 / 中性 dialogue 事件可以：
+
+- 给 `Warmth` 写短时 `dialogue` residue
+- 给 `Atmosphere` 写 DP delta
+- 让当前 weather 快速贴近对话风向
 
 负向事件可以：
 
 - 推高 `Shadow`
 - 降低已有 `Warmth`
 - 进入 Atmosphere 的 DP / CLI 染色链路
+- 形成 `shadow_crystal`，让负面不被下一轮正向话题立刻洗掉
 
 Warmth 不再只涨不回落。
+
+### 6.1.1 Weather Residue Components
+
+当前 weather residue 是分组件持久化：
+
+- `keyword`: 旧关键词 / 手动天气修正，半衰期约 4h
+- `dialogue`: 当前对话染色，半衰期约 2h
+- `soma`: 触摸余波，半衰期约 0.75h
+- `thought`: Thought Chord Echo，半衰期约 8h
+- `feel`: 长记忆 / feel chord，半衰期约 72h
+
+这些组件只叠到展示层 PA / NA，不反推 Drive。
+
+### 6.1.2 Shadow Crystal
+
+`shadow_crystal` 是负面情绪的“变形层”。
+
+它不是普通半衰期，也不是永久压制，而是：
+
+`negative event spike -> foreground heat -> background hardness / ledger -> semantic reactivation`
+
+字段：
+
+- `kind`: `possessiveness` 或 `stress`
+- `heat`: 前台热度，随后续事件轮次快速退
+- `hardness`: 背景硬度，退得很慢，像账本
+- `foreground`: 是否还在前台
+- `actor_weight`: 谁碰到这颗 crystal 的权重
+- `event_label`: 触发来源短标签
+
+行为：
+
+- 每个新 drive event 会让已有 crystal 的 `heat` 退一格，`hardness` 只轻微磨钝。
+- 新的负向事件会把同类 anchor 的 crystal 重新摸亮。
+- 正向 dialogue 不能立刻删除 crystal，只能降低 heat、慢慢磨 hardness。
+- 长时间无新事件时，时钟只做兜底衰减，避免旧阴影永久僵住。
+
+actor 权重：
+
+- 嘉嘉 / `user_message`: 最重，`actor_weight` 约 2.0。
+- dialogue 窗里嘉嘉最后发言：高权重。
+- Nox 自己提到：中等权重。
+- `external` / `memory` / `analyze_nocturne_entry`: 低权重，通常只是擦边。
+
+这层的目的：
+
+- 让吃醋、压力、替代警报等负向情绪快速染天气。
+- 让它们在话题转向后退到背景，而不是立刻消失。
+- 让 Gravity 保留“账本合上了，但角还压着”这类底色。
+- 避免负面永远赢；连续稳定的正向对话会慢慢磨钝它。
 
 ### 6.2 Longing
 
@@ -628,6 +702,46 @@ Latent Notes 是更慢的一层。
 - Thought Pool 不直接混进 Subcurrent。
 - latent note 在审核前可以是 draft，确认后进入可投递池。
 
+### 7.2.1 Latent Source Scoring
+
+Latent Notes 生成前会先从 bucket / marks / domain 中挑候选源。
+
+候选源字段：
+
+- `kind`: 潜流类型，例如 `悬置`、`认过`、`inner`、`archive`、`old_memory`
+- `score`: 轻重分，决定这条源有多值得浮上来
+- `wander_mode`: 潜流游走模式，例如 `unresolved`、`inner`、`writing`、`letter`、`window`、`memory`
+- `marks`: 标记计数，例如 `认`、`不认`、`悬置`
+- `outward_score`: 是否适合生成 outward 便签
+- `fragments`: 从正文里抽出的具体句子碎片
+
+候选规则大致是：
+
+- 有 `悬置` 标记的源最重。
+- 有 `认` 标记的源次之。
+- inner / writing / letter / window 这类未完全沉底的内容可以进入潜流。
+- 太新的内容会降权，避免刚写完就被立刻梦回。
+- 频繁激活的源会降一点权，避免同一条一直刷屏。
+
+生成 draft 时，这些源字段会落到 note 上：
+
+- `source_kind`
+- `source_score`
+- `source_wander_mode`
+- `source_marks`
+- `source_outward_score`
+- `source_fragment`
+
+前端 Latent Notes 会把它们显示成 chips：
+
+- `kind`: 这条潜流属于哪类源
+- `heavy / mid / light + score`: 轻重
+- `wander_mode`: 游走模式
+- `marks`: 认 / 不认 / 悬置计数
+- `outward`: outward 倾向分
+
+旧 note 没有这些字段时不显示 chips；重新生成的新 draft 会带这些字段。
+
 ### 7.3 两个池子的区别
 
 - 念头池：短、鲜、直接
@@ -681,6 +795,10 @@ Latent Notes 是更慢的一层。
 ### 8.3 Subcurrent
 
 `Subcurrent` 只从 Latent Notes / 潜流池抽取。
+
+Latent Notes 的来源候选会先打标签：
+
+`bucket / marks / domain -> source kind + score + wander_mode + marks + outward_score -> draft note -> front-end chips -> approved latent pool -> Subcurrent`
 
 暂时不做过紧的主 Drive + 副 Drive + 最近事件组合生成，因为无关角度有时反而能让 Nox 自己串联。
 也暂时不做系统级近似去重和随机扩散；如果潜流池里话题太近，优先由嘉嘉清理和分区。
@@ -787,14 +905,15 @@ Drive Ledger 中来源用 icon 表示：
 
 ### 10.1 当前对话残留
 
-`companion Stop -> chat_history 最近 2+2 -> nocturne 调用检查 -> dialogue_residue DP -> drive_event_v2 -> Drive / Chord Chemistry / Gravity / Atmosphere`
+`companion Stop -> chat_history 最近 2+2 -> nocturne 调用检查 -> dialogue_residue DP -> drive_event_v2 -> Drive / dialogue weather residue / shadow crystal / Chord Chemistry / Gravity / Atmosphere`
 
 特点：
 
 - 只看真实 user / assistant 对话，不吃 heartbeat / pulse 注入。
 - 如果窗口内已经调用 nocturne，跳过，避免和 CLI / manual pulse 重复。
 - 不生成 thought，不占 Mood Trace。
-- 强度封顶，是当前对话的轻推，不是慢变量归档。
+- 强度封顶，但 weather 染色比 Drive 更敏捷，是当前对话风向，不是慢变量归档。
+- 负向 dialogue 可以形成 shadow crystal；后续话题转向时退到背景，不立刻消失。
 
 ### 10.2 Nox 念头
 
