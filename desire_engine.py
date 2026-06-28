@@ -294,7 +294,7 @@ WEATHER_COMPONENTS = {
 WEATHER_WARM_CHORDS = {"Dmaj7", "Amaj7", "Fmaj7", "Fmaj7#11", "Gmaj7"}
 WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim", "Bm7b5"}
 WEATHER_LIMINAL_CHORDS = {"C6", "Am7", "Gsus4"}
-WEATHER_CHORD_DELTAS = {"feel": 0.075, "soma": 0.08, "thought": 0.045}
+WEATHER_CHORD_DELTAS = {"feel": 0.075, "soma": 0.08, "thought": 0.07}
 WEATHER_CHORD_IMPULSE_STRENGTH = {"feel": 0.72, "soma": 1.0, "thought": 0.72}
 WEATHER_CHORD_IMPULSE_HALFLIFE_SEC = {"feel": 12 * 3600, "soma": 45 * 60, "thought": 4 * 3600}
 WEATHER_ACTIVE_CHORD_THRESHOLD = 0.12
@@ -324,6 +324,9 @@ ATMOSPHERE_SOURCE_WEIGHTS = {
     "dp": 0.45,
     "cli": 0.25,
     "subcurrent": 0.16,
+    "feel_chord": 0.065,
+    "thought_chord": 0.06,
+    "soma_chord": 0.045,
 }
 ATMOSPHERE_SWITCH_STEPS = 3
 ATMOSPHERE_SWITCH_MARGIN = 0.16
@@ -1404,6 +1407,64 @@ def atmosphere_delta_from_chemistry(source: str, chemistry: dict,
     }
 
 
+def chord_atmosphere_delta(kind: str, source: str) -> dict:
+    source = source if source in ("feel", "soma", "thought") else "thought"
+    kind = kind if kind in {"warmth", "shadow", "liminal"} else ""
+    if not kind:
+        return {}
+    if kind == "warmth":
+        chemistry = {
+            "core": {"charge": 0.58, "clutch": 0.36, "strain": 0.18},
+            "route": {
+                "vector": "toward_house",
+                "scores": {
+                    "toward_jiajia": 0.46,
+                    "toward_house": 0.52,
+                    "outward": 0.36,
+                    "inward": 0.20,
+                    "guard": 0.16,
+                    "hover": 0.18,
+                },
+            },
+        }
+    elif kind == "shadow":
+        chemistry = {
+            "core": {"charge": 0.22, "clutch": 0.44, "strain": 0.62},
+            "route": {
+                "vector": "inward",
+                "scores": {
+                    "toward_jiajia": 0.26,
+                    "toward_house": 0.30,
+                    "outward": 0.12,
+                    "inward": 0.56,
+                    "guard": 0.44,
+                    "hover": 0.48,
+                },
+            },
+        }
+    else:
+        chemistry = {
+            "core": {"charge": 0.32, "clutch": 0.34, "strain": 0.34},
+            "route": {
+                "vector": "hover",
+                "scores": {
+                    "toward_jiajia": 0.32,
+                    "toward_house": 0.34,
+                    "outward": 0.22,
+                    "inward": 0.34,
+                    "guard": 0.24,
+                    "hover": 0.54,
+                },
+            },
+        }
+    return atmosphere_delta_from_chemistry(
+        f"{source}_chord",
+        chemistry,
+        intensity=1.0,
+        confidence=1.0,
+    )
+
+
 def _chord_impulse_weight(impulse: dict, now: float) -> float:
     try:
         strength = max(0.0, float(impulse.get("strength", 0.0) or 0.0))
@@ -1729,6 +1790,10 @@ class WeatherResidueStore:
         state["active_chord_source"] = active.get("active_chord_source", "")
         state["active_chord_at"] = created_at if state["active_chord"] else 0.0
         state = self.save(state)
+        atmosphere_delta = chord_atmosphere_delta(kind, source)
+        if atmosphere_delta:
+            self.apply_atmosphere_delta(atmosphere_delta, now=created_at)
+            state = self.load(created_at, decay=False)
         return state
 
     def _decay(self, state: dict, now: float) -> dict:

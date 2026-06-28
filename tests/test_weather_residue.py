@@ -76,10 +76,25 @@ def test_thought_chord_tints_weather_once_between_light_dialogue_and_feel(tmp_pa
         "brain": {"source": "dialogue_residue", "tension_load": 0.25, "grounding": "实"},
     })
 
-    assert thought["shadow_residue"] == 0.045
+    assert thought["shadow_residue"] == 0.07
     assert dialogue["weather"]["shadow_residue"] < thought["shadow_residue"]
     assert thought["shadow_residue"] < feel["shadow_residue"]
     assert thought["active_chord_source"] == "thought"
+
+
+def test_thought_chord_gently_tints_atmosphere(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+
+    engine.apply_chord_echo("Dm7", source="thought")
+    weather = engine.weather_state()
+    atmosphere = weather["atmosphere"]
+
+    assert atmosphere["last_delta"]["source"] == "thought_chord"
+    assert atmosphere["last_delta"]["influence"] == 0.06
+    assert atmosphere["route"]["scores"]["inward"] > atmosphere["route"]["scores"]["outward"]
+    assert atmosphere["climate"]["candidate"] in CLIMATE_LABELS
+    assert atmosphere["climate"]["candidate_steps"] == 1
+    assert atmosphere["climate"]["blend"] > 0
 
 
 def test_pulse_returns_compact_chord_change_signal(tmp_path):
