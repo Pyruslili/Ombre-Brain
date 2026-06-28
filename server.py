@@ -593,6 +593,10 @@ def _compact_desire_state(state: dict) -> dict:
             "undertow_value": weather.get("undertow_value"),
             "warmth": weather.get("warmth"),
             "shadow": weather.get("shadow"),
+            "warmth_residue": weather.get("warmth_residue"),
+            "shadow_residue": weather.get("shadow_residue"),
+            "base_warmth": weather.get("base_warmth"),
+            "base_shadow": weather.get("base_shadow"),
             "climate": weather.get("climate"),
             "climate_display": climate_display,
             "atmosphere_display": climate_display,
@@ -605,6 +609,12 @@ def _compact_desire_state(state: dict) -> dict:
             "gravity_pool": weather.get("gravity_pool") or (weather.get("chord_chemistry") or {}).get("gravity_pool"),
             "derived_texture": weather.get("derived_texture", {}),
             "gravity": _short_state_text(weather.get("gravity") or weather.get("gravity_line"), 160),
+        },
+        "weather_residue": {
+            "warmth": weather.get("warmth_residue"),
+            "shadow": weather.get("shadow_residue"),
+            "base_warmth": weather.get("base_warmth"),
+            "base_shadow": weather.get("base_shadow"),
         },
         "speech_event": {
             "label": speech_event.get("label"),

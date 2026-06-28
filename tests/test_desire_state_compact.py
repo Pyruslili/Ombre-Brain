@@ -19,6 +19,10 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
             "climate_display": "Overcast",
             "chord_display": "Gmaj7→Fmaj7",
             "mood_trace": "first thought",
+            "warmth_residue": 0.04,
+            "shadow_residue": 0.02,
+            "base_warmth": 0.57,
+            "base_shadow": 0.20,
             "current_chord": "Fmaj7#11",
             "gravity": "重心往屋里坠，手还没松。",
             "chemistry_core": {"depth": 0.7},
@@ -62,6 +66,10 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
     assert compact["weather_panel"]["gravity"] == "重心往屋里坠，手还没松。"
     assert compact["weather_panel"]["now_playing"] == "Light Song - haruka nakamura"
     assert _weather_panel_lines(compact["weather_panel"])[-1] == "♪ On Air：Light Song - haruka nakamura"
+    assert compact["pulse_weather"]["warmth_residue"] == 0.04
+    assert compact["pulse_weather"]["shadow_residue"] == 0.02
+    assert compact["weather_residue"]["base_warmth"] == 0.57
+    assert compact["weather_residue"]["base_shadow"] == 0.20
     assert compact["pulse_weather"]["chemistry_core"] == {"depth": 0.7}
     assert compact["pulse_weather"]["gravity_pool"] == "pull"
     assert compact["pulse_weather"]["gravity"] == "重心往屋里坠，手还没松。"
