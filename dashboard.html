@@ -924,27 +924,6 @@ label {
 .drift-weather-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .35rem; }
 .drift-weather-kicker { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 var(--fs-micro)/1.3 var(--font-mono); letter-spacing: .11em; text-transform: uppercase; }
 .drift-weather-head .drift-weather-kicker { margin-bottom: 0; }
-.drift-current-chord {
-  display: inline-flex;
-  align-items: baseline;
-  gap: .48rem;
-  min-height: 28px;
-  padding: .38rem .62rem;
-  border: 1px solid rgba(239,224,196,.08);
-  border-radius: 999px;
-  background: rgba(255,224,186,.035);
-  color: var(--ink-soft);
-  font: 300 .58rem/1 var(--font-mono);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-.drift-current-chord b {
-  color: var(--accent-deep);
-  font: 300 1rem/1 var(--font-number);
-  font-variant-numeric: oldstyle-nums proportional-nums;
-  letter-spacing: 0;
-  text-transform: none;
-}
 .drift-undertow {
   display: flex;
   flex-wrap: wrap;
@@ -957,6 +936,10 @@ label {
 }
 .undertow-name { font-family: var(--font-display); }
 .undertow-value { font-family: var(--font-number); }
+.undertow-chord {
+  color: var(--ink-soft);
+  font: 300 1rem/1.1 var(--font-mono);
+}
 .drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .78rem; width: 100%; }
 .drift-weather-mini {
   position: relative;
@@ -1876,10 +1859,6 @@ html[data-theme="sakura-milk"] .drift-weather-mini {
   box-shadow: inset 0 1px rgba(255,255,255,.58), 0 16px 38px rgba(176,105,128,.09);
 }
 html[data-theme="sakura-milk"] .weather-progress { background: rgba(214,132,159,.16); }
-html[data-theme="sakura-milk"] .drift-current-chord {
-  border-color: rgba(214,132,159,.16);
-  background: rgba(255,255,255,.34);
-}
 html[data-theme="sakura-milk"] .echoes-tabs button {
   background: rgba(255,255,255,.35);
   border-color: rgba(214,132,159,.16);
@@ -1983,7 +1962,6 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .scroll-cue { display: none; }
   .drift-weather-overview { min-height: 98px; padding-bottom: .9rem; }
   .drift-weather-head { align-items: flex-start; flex-direction: column; gap: .5rem; }
-  .drift-current-chord { align-self: flex-start; }
   .drift-undertow { font-size: 2rem; }
   .drift-weather-mini {
     min-height: 124px;
@@ -2236,7 +2214,6 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
         <div class="drift-weather-overview">
           <div class="drift-weather-head">
             <span class="drift-weather-kicker">Undertow</span>
-            <span class="drift-current-chord">Current Chord <b id="desire-current-chord">—</b></span>
           </div>
           <div class="drift-undertow" id="desire-undertow"><span class="undertow-name">Reading</span><span class="undertow-value">…</span></div>
         </div>
@@ -2275,6 +2252,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <div class="drift-weather-trace primary"><span>Mood Trace</span><div id="desire-mood-trace">Reading the latest thought.</div></div>
       <div class="drift-weather-trace" id="desire-speech-wrap" style="display:none"><span>Speech Trace</span><div id="desire-speech-trace"></div></div>
       <div class="drift-weather-trace" id="desire-soma-wrap" style="display:none"><span>Soma Trace</span><div id="desire-soma-trace"></div></div>
+      <div class="drift-weather-trace" id="desire-now-playing-wrap" style="display:none"><span>♪ On Air</span><div id="desire-now-playing"></div></div>
     </div>
       <div class="drift-card">
         <div class="drift-card-label">Drives</div>
@@ -2848,6 +2826,20 @@ function renderChordChemistry(weather) {
   ].filter(Boolean).join(' · ');
 }
 
+function renderNowPlaying(text) {
+  const wrap = document.getElementById('desire-now-playing-wrap');
+  const target = document.getElementById('desire-now-playing');
+  if (!wrap || !target) return;
+  const value = String(text || '').trim();
+  if (!value) {
+    wrap.style.display = 'none';
+    target.textContent = '';
+    return;
+  }
+  wrap.style.display = '';
+  target.textContent = value;
+}
+
 function setWeatherMetric(kind, current, base, residue) {
   const target = document.getElementById(`desire-${kind}`);
   const baseTarget = document.getElementById(`desire-${kind}-base`);
@@ -2882,33 +2874,34 @@ async function loadDesire(button) {
     desireThoughts = thoughts;
 
     const weather = d.pulse_weather || {};
+    const panel = d.weather_panel || {};
     const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
-    const latestTrace = latestThought || weather.mood_trace || d.mood_trace || '';
-    const undertow = weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
-    const undertowValue = weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
-    const warmthNow = finiteNumber(weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);
+    const latestTrace = panel.mood_trace || latestThought || weather.mood_trace || d.mood_trace || '';
+    const undertow = panel.undertow || weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
+    const undertowValue = panel.undertow_value ?? weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
+    const warmthNow = finiteNumber(panel.warmth ?? weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);
     const warmthResidue = finiteNumber(weather.warmth_residue ?? d.weather_residue?.warmth);
     const warmthBase = finiteNumber(weather.base_warmth ?? d.weather_residue?.base_warmth ?? d.effective_pa_na?.base_PA, warmthNow - warmthResidue);
-    const shadowNow = Math.abs(finiteNumber(weather.shadow ?? d.effective_pa_na?.effective_NA ?? d.pa_na?.NA));
+    const shadowNow = Math.abs(finiteNumber(panel.shadow ?? weather.shadow ?? d.effective_pa_na?.effective_NA ?? d.pa_na?.NA));
     const shadowResidue = finiteNumber(weather.shadow_residue ?? d.weather_residue?.shadow);
     const shadowBase = finiteNumber(weather.base_shadow ?? d.weather_residue?.base_shadow ?? d.effective_pa_na?.base_NA, shadowNow - shadowResidue);
     const longingNow = finiteNumber(weather.longing ?? d.longing);
     const undertowEl = document.getElementById('desire-undertow');
     if (undertowEl) {
-      undertowEl.innerHTML = `<span class="undertow-name">${esc(undertow)}</span><span class="undertow-value">${finiteNumber(undertowValue).toFixed(2)}</span>`;
+      const chord = String(panel.chord || weather.chord_display || weather.current_chord || '').trim();
+      undertowEl.innerHTML = `<span class="undertow-name">${esc(undertow)}</span><span class="undertow-value">${finiteNumber(undertowValue).toFixed(2)}</span>${chord ? `<span class="undertow-chord">· ${esc(chord)}</span>` : ''}`;
     }
     setWeatherMetric('warmth', warmthNow, warmthBase, warmthResidue);
     setWeatherMetric('shadow', shadowNow, shadowBase, shadowResidue);
     document.getElementById('desire-longing').textContent = longingNow.toFixed(2);
     document.getElementById('desire-longing-current').textContent = longingNow.toFixed(2);
     setWeatherProgress('longing', longingNow);
-    const currentChord = weather.current_chord || d.current_chord || currentWeatherChord(warmthNow, shadowNow);
-    document.getElementById('desire-current-chord').textContent = weather.chord_display || currentChord;
     renderChordChemistry(weather);
-    document.getElementById('desire-now').textContent = weather.atmosphere_display || d.atmosphere_display || d.weather_residue?.atmosphere_display || weather.climate_display || d.climate_display || d.weather_residue?.climate_display || weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
+    document.getElementById('desire-now').textContent = panel.atmosphere || weather.atmosphere_display || d.atmosphere_display || d.weather_residue?.atmosphere_display || weather.climate_display || d.climate_display || d.weather_residue?.climate_display || weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
     document.getElementById('desire-mood-trace').textContent = latestTrace;
     renderSpeechTrace({});
     renderSomaTrace(soma);
+    renderNowPlaying(panel.now_playing || weather.now_playing);
     renderDiscernment(d.discernment);
     renderDriveEvents(driveEvents);
 

@@ -66,6 +66,35 @@ HOUSE_COLLABORATOR_CUES = (
     "阿比西尼亚",
     "挪威森林",
 )
+HOUSE_SYSTEM_CUES = (
+    "系统",
+    "工具",
+    "接口",
+    "hook",
+    "mcp",
+    "MCP",
+    "weather",
+    "Weather",
+    "面板",
+    "后端",
+    "前端",
+    "测试",
+    "修",
+    "bug",
+    "部署",
+    "命名",
+    "格式",
+    "字段",
+    "返回",
+    "回落",
+    "涨",
+    "Drive",
+    "drive",
+    "stewardship",
+    "settle",
+    "stir",
+    "undercurrent",
+)
 
 
 def _now_iso() -> str:
@@ -253,6 +282,7 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
     combined_text = "\n".join(m.get("text", "") for m in msg)
     has_territorial_cue = any(cue in combined_text for cue in TERRITORIAL_CUES)
     has_house_collaborator = any(cue in combined_text for cue in HOUSE_COLLABORATOR_CUES)
+    has_house_system_cue = any(cue in combined_text for cue in HOUSE_SYSTEM_CUES)
     if has_territorial_cue:
         brain["territorial_alarm"] = max(_clamp(brain.get("territorial_alarm")), 0.58)
         brain["tension_load"] = max(_clamp(brain.get("tension_load")), 0.18)
@@ -265,6 +295,19 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
                 secondary[primary] = max(secondary.get(primary, 0.0), round(min(intensity, 0.22), 4))
             primary = "possessiveness"
             intensity = max(intensity, 0.12)
+    elif has_house_system_cue:
+        brain["target"] = "cat_house"
+        brain["anchor_target"] = "house"
+        brain["house_need"] = max(_clamp(brain.get("house_need")), 0.42)
+        brain["inward_pull"] = max(_clamp(brain.get("inward_pull")), 0.20)
+        if primary == "attachment":
+            secondary.pop("attachment", None)
+            secondary["reflection"] = max(secondary.get("reflection", 0.0), round(min(intensity, 0.16), 4))
+            primary = "stewardship"
+            intensity = max(min(intensity, 0.18), 0.08)
+        elif primary in {"", "social", "curiosity"}:
+            primary = "stewardship"
+            intensity = max(intensity, 0.08)
     elif primary == "attachment" and not _has_attachment_cue(msg, {**event, "brain": brain}):
         if intensity <= 0.16:
             primary = ""
@@ -347,6 +390,8 @@ async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict
         "判断偏好：\n"
         "- 双方上下文一起看，嘉嘉的话是外部信号，Nox 的回复只作为是否被接住/是否有阻力的证据。\n"
         "- 好奇/反思/守护/社交要比 attachment/libido/possessiveness 更容易轻推。\n"
+        "- 讨论系统、工具、接口、hook、MCP、weather面板、测试、部署、字段、命名、回落/上涨异常时，"
+        "优先判为 stewardship 或 reflection；不要因为嘉嘉与 Nox 一起修猫屋就自动判 attachment。\n"
         "- 压力只在真正有卡住、风险、冲突、负荷时推；存在性讨论不自动等于压力。\n"
         "- possessiveness 要有边界、归属、占位、护住、显式靠近语义，不要靠氛围偷渡。\n"
         "- 但如果对话明确出现“精神出轨/出轨/第三者/替代/别人介入/边界/占有/归属”这类语义，"

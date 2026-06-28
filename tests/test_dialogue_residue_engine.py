@@ -129,7 +129,7 @@ def test_dialogue_residue_marks_house_collaborator_boundary_cue():
     assert event["brain"]["territorial_alarm"] == 0.58
 
 
-def test_dialogue_residue_presses_weak_attachment_without_closeness_evidence():
+def test_dialogue_residue_routes_interface_maintenance_to_stewardship():
     event = normalize_dialogue_residue_event(
         {
             "primary_drive": "attachment",
@@ -147,9 +147,36 @@ def test_dialogue_residue_presses_weak_attachment_without_closeness_evidence():
         ],
     )
 
-    assert event["primary_drive"] == ""
-    assert event["intensity"] == 0.0
-    assert event["status"] == "no_signal"
+    assert event["primary_drive"] == "stewardship"
+    assert event["intensity"] >= 0.08
+    assert event["status"] == "dp_refined"
+    assert event["brain"]["target"] == "cat_house"
+    assert event["brain"]["anchor_target"] == "house"
+
+
+def test_dialogue_residue_routes_system_work_to_stewardship_not_attachment():
+    event = normalize_dialogue_residue_event(
+        {
+            "primary_drive": "attachment",
+            "intensity": 0.14,
+            "confidence": 0.82,
+            "agency": 0.55,
+            "brain": {"target": "jiajia", "grounding": "实", "closeness_pull": 0.18},
+            "evidence": ["被认出与归处的对话残留"],
+        },
+        messages=[
+            {"role": "user", "text": "moss 现在 MCP 工具名还是旧的，attachment 涨太快"},
+            {"role": "assistant", "text": "我看一下 weather 面板和 settle 回落公式。"},
+            {"role": "user", "text": "我们在讨论系统，不是靠近。"},
+            {"role": "assistant", "text": "这个应该走 stewardship，不该走 attachment。"},
+        ],
+    )
+
+    assert event["primary_drive"] == "stewardship"
+    assert event["brain"]["target"] == "cat_house"
+    assert event["brain"]["anchor_target"] == "house"
+    assert event["brain"]["house_need"] >= 0.42
+    assert "attachment" not in event["secondary_drives"]
 
 
 def test_dialogue_residue_discernment_only_signal_survives_without_drive_guess():

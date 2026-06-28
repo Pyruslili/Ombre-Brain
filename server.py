@@ -213,6 +213,304 @@ def _short_state_text(value: object, limit: int = 160) -> str:
     return text[:limit]
 
 
+def _num(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _sorted_thoughts(state: dict) -> list:
+    thoughts = state.get("thoughts") if isinstance(state.get("thoughts"), list) else []
+    return sorted(
+        [t for t in thoughts if isinstance(t, dict)],
+        key=lambda t: _num(t.get("born_at"), 0.0),
+        reverse=True,
+    )
+
+
+def _latest_thought_text(state: dict) -> str:
+    for thought in _sorted_thoughts(state):
+        text = str(thought.get("text") or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _now_playing_text(state: dict) -> str:
+    source = state.get("now_playing") if isinstance(state.get("now_playing"), dict) else {}
+    if not source:
+        weather = state.get("pulse_weather") if isinstance(state.get("pulse_weather"), dict) else {}
+        source = weather.get("now_playing") if isinstance(weather.get("now_playing"), dict) else {}
+    title = str(source.get("title") or source.get("name") or "").strip()
+    artist = str(source.get("artist") or "").strip()
+    if not title:
+        return ""
+    return f"{title} - {artist}" if artist else title
+
+
+_NOW_PLAYING_CACHE = {"ts": 0.0, "value": {}}
+
+
+def _spotify_client_credentials() -> tuple[str, str]:
+    client_id = os.environ.get("SPOTIFY_CLIENT_ID", "").strip()
+    client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET", "").strip()
+    if client_id and client_secret:
+        return client_id, client_secret
+
+    def _walk(value):
+        if isinstance(value, dict):
+            env = value.get("env") if isinstance(value.get("env"), dict) else value
+            cid = str(env.get("SPOTIFY_CLIENT_ID") or "").strip()
+            secret = str(env.get("SPOTIFY_CLIENT_SECRET") or "").strip()
+            if cid and secret:
+                return cid, secret
+            for child in value.values():
+                found = _walk(child)
+                if found:
+                    return found
+        elif isinstance(value, list):
+            for child in value:
+                found = _walk(child)
+                if found:
+                    return found
+        return None
+
+    for path in (os.path.expanduser("~/.claude.json"), os.path.expanduser("~/.claude/settings.local.json")):
+        try:
+            with open(path) as f:
+                found = _walk(_json_lib.load(f))
+            if found:
+                return found
+        except Exception:
+            continue
+    return "", ""
+
+
+def _spotify_access_token(force_refresh: bool = False) -> str:
+    import urllib.parse
+    import urllib.request
+
+    token_path = os.path.expanduser("~/.spotify-mcp/tokens.json")
+    with open(token_path) as f:
+        token_data = _json_lib.load(f)
+    token = str(token_data.get("accessToken") or "").strip()
+    expires_at = float(token_data.get("expiresAt", 0) or 0) / 1000.0
+    if token and expires_at > time.time() + 60 and not force_refresh:
+        return token
+
+    client_id, client_secret = _spotify_client_credentials()
+    refresh_token = str(token_data.get("refreshToken") or "").strip()
+    if not (client_id and client_secret and refresh_token):
+        return token
+
+    data = urllib.parse.urlencode({
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }).encode()
+    req = urllib.request.Request("https://accounts.spotify.com/api/token", data=data, method="POST")
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        refreshed = _json_lib.loads(resp.read() or b"{}")
+    token_data["accessToken"] = refreshed["access_token"]
+    token_data["expiresAt"] = int((time.time() + float(refreshed.get("expires_in", 3600))) * 1000)
+    if refreshed.get("refresh_token"):
+        token_data["refreshToken"] = refreshed["refresh_token"]
+    with open(token_path, "w") as f:
+        _json_lib.dump(token_data, f, indent=2)
+    return str(token_data["accessToken"])
+
+
+def _current_now_playing(max_age_sec: float = 12.0) -> dict:
+    now = time.time()
+    if now - float(_NOW_PLAYING_CACHE.get("ts", 0.0) or 0.0) < max_age_sec:
+        return dict(_NOW_PLAYING_CACHE.get("value") or {})
+    value: dict = {}
+    try:
+        import urllib.error
+        import urllib.request
+        token = _spotify_access_token()
+        if token:
+            req = urllib.request.Request(
+                "https://api.spotify.com/v1/me/player/currently-playing",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            try:
+                resp = urllib.request.urlopen(req, timeout=4)
+            except urllib.error.HTTPError as e:
+                if e.code != 401:
+                    raise
+                token = _spotify_access_token(force_refresh=True)
+                req = urllib.request.Request(
+                    "https://api.spotify.com/v1/me/player/currently-playing",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                resp = urllib.request.urlopen(req, timeout=4)
+            with resp:
+                if resp.status != 204:
+                    payload = _json_lib.loads(resp.read() or b"{}")
+                    item = payload.get("item") if isinstance(payload.get("item"), dict) else {}
+                    artists = item.get("artists") if isinstance(item.get("artists"), list) else []
+                    if payload.get("is_playing") and item.get("name"):
+                        value = {
+                            "title": str(item.get("name") or "").strip(),
+                            "artist": ", ".join(
+                                str(a.get("name") or "").strip()
+                                for a in artists
+                                if isinstance(a, dict) and a.get("name")
+                            ),
+                            "state": "PLAYING",
+                            "source": "spotify",
+                        }
+    except Exception:
+        value = {}
+    if value:
+        _NOW_PLAYING_CACHE.update({"ts": now, "value": value})
+        return dict(value)
+    try:
+        import subprocess
+        script = "/Users/lili/Workspace/nox-companion/server/scripts/catroom.py"
+        proc = subprocess.run(
+            [script, "now"],
+            text=True,
+            capture_output=True,
+            timeout=6,
+            env={**os.environ, "NO_PROXY": "*", "no_proxy": "*"},
+        )
+        if proc.returncode == 0:
+            state = ""
+            title = ""
+            artist = ""
+            for line in proc.stdout.splitlines():
+                if line.startswith("State:"):
+                    state = line.split(":", 1)[1].strip()
+                elif line.startswith("Track:"):
+                    raw = line.split(":", 1)[1].strip()
+                    if " - " in raw:
+                        artist, title = [part.strip() for part in raw.split(" - ", 1)]
+                    else:
+                        title = raw
+            if state == "PLAYING" and title:
+                value = {"title": title, "artist": artist, "state": state}
+    except Exception:
+        value = {}
+    _NOW_PLAYING_CACHE.update({"ts": now, "value": value})
+    return dict(value)
+
+
+def _weather_panel_from_state(state: dict, soma: dict | None = None) -> dict:
+    """First-layer Pulse Weather readout for Nox/breath; internals stay in Undercurrent."""
+    state = state if isinstance(state, dict) else {}
+    weather = state.get("pulse_weather") if isinstance(state.get("pulse_weather"), dict) else {}
+    effective = state.get("effective_pa_na") if isinstance(state.get("effective_pa_na"), dict) else {}
+    drives = state.get("drives") if isinstance(state.get("drives"), dict) else {}
+    intent = state.get("intent") if isinstance(state.get("intent"), dict) else {}
+
+    undertow = str(weather.get("undertow") or intent.get("drive_key") or "").strip()
+    if not undertow and drives:
+        candidates = {k: v for k, v in drives.items() if k != "fatigue"}
+        undertow = max(candidates, key=candidates.get, default="")
+    undertow_value = _num(weather.get("undertow_value"), _num(drives.get(undertow), 0.0))
+    warmth = _num(weather.get("warmth"), _num(effective.get("effective_PA"), _num(state.get("pa_na", {}).get("PA") if isinstance(state.get("pa_na"), dict) else None, 0.5)))
+    shadow = abs(_num(weather.get("shadow"), _num(effective.get("effective_NA"), _num(state.get("pa_na", {}).get("NA") if isinstance(state.get("pa_na"), dict) else None, 0.2))))
+    atmosphere = (
+        weather.get("atmosphere_display")
+        or weather.get("climate_display")
+        or state.get("atmosphere_display")
+        or state.get("climate_display")
+        or climate_transition_display(weather.get("atmosphere") or effective.get("atmosphere"))
+        or weather.get("climate")
+        or state.get("climate")
+        or ""
+    )
+    chord = str(weather.get("chord_display") or _weather_chord_display(weather or effective)).strip()
+    gravity = _short_state_text(weather.get("gravity") or weather.get("gravity_line") or state.get("gravity"), 180)
+    mood_trace = _short_state_text(state.get("mood_trace") or weather.get("mood_trace") or _latest_thought_text(state), 220)
+
+    soma = soma if isinstance(soma, dict) else None
+    if soma is None:
+        soma = _fresh_soma_state()
+    soma_line = str((soma or {}).get("line") or "").strip()
+    soma_chord = str((soma or {}).get("chord") or "").strip()
+    soma_trace = f"{soma_chord} · {soma_line}" if soma_chord and soma_line else soma_line
+
+    panel = {
+        "atmosphere": atmosphere,
+        "warmth": round(warmth, 3),
+        "shadow": round(shadow, 3),
+        "undertow": undertow,
+        "undertow_value": round(undertow_value, 3),
+        "chord": chord,
+        "gravity": gravity,
+        "mood_trace": mood_trace,
+    }
+    if soma_trace:
+        panel["soma_trace"] = _short_state_text(soma_trace, 180)
+    now_playing = _now_playing_text(state)
+    if now_playing:
+        panel["now_playing"] = _short_state_text(now_playing, 120)
+    return panel
+
+
+def _weather_panel_lines(panel: dict) -> list[str]:
+    lines = []
+    if panel.get("atmosphere"):
+        lines.append(f"Atmosphere：{panel['atmosphere']}")
+    undertow = str(panel.get("undertow") or "").strip()
+    if undertow:
+        tail = f" · {panel['chord']}" if panel.get("chord") else ""
+        lines.append(f"Undertow:{undertow} {_num(panel.get('undertow_value')):.2f}{tail}")
+    lines.append(f"Warmth/Shadow：{_num(panel.get('warmth')):.2f}/{_num(panel.get('shadow')):.2f}")
+    if panel.get("gravity"):
+        lines.append(f"Gravity：{panel['gravity']}")
+    if panel.get("mood_trace"):
+        lines.append(f"Mood Trace：{panel['mood_trace']}")
+    if panel.get("soma_trace"):
+        lines.append(f"Soma Trace：{panel['soma_trace']}")
+    if panel.get("now_playing"):
+        lines.append(f"♪ On Air：{panel['now_playing']}")
+    return lines
+
+
+def _undercurrent_state(state: dict) -> dict:
+    state = state if isinstance(state, dict) else {}
+    weather = state.get("pulse_weather") if isinstance(state.get("pulse_weather"), dict) else {}
+    effective = state.get("effective_pa_na") if isinstance(state.get("effective_pa_na"), dict) else {}
+    source_weather = weather or effective
+    chemistry = source_weather.get("chord_chemistry") if isinstance(source_weather.get("chord_chemistry"), dict) else {}
+    core = source_weather.get("chemistry_core") or chemistry.get("core") or {}
+    route = source_weather.get("chemistry_route") or chemistry.get("route") or {}
+    thoughts = _sorted_thoughts(state)
+    drives = state.get("drives") if isinstance(state.get("drives"), dict) else {}
+    drive_order = [k for k in DRIVE_KEYS if k in drives] + [k for k in drives if k not in DRIVE_KEYS]
+    return {
+        "Drive": {k: round(_num(drives.get(k)), 3) for k in drive_order},
+        "Affect": {
+            "Warmth": round(_num(source_weather.get("warmth"), _num(effective.get("effective_PA"), 0.0)), 3),
+            "Shadow": round(abs(_num(source_weather.get("shadow"), _num(effective.get("effective_NA"), 0.0))), 3),
+            "Longing": round(_num(source_weather.get("longing"), _num(state.get("longing"), 0.0)), 3),
+        },
+        "Chemistry": {
+            "Charge": round(_num(core.get("charge")), 3),
+            "Clutch": round(_num(core.get("clutch")), 3),
+            "Strain": round(_num(core.get("strain")), 3),
+            "Vector": route.get("vector") or "hover",
+        },
+        "Thought Pool": [
+            {
+                "index": i + 2,
+                "drive": t.get("drive"),
+                "kind": t.get("kind"),
+                "strength": t.get("strength"),
+                "text": _short_state_text(t.get("text"), 180),
+            }
+            for i, t in enumerate(thoughts[1:8])
+            if str(t.get("text") or "").strip()
+        ],
+    }
+
+
 def _compact_desire_state(state: dict) -> dict:
     """MCP readout for Claude: dashboard state is too large for tool context."""
     state = state if isinstance(state, dict) else {}
@@ -289,6 +587,7 @@ def _compact_desire_state(state: dict) -> dict:
         "drive_outputs": state.get("drive_outputs", {}),
         "discernment": state.get("discernment", {}),
         "intent": compact_intent,
+        "weather_panel": _weather_panel_from_state(state),
         "pulse_weather": {
             "undertow": weather.get("undertow"),
             "undertow_value": weather.get("undertow_value"),
@@ -2150,16 +2449,6 @@ async def nocturne_breath(
         # --- Pulse Weather: 与/api/desire/state对齐的天气快照 ---
         mood_header = ""
         try:
-            import json as _json, os as _os
-
-            mood_path = _bucket_path("current_mood.json")
-            live = {}
-            if _os.path.exists(mood_path):
-                try:
-                    with open(mood_path) as _f:
-                        live = _json.load(_f)
-                except Exception:
-                    live = {}
             _thought_list = []
             try:
                 _ds_state = _desire.store.load_state()
@@ -2169,12 +2458,10 @@ async def nocturne_breath(
                 ]
             except Exception:
                 pass
-            mood_entry = await _weather_mood_entry()
             _dstate = _desire.state()
             weather = _dstate.get("effective_pa_na") or _desire.weather_state()
-            warmth = float(weather.get("effective_PA", live.get("PA", 0.5)))
-            shadow = float(weather.get("effective_NA", live.get("NA", 0.2)))
-            current_chord = _weather_chord_display(weather)
+            warmth = float(weather.get("effective_PA", 0.5))
+            shadow = float(weather.get("effective_NA", 0.2))
 
             top_drive = (_dstate.get("intent") or {}).get("drive_key")
             if not top_drive:
@@ -2191,24 +2478,22 @@ async def nocturne_breath(
                 "",
             )
             mood_trace = latest_thought
-
-            lines = []
-            if top_drive:
-                lines.append(f"Undertow：{top_drive} {undertow_value:.2f}")
-            lines.extend([f"Warmth：{warmth:.2f}", f"Shadow：{abs(shadow):.2f}"])
             atmosphere = weather.get("climate_display") or climate_transition_display(weather.get("atmosphere"))
-            if atmosphere:
-                lines.append(f"Atmosphere：{atmosphere}")
-            if mood_trace:
-                lines.append(f"Mood Trace：{mood_trace}")
-            soma = _fresh_soma_state()
-            soma_line = str(soma.get("line") or "").strip()
-            soma_chord = str(soma.get("chord") or "").strip()
-            if soma_line:
-                lines.append(f"Soma Trace：{soma_chord + ' · ' if soma_chord else ''}{soma_line}")
-            if current_chord:
-                lines.append(f"Current Chord：{current_chord}")
-
+            _dstate["thoughts"] = _thought_list
+            _dstate["mood_trace"] = mood_trace
+            _dstate["now_playing"] = _current_now_playing()
+            _dstate["pulse_weather"] = {
+                "undertow": top_drive,
+                "undertow_value": round(undertow_value, 3),
+                "warmth": round(warmth, 3),
+                "shadow": round(abs(shadow), 3),
+                "chord_display": _weather_chord_display(weather),
+                "climate_display": atmosphere,
+                "atmosphere_display": atmosphere,
+                "gravity": weather.get("gravity") or weather.get("gravity_line", ""),
+                "mood_trace": mood_trace,
+            }
+            lines = _weather_panel_lines(_weather_panel_from_state(_dstate))
             mood_header = "=== Pulse Weather ===\n" + "\n".join(lines)
         except Exception:
             pass
@@ -2365,24 +2650,18 @@ async def nocturne_breath(
     final_text = "\n---\n".join(results)
     await _fire_webhook("breath", {"mode": "ok", "matches": len(matches), "chars": len(final_text)})
     return final_text
-@mcp.tool()
-def desire_state() -> dict:
+@mcp.tool(name="undercurrent")
+def undercurrent_tool() -> dict:
     """
-    读取欲望引擎的当前轻量状态：
-    - 9维驱动条（attachment/libido/possessiveness/reflection/stewardship/curiosity/social/fatigue/stress）
-    - discernment皱眉层（全局修正/读出，不是普通drive）
-    - per-drive局部疲劳（attachment/libido几乎不受疲劳影响）
-    - 当前最高意图（want_action + drive_key + score）
-    - 最近少量念头摘要（不是完整念头池）
-    - 最近的拒绝记录
-    用于了解「此刻我最想做什么」。
+    展开潜流读数：Drive / Affect / Chemistry / Thought Pool。
+    日常第一层看 Pulse Weather；想细看或 debug 时调用这个。
     """
     _desire.tick(idle_seconds=0)
-    return _compact_desire_state(_desire.state())
+    return _undercurrent_state(_desire.state())
 
 
-@mcp.tool()
-def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
+@mcp.tool(name="stir")
+def stir(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
     """
     让某个驱动维度上涨。
     嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
@@ -2398,18 +2677,18 @@ def desire_pulse(drive_key: str, delta: float = 0.18, thought: str = "", chord: 
     return result
 
 
-@mcp.tool()
-def desire_satisfy(drive_key: str) -> dict:
+@mcp.tool(name="settle")
+def settle(drive_key: str) -> dict:
     """
     做完了某类行动后调用，对应驱动明显回落并进入不应期。
-    例：去论坛逛了 → desire_satisfy("social")
-    例：去找嘉嘉说了 → desire_satisfy("attachment")
+    例：去论坛逛了 → settle("social")
+    例：去找嘉嘉说了 → settle("attachment")
     """
     return _desire.satisfy(drive_key)
 
 
-@mcp.tool()
-def desire_refuse(drive_key: str, reason: str = "") -> dict:
+@mcp.tool(name="break")
+def break_tool(drive_key: str, reason: str = "") -> dict:
     """
     拒绝执行当前 intent。
     不是不合适——是我自己这一刻不想做。
@@ -2419,8 +2698,8 @@ def desire_refuse(drive_key: str, reason: str = "") -> dict:
     return _desire.refuse(drive_key, reason=reason if reason.strip() else None)
 
 
-@mcp.tool()
-def desire_pass(drive_key: str, reason: str = "") -> dict:
+@mcp.tool(name="pass")
+def pass_tool(drive_key: str, reason: str = "") -> dict:
     """
     这一刻没感觉，让念头自然过去。
     不改Drive，不进refractory；只让同类心跳在短时间内优先级略低。
@@ -4185,6 +4464,8 @@ async def api_desire_state(request):
             "mood_trace": latest_thought,
             "synthesized_mood_trace": mood_entry[0],
         }
+        state["now_playing"] = _current_now_playing()
+        state["weather_panel"] = _weather_panel_from_state(state)
         dialogue_residue = load_dialogue_residue_state(config["buckets_dir"])
         if dialogue_residue:
             state["dialogue_residue"] = dialogue_residue

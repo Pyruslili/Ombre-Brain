@@ -324,6 +324,9 @@ ATMOSPHERE_SOURCE_WEIGHTS = {
     "dp": 0.45,
     "cli": 0.25,
     "subcurrent": 0.16,
+    # Thought Chord Echo may tint Atmosphere only through chemistry/chord delta.
+    # Keep it well below subcurrent: repeated short thoughts can accumulate, so
+    # hysteresis/decay must keep bursts from outvoting the slower undertow.
     "feel_chord": 0.065,
     "thought_chord": 0.06,
     "soma_chord": 0.045,
@@ -2256,6 +2259,9 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
     for k, factor in decay_map.items():
         if k in new_drives:
             new_drives[k] = _clamp(new_drives[k] * factor)
+    attachment_rebound = normalize_attachment_rebound(state.attachment_rebound)
+    if drive_key == "attachment":
+        attachment_rebound.update({"active": False, "phase": "settled", "overshoot": 0.0})
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
@@ -2264,7 +2270,7 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
                       last_user_message_at=state.last_user_message_at,
                       reunion_pa_boost=state.reunion_pa_boost,
                       possessiveness_channels=state.possessiveness_channels,
-                      attachment_rebound=state.attachment_rebound)
+                      attachment_rebound=attachment_rebound)
 
 
 def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
@@ -3592,7 +3598,7 @@ class DesireEngine:
 
     def mark_user_signal(self, now: float = None) -> dict:
         """嘉嘉的真实输入信号到达时调用（/api/desire/feed的v2/legacy feed路径），
-        而不是desire_pulse——desire_pulse同时承载Nox自己经历的pulse，
+        而不是stir——stir同时承载Nox自己经历的pulse，
         不应该用来重置"距离上次嘉嘉消息"的计时。"""
         now = now if now is not None else time.time()
         state = self.store.load_state()
@@ -3783,6 +3789,9 @@ class DesireEngine:
                 and str(brain.get("third_party_context") or "").strip() == "house_collaborator"
                 else 1.0
             )
+            if source == "dialogue_residue" and primary == "attachment":
+                closeness = _feature_value(brain, "closeness_pull")
+                primary_scale *= 0.45 if closeness < 0.45 else 0.70
             proposed[primary] = DRIVE_EVENT_BASE_DELTA[primary] * intensity * confidence * source_weight * primary_scale
         for key, value in secondary.items():
             drive_key = normalize_drive_key(key)

@@ -61,6 +61,25 @@ def test_satisfy_returns_compact_ack(tmp_path):
     assert result["refractory"] is True
 
 
+def test_dialogue_residue_attachment_is_softened(tmp_path):
+    dialogue_engine = DesireEngine(str(tmp_path / "dialogue.db"))
+    user_engine = DesireEngine(str(tmp_path / "user.db"))
+    event = {
+        "schema_version": "drive_event_v2",
+        "primary_drive": "attachment",
+        "intensity": 0.2,
+        "confidence": 0.8,
+        "agency": 0.8,
+        "event_label": "attachment_signal",
+        "brain": {"closeness_pull": 0.18, "grounding": "实"},
+    }
+
+    dialogue = dialogue_engine.apply_drive_event({**event, "source": "dialogue_residue"})
+    user = user_engine.apply_drive_event({**event, "source": "user_message"})
+
+    assert dialogue["applied"]["attachment"]["raw_delta"] < user["applied"]["attachment"]["raw_delta"] * 0.35
+
+
 def test_drive_event_ledger_keeps_source_metadata(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     engine.apply_drive_event({

@@ -277,3 +277,27 @@ def test_attachment_rebound_after_absence(tmp_path):
     assert rebound["phase"] == "overshoot"
     assert rebound_state["drives"]["attachment"] > rebound["baseline"]
     assert rebound_state["drive_outputs"]["attachment"]["rebound"]["active"] is True
+
+
+def test_settle_attachment_clears_rebound_floor(tmp_path):
+    import time
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    now = time.time()
+    state = engine.store.load_state()
+    state.drives["attachment"] = 0.55
+    state.last_user_message_at = now - 8 * 3600
+    engine.store.save_state(state)
+
+    engine.mark_user_signal(now)
+    rebound_state = engine.store.load_state()
+    assert rebound_state.attachment_rebound["active"] is True
+
+    result = engine.satisfy("attachment")
+    settled = engine.store.load_state()
+    ticked = engine.tick(idle_seconds=0)
+
+    assert result["value"] < 0.4
+    assert settled.attachment_rebound["active"] is False
+    assert ticked["attachment_rebound"]["active"] is False
+    assert ticked["drives"]["attachment"] < 0.4

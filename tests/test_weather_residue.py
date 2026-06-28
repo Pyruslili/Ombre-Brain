@@ -1,4 +1,5 @@
 from desire_engine import (
+    ATMOSPHERE_SOURCE_WEIGHTS,
     CLIMATE_LABELS,
     DesireEngine,
     DRIVE_BASELINES,
@@ -95,6 +96,10 @@ def test_thought_chord_gently_tints_atmosphere(tmp_path):
     assert atmosphere["climate"]["candidate"] in CLIMATE_LABELS
     assert atmosphere["climate"]["candidate_steps"] == 1
     assert atmosphere["climate"]["blend"] > 0
+
+
+def test_thought_chord_atmosphere_weight_stays_below_subcurrent():
+    assert ATMOSPHERE_SOURCE_WEIGHTS["thought_chord"] * 2 <= ATMOSPHERE_SOURCE_WEIGHTS["subcurrent"]
 
 
 def test_pulse_returns_compact_chord_change_signal(tmp_path):
