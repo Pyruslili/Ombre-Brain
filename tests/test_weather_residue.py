@@ -4,6 +4,8 @@ from desire_engine import (
     DRIVE_BASELINES,
     chord_chemistry_snapshot,
     chord_event_tint_from_drive_events,
+    chord_gravity_pool,
+    choose_chord_gravity,
     classify_chord_situation,
     climate_transition_display,
     current_weather_chord,
@@ -283,6 +285,25 @@ def test_chord_situation_splits_scout_from_spark():
 
     assert classify_chord_situation(core, {"vector": "outward"}, derived) == "scout"
     assert classify_chord_situation(core, {"vector": "hover"}, derived) == "spark"
+
+
+def test_chord_gravity_splits_anchored_drift_from_light_drift():
+    anchored_core = {"charge": 0.44, "clutch": 0.49, "strain": 0.30}
+    light_core = {"charge": 0.20, "clutch": 0.22, "strain": 0.24}
+    route = {"vector": "hover"}
+    derived = {"pull": 0.12, "depth": 0.10, "drift": 0.42}
+
+    assert classify_chord_situation(anchored_core, route, derived) == "drift"
+    assert chord_gravity_pool("drift", route, anchored_core) == "drift_anchored"
+    anchored_gravity = choose_chord_gravity("drift", route, anchored_core, recent=[], now=1000)
+
+    assert chord_gravity_pool("drift", route, light_core) == "drift_light"
+    assert anchored_gravity in {
+        "电没亮透，手还搭着，方向松不开。",
+        "电还挂在指尖，方向咬不死也松不开。",
+        "力还在手下，只是没往哪边走。",
+    }
+    assert anchored_gravity != "没有方向，先搁在这里。"
 
 
 def test_chord_gravity_uses_force_line_not_instruction():

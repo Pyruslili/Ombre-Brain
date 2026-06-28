@@ -240,6 +240,8 @@ def _compact_desire_state(state: dict) -> dict:
     def _compact_event(e: dict) -> dict:
         brain = e.get("brain") if isinstance(e.get("brain"), dict) else {}
         return {
+            "id": e.get("id"),
+            "ts": e.get("ts"),
             "source": e.get("source") or brain.get("source"),
             "primary_drive": e.get("primary_drive"),
             "event_label": e.get("event_label"),
@@ -248,6 +250,7 @@ def _compact_desire_state(state: dict) -> dict:
             "agency": e.get("agency"),
             "applied": e.get("applied"),
             "suppressed": e.get("suppressed", False),
+            "reason": e.get("reason", ""),
             "brain": {
                 k: brain.get(k)
                 for k in (
@@ -278,6 +281,7 @@ def _compact_desire_state(state: dict) -> dict:
         }
 
     compact_thoughts = [_compact_thought(t) for t in thoughts[:8] if isinstance(t, dict)]
+    compact_events = [_compact_event(e) for e in drive_events[:5] if isinstance(e, dict)]
     return {
         "drives": state.get("drives", {}),
         "effective_drives": state.get("effective_drives", {}),
@@ -299,6 +303,7 @@ def _compact_desire_state(state: dict) -> dict:
             "chemistry_core": weather.get("chemistry_core") or (weather.get("chord_chemistry") or {}).get("core"),
             "chemistry_route": weather.get("chemistry_route") or (weather.get("chord_chemistry") or {}).get("route"),
             "chord_situation": weather.get("chord_situation", ""),
+            "gravity_pool": weather.get("gravity_pool") or (weather.get("chord_chemistry") or {}).get("gravity_pool"),
             "derived_texture": weather.get("derived_texture", {}),
             "gravity": _short_state_text(weather.get("gravity") or weather.get("gravity_line"), 160),
         },
@@ -318,7 +323,8 @@ def _compact_desire_state(state: dict) -> dict:
         } if dialogue else {},
         "thoughts": compact_thoughts,
         "recent_thoughts": compact_thoughts,
-        "recent_drive_events": [_compact_event(e) for e in drive_events[:5] if isinstance(e, dict)],
+        "drive_events": compact_events,
+        "recent_drive_events": compact_events,
         "recent_refusals": state.get("recent_refusals", []),
         "counts": {
             "thoughts": len(thoughts),
@@ -4139,6 +4145,7 @@ async def api_desire_state(request):
             "source_stack": weather.get("source_stack", []),
             "chord_chemistry": weather.get("chord_chemistry", {}),
             "chord_situation": weather.get("chord_situation", ""),
+            "gravity_pool": weather.get("gravity_pool", ""),
             "gravity_line": weather.get("gravity_line", ""),
             "gravity": weather.get("gravity", ""),
             "atmosphere": weather.get("atmosphere", {}),
@@ -4165,6 +4172,7 @@ async def api_desire_state(request):
             "chemistry_core": weather.get("chemistry_core", {}),
             "chemistry_route": weather.get("chemistry_route", {}),
             "chord_situation": weather.get("chord_situation", ""),
+            "gravity_pool": weather.get("gravity_pool", ""),
             "derived_texture": weather.get("derived_texture", {}),
             "gravity_line": weather.get("gravity_line", ""),
             "gravity": weather.get("gravity", ""),

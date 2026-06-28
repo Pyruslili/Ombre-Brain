@@ -2877,7 +2877,7 @@ async function loadDesire(button) {
     const effectiveDrives = d.effective_drives || {};
     const driveOutputs = d.drive_outputs || {};
     const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
-    const driveEvents = [...(d.drive_events || [])];
+    const driveEvents = [...(d.drive_events || d.recent_drive_events || [])];
     const driveHistory = buildDriveLedgerHistory(driveEvents);
     desireThoughts = thoughts;
 

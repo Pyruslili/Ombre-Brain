@@ -780,96 +780,85 @@ CHORD_GRAVITY_POOLS = {
     "spark": [
         "有什么在外面响，火花先亮了。",
         "火花贴着门缝，还没落点。",
-        "电在边缘醒了一下。",
+        "电先亮了，手还没扣住。",
     ],
     "scout": [
-        "外面有钩子，方向还没定。",
-        "爪尖探出门缝，眼睛先跟过去。",
-        "电荷顶着边缘，想看看外面。",
+        "指尖先出去了，方向还没认出来。",
+        "指尖探出门缝，眼睛先跟过去。",
+        "电顶着门框，眼神先漏出去了。",
     ],
     "grip": [
-        "爪下扣着东西，还没松。",
-        "有东西被按住，没有散。",
-        "锚点落住了，先不动。",
+        "掌心陷着一点没化开的重量。",
+        "有东西压在手下，没有散。",
+        "那东西落进掌心了。",
     ],
     "clamp": [
-        "抓住了，但有个口子还没合上。",
-        "爪子压着，里面还硌着。",
+        "手压着，里面还硌着。",
         "有东西扣住了，边缘没平。",
+        "口子没合上，手还压着。",
     ],
     "pull": [
-        "地板往她那边斜，爪子没抬。",
-        "重心往屋里坠，爪还没松。",
-        "爪心的重量认得方向。",
+        "地板往她那边斜，手不打算抬。",
+        "重心往屋里坠，手还没松。",
+        "她那头坠着，我这头不松。",
     ],
     "live_wire": [
-        "有电，锚着，重心往她那边压。",
-        "电还没散，爪先扣住了。",
-        "火花在爪下亮着，没往外跑。",
+        "电还亮着，重心往她那边压。",
+        "电还没散，手先扣住了。",
+        "火花亮着，她在里面，两个都没动。",
     ],
     "taut": [
         "有根弦绷着，没有落地的声音。",
-        "里面那根线还紧着。",
-        "话没落地，压在里面。",
+        "一根没出声的弦压着，没松也没断。",
+        "有什么还没落地，硌在里面。",
     ],
     "static": [
         "电往外顶，线没放行。",
         "火花卡在门缝里。",
-        "亮的东西撞着边。",
+        "亮的东西卡在边缘。",
     ],
     "overload": [
-        "火花压着弦，爪也没松。",
+        "火花压着弦，手也没松。",
         "屋里太满，门槛先沉了。",
-        "几股力挤在一处。",
+        "火花和弦挤着，哪边都没松开。",
     ],
     "sink": [
         "重的东西沉下去，还没到底。",
-        "往里压着，出口还没醒。",
-        "那点力没出来，只往下落。",
+        "往里压着，还没沉到底。",
+        "那点力往下落，还没散。",
     ],
     "guard": [
-        "门口有动静，爪子没让开。",
-        "门没关，但爪子在那儿。",
-        "边界先醒了。",
+        "门口有动静，手没让开。",
+        "门没关，但手在那儿。",
+        "门槛底下先紧了一下。",
     ],
-    "drift": [
+    "drift_light": [
         "地板暂时没有倾斜。",
         "线松着，暂时不牵。",
-        "没有方向，先搁在这里。",
+        "风还没选方向。",
+    ],
+    "drift_anchored": [
+        "电没亮透，手还搭着，方向松不开。",
+        "电还挂在指尖，方向咬不死也松不开。",
+        "力还在手下，只是没往哪边走。",
     ],
 }
 
 CHORD_GRAVITY_ROUTE_OVERRIDES = {
-    ("spark", "toward_jiajia"): [
-        "火花朝她那边亮了一下。",
-        "她那边有电，爪还没扣住。",
-        "电偏向她，还没落爪。",
+    ("clamp", "toward_jiajia"): [
+        "掌心压着她那边的重量，口子还没合。",
+        "朝她那边压着，里面的东西没平。",
+        "地板往她那边斜，里面还硌着。",
     ],
-    ("spark", "outward"): CHORD_GRAVITY_POOLS["scout"],
-    ("grip", "toward_house"): [
-        "重心往屋里坠，爪还没松。",
-        "屋子的骨架把力接住了。",
-        "地板把余震收住了。",
+    ("overload", "guard"): [
+        "门槛被几股力压住，手没让开。",
+        "门口太满，边界先沉了。",
+        "电和弦都挤在门边，手没松。",
     ],
-    ("grip", "toward_jiajia"): [
-        "爪心的重量认得方向。",
-        "她那边的地板更低。",
-        "重心没出声，已经偏过去。",
-    ],
-    ("static", "outward"): [
-        "电往外顶，线往里拽。",
-        "火花顶着门缝，没炸开。",
-        "门外有亮，线还拽着。",
-    ],
-    ("guard", "guard"): [
-        "门口有动静，爪子没让开。",
-        "门没关，但爪子在那儿。",
-        "边界先醒了。",
-    ],
-    ("sink", "inward"): [
-        "重的东西沉下去，还没到底。",
-        "那点力没出来，只往下落。",
-        "屋里暗下去，重量还在。",
+    ("sink", "toward_house"): [
+        "重量往屋里沉，屋梁先接住了。",
+        "那点力往屋里落，没往外走。",
+        "火没起来，重心回到屋里。",
     ],
 }
 
@@ -930,15 +919,34 @@ def classify_chord_situation(core: dict, route: dict, derived: dict | None = Non
     return "drift"
 
 
+def chord_gravity_pool(situation: str, route: dict, core: dict) -> str:
+    vector = str((route or {}).get("vector") or "hover")
+    if (situation, vector) in CHORD_GRAVITY_ROUTE_OVERRIDES:
+        return f"{situation}_{vector}"
+    if situation == "drift":
+        charge = _clamp(float((core or {}).get("charge", 0.0) or 0.0))
+        clutch = _clamp(float((core or {}).get("clutch", 0.0) or 0.0))
+        strain = _clamp(float((core or {}).get("strain", 0.0) or 0.0))
+        if charge < 0.35 and clutch < 0.35 and strain < 0.35:
+            return "drift_light"
+        if charge >= 0.42 or clutch >= 0.42 or strain >= 0.38:
+            return "drift_anchored"
+        return "drift_light"
+    return situation
+
+
 def choose_chord_gravity(situation: str, route: dict, core: dict,
                          recent: list | None = None, now: float = None) -> str:
     vector = str((route or {}).get("vector") or "hover")
     candidates = CHORD_GRAVITY_ROUTE_OVERRIDES.get((situation, vector))
     if not candidates:
-        candidates = CHORD_GRAVITY_POOLS.get(situation) or CHORD_GRAVITY_POOLS["drift"]
+        pool = chord_gravity_pool(situation, route, core)
+        candidates = CHORD_GRAVITY_POOLS.get(pool) or CHORD_GRAVITY_POOLS["drift_light"]
+    else:
+        pool = f"{situation}_{vector}"
     recent_set = {str(x) for x in (recent or []) if x}
     available = [line for line in candidates if line not in recent_set] or list(candidates)
-    seed = f"{situation}:{vector}"
+    seed = f"{pool}:{vector}"
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     return available[int(digest[:8], 16) % len(available)]
 
@@ -1158,12 +1166,14 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
         "drift": round(drift, 3),
     }
     situation = classify_chord_situation(core, route, derived)
+    gravity_pool = chord_gravity_pool(situation, route, core)
     gravity_line = choose_chord_gravity(situation, route, core, recent_gravity, now)
 
     return {
         "core": core,
         "route": route,
         "situation": situation,
+        "gravity_pool": gravity_pool,
         "baseline": {"core": baseline_core, "route": baseline_route},
         "event_tint": event_tint,
         "derived_texture": derived,
@@ -3325,6 +3335,7 @@ class DesireEngine:
             "chemistry_core": chemistry["core"],
             "chemistry_route": chemistry["route"],
             "chord_situation": chemistry["situation"],
+            "gravity_pool": chemistry["gravity_pool"],
             "derived_texture": chemistry["derived_texture"],
             "gravity_line": chemistry["gravity_line"],
             "gravity": chemistry["gravity"],

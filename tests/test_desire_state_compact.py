@@ -17,9 +17,10 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
             "warmth": 0.61,
             "shadow": 0.22,
             "current_chord": "Fmaj7#11",
-            "gravity": "重心往屋里坠，爪还没松。",
+            "gravity": "重心往屋里坠，手还没松。",
             "chemistry_core": {"depth": 0.7},
             "chemistry_route": {"pull": 0.6},
+            "gravity_pool": "pull",
             "derived_texture": {"primary": "depth"},
             "source_stack": [{"debug": True}],
         },
@@ -27,15 +28,31 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
             {"tid": str(i), "drive": "attachment", "kind": "flit", "strength": 0.4, "text": f"thought {i}"}
             for i in range(12)
         ],
-        "drive_events": [{"event_label": str(i), "brain": {"source_stack": ["debug"]}} for i in range(9)],
+        "drive_events": [
+            {
+                "id": i,
+                "ts": 1000 + i,
+                "event_label": str(i),
+                "primary_drive": "attachment",
+                "reason": "ok",
+                "applied": {"attachment": {"delta": 0.01}},
+                "brain": {"source_stack": ["debug"], "source": "dialogue_residue"},
+            }
+            for i in range(9)
+        ],
     }
 
     compact = _compact_desire_state(state)
 
     assert len(compact["thoughts"]) == 8
     assert compact["thoughts"] == compact["recent_thoughts"]
+    assert len(compact["drive_events"]) == 5
     assert len(compact["recent_drive_events"]) == 5
-    assert "drive_events" not in compact
+    assert compact["drive_events"] == compact["recent_drive_events"]
+    assert compact["drive_events"][0]["ts"] == 1000
+    assert compact["drive_events"][0]["reason"] == "ok"
+    assert "source_stack" not in compact["drive_events"][0]["brain"]
     assert "source_stack" not in compact["pulse_weather"]
     assert compact["pulse_weather"]["chemistry_core"] == {"depth": 0.7}
-    assert compact["pulse_weather"]["gravity"] == "重心往屋里坠，爪还没松。"
+    assert compact["pulse_weather"]["gravity_pool"] == "pull"
+    assert compact["pulse_weather"]["gravity"] == "重心往屋里坠，手还没松。"
