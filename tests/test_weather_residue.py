@@ -52,6 +52,36 @@ def test_chord_echo_routes_by_source_and_chord(tmp_path):
     assert shadow["shadow_residue"] > 0
 
 
+def test_thought_chord_tints_weather_once_between_light_dialogue_and_feel(tmp_path):
+    thought_dir = tmp_path / "thought"
+    feel_dir = tmp_path / "feel"
+    dialogue_dir = tmp_path / "dialogue"
+    thought_dir.mkdir()
+    feel_dir.mkdir()
+    dialogue_dir.mkdir()
+    thought_engine = DesireEngine(db_path=str(thought_dir / "desire.db"))
+    feel_engine = DesireEngine(db_path=str(feel_dir / "desire.db"))
+    dialogue_engine = DesireEngine(db_path=str(dialogue_dir / "desire.db"))
+
+    thought = thought_engine.apply_chord_echo("Dm7", source="thought")
+    feel = feel_engine.apply_chord_echo("Dm7", source="feel")
+    dialogue = dialogue_engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "stress",
+        "intensity": 0.16,
+        "confidence": 0.7,
+        "agency": 0.6,
+        "event_label": "light_dialogue_tension",
+        "brain": {"source": "dialogue_residue", "tension_load": 0.25, "grounding": "实"},
+    })
+
+    assert thought["shadow_residue"] == 0.045
+    assert dialogue["weather"]["shadow_residue"] < thought["shadow_residue"]
+    assert thought["shadow_residue"] < feel["shadow_residue"]
+    assert thought["active_chord_source"] == "thought"
+
+
 def test_pulse_returns_compact_chord_change_signal(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 
