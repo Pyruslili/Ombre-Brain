@@ -927,18 +927,28 @@ label {
 .drift-undertow {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: .42rem;
+  align-items: center;
+  gap: .38rem;
   color: var(--accent-deep);
-  font: 300 clamp(2.15rem,3.8vw,3.45rem)/.88 var(--font-number);
+  font: 300 clamp(2rem,3.45vw,3.18rem)/.92 var(--font-number);
   font-variant-numeric: oldstyle-nums proportional-nums;
   letter-spacing: 0;
 }
 .undertow-name { font-family: var(--font-display); }
 .undertow-value { font-family: var(--font-number); }
 .undertow-chord {
-  color: var(--ink-soft);
-  font: 300 1rem/1.1 var(--font-mono);
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.72rem;
+  max-width: 100%;
+  border: 1px solid rgba(238, 151, 173, .34);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(238,151,173,.15), rgba(238,151,173,.055));
+  box-shadow: inset 0 1px rgba(255,236,242,.10), 0 10px 26px rgba(88,34,50,.14);
+  color: rgba(255, 199, 214, .92);
+  padding: .22rem .58rem .24rem;
+  font: 300 .78rem/1 var(--font-mono);
+  overflow-wrap: anywhere;
 }
 .drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .78rem; width: 100%; }
 .drift-weather-mini {
@@ -2889,7 +2899,7 @@ async function loadDesire(button) {
     const undertowEl = document.getElementById('desire-undertow');
     if (undertowEl) {
       const chord = String(panel.chord || weather.chord_display || weather.current_chord || '').trim();
-      undertowEl.innerHTML = `<span class="undertow-name">${esc(undertow)}</span><span class="undertow-value">${finiteNumber(undertowValue).toFixed(2)}</span>${chord ? `<span class="undertow-chord">· ${esc(chord)}</span>` : ''}`;
+      undertowEl.innerHTML = `<span class="undertow-name">${esc(undertow)}</span><span class="undertow-value">${finiteNumber(undertowValue).toFixed(2)}</span>${chord ? `<span class="undertow-chord">${esc(chord)}</span>` : ''}`;
     }
     setWeatherMetric('warmth', warmthNow, warmthBase, warmthResidue);
     setWeatherMetric('shadow', shadowNow, shadowBase, shadowResidue);

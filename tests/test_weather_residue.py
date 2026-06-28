@@ -102,6 +102,36 @@ def test_thought_chord_atmosphere_weight_stays_below_subcurrent():
     assert ATMOSPHERE_SOURCE_WEIGHTS["thought_chord"] * 2 <= ATMOSPHERE_SOURCE_WEIGHTS["subcurrent"]
 
 
+def test_dialogue_atmosphere_weight_leads_cli_underpaint():
+    assert ATMOSPHERE_SOURCE_WEIGHTS["dp"] > ATMOSPHERE_SOURCE_WEIGHTS["cli"]
+
+
+def test_dialogue_event_adds_live_warmth_residue(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+
+    result = engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "stewardship",
+        "intensity": 0.32,
+        "confidence": 0.82,
+        "agency": 0.65,
+        "event_label": "cat_house_maintenance",
+        "brain": {
+            "source": "dialogue_residue",
+            "target": "cat_house",
+            "grounding": "实",
+            "house_need": 0.68,
+            "inward_pull": 0.22,
+        },
+    })
+
+    weather = engine.weather_state()
+    assert result["weather"]["warmth_residue"] >= 0.02
+    assert weather["warmth_residue"] >= 0.02
+    assert weather["effective_PA"] > weather["base_PA"]
+
+
 def test_pulse_returns_compact_chord_change_signal(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 

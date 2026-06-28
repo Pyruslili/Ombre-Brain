@@ -287,6 +287,7 @@ LONGING_FEELINGS = {
 # 独立持久化的PA/NA余波；只叠到展示，不反推drive。
 WEATHER_COMPONENTS = {
     "keyword": {"halflife_hours": 4.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
+    "dialogue": {"halflife_hours": 2.0, "warmth_cap": 0.18, "shadow_cap": 0.18},
     "soma": {"halflife_hours": 0.75, "warmth_cap": 0.16, "shadow_cap": 0.16},
     "thought": {"halflife_hours": 8.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
     "feel": {"halflife_hours": 72.0, "warmth_cap": 0.35, "shadow_cap": 0.35},
@@ -305,6 +306,7 @@ WEATHER_SOOTHE_DURATION_SEC = 30 * 60
 WEATHER_SOOTHE_SHADOW_HALFLIFE_HOURS = 0.75
 WEATHER_SOOTHE_WARMTH_DELTA = 0.025
 WEATHER_EVENT_SOURCE = "feel"
+WEATHER_DIALOGUE_SOURCES = {"dialogue_residue", "speech_event", "user_message"}
 
 CLIMATE_LABELS = (
     "Clear",
@@ -321,9 +323,11 @@ CLIMATE_LABELS = (
     "Gravity",
 )
 ATMOSPHERE_SOURCE_WEIGHTS = {
-    "dp": 0.45,
-    "cli": 0.25,
-    "subcurrent": 0.16,
+    # DP/dialogue is the live weather vane: it should be able to turn the sky.
+    # CLI/analyzer remains the stable underpaint, not the dominant brush stroke.
+    "dp": 0.62,
+    "cli": 0.20,
+    "subcurrent": 0.14,
     # Thought Chord Echo may tint Atmosphere only through chemistry/chord delta.
     # Keep it well below subcurrent: repeated short thoughts can accumulate, so
     # hysteresis/decay must keep bursts from outvoting the slower undertow.
@@ -331,10 +335,10 @@ ATMOSPHERE_SOURCE_WEIGHTS = {
     "thought_chord": 0.06,
     "soma_chord": 0.045,
 }
-ATMOSPHERE_SWITCH_STEPS = 3
-ATMOSPHERE_SWITCH_MARGIN = 0.16
+ATMOSPHERE_SWITCH_STEPS = 2
+ATMOSPHERE_SWITCH_MARGIN = 0.11
 ATMOSPHERE_WEAK_CURRENT_SCORE = 0.42
-ATMOSPHERE_BLEND_SWITCH = 0.65
+ATMOSPHERE_BLEND_SWITCH = 0.52
 CLIMATE_LEAN_BLEND = 0.25
 CLIMATE_ARROW_BLEND = 0.60
 CLIMATE_VISIBLE_STEPS = 2
@@ -3546,6 +3550,10 @@ class DesireEngine:
             return {}
 
         source_weight = DRIVE_EVENT_SOURCE_WEIGHTS.get(source, 0.65)
+        weather_source = "dialogue" if source in WEATHER_DIALOGUE_SOURCES else WEATHER_EVENT_SOURCE
+        weather_scale = intensity * confidence * source_weight
+        if weather_source == "dialogue":
+            weather_scale *= 1.85
         territorial = _feature_value(brain, "territorial_alarm")
         territorial_for_delta = territorial_delta_value(brain)
         tension = _feature_value(brain, "tension_load")
@@ -3557,32 +3565,52 @@ class DesireEngine:
             _feature_value(brain, "output_drift"),
         )
         energy = _feature_value(brain, "energy_cost")
+        closeness = _feature_value(brain, "closeness_pull")
+        house_need = _feature_value(brain, "house_need")
+        novelty = _feature_value(brain, "novelty_pull")
+        expression = _feature_value(brain, "expression_pressure")
+        inward = _feature_value(brain, "inward_pull")
         grounding = str(brain.get("grounding") or "").strip()
-        scale = intensity * confidence * source_weight
+        primary_warmth = {
+            "attachment": 0.055,
+            "stewardship": 0.044,
+            "curiosity": 0.044,
+            "social": 0.034,
+            "reflection": 0.026 if grounding == "实" else 0.0,
+            "libido": 0.040,
+        }.get(primary, 0.0)
+        warmth_lift = (
+            0.150 * closeness
+            + 0.125 * house_need
+            + 0.105 * novelty
+            + 0.080 * expression
+            + (0.062 * inward if grounding == "实" else 0.0)
+            + primary_warmth
+        ) * weather_scale
         shadow_delta = (
-            0.055 * tension
-            + 0.050 * discernment
-            + 0.034 * energy
-            + (0.026 if primary in {"stress", "fatigue"} else 0.0)
-            + (0.022 * territorial_for_delta if primary == "possessiveness" else 0.0)
-            + (0.024 if grounding == "悬" else 0.0)
-            + (0.036 if grounding == "空" else 0.0)
-        ) * scale
+            0.155 * tension
+            + 0.140 * discernment
+            + 0.095 * energy
+            + (0.070 if primary in {"stress", "fatigue"} else 0.0)
+            + (0.085 * territorial_for_delta if primary == "possessiveness" else 0.0)
+            + (0.060 if grounding == "悬" else 0.0)
+            + (0.090 if grounding == "空" else 0.0)
+        ) * weather_scale
         warmth_drop = (
-            0.038 * tension
-            + 0.040 * discernment
-            + 0.025 * energy
-            + (0.018 * territorial_for_delta if primary == "possessiveness" else 0.0)
-            + (0.020 if grounding in {"悬", "空"} else 0.0)
-        ) * scale
-        shadow_delta = _clamp(shadow_delta, 0.0, 0.09)
-        warmth_delta = -_clamp(warmth_drop, 0.0, 0.06)
-        if shadow_delta <= 0 and warmth_delta >= 0:
+            0.095 * tension
+            + 0.105 * discernment
+            + 0.070 * energy
+            + (0.060 * territorial_for_delta if primary == "possessiveness" else 0.0)
+            + (0.055 if grounding in {"悬", "空"} else 0.0)
+        ) * weather_scale
+        shadow_delta = _clamp(shadow_delta, 0.0, 0.12)
+        warmth_delta = _clamp(warmth_lift - warmth_drop, -0.09, 0.12)
+        if shadow_delta <= 0 and abs(warmth_delta) <= 1e-9:
             return {}
         return self.apply_weather_delta(
             warmth_delta=warmth_delta,
             shadow_delta=shadow_delta,
-            source=WEATHER_EVENT_SOURCE,
+            source=weather_source,
         )
 
     def _mark_real_user_message(self, state: DriveState, now: float) -> DriveState:
