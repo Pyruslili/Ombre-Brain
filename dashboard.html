@@ -829,6 +829,35 @@ label {
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.latent-note-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .34rem;
+  margin-top: .55rem;
+}
+.latent-note-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.42rem;
+  border: 1px solid rgba(239,224,196,.13);
+  border-radius: 999px;
+  background: rgba(255,224,186,.025);
+  color: rgba(239,224,196,.68);
+  padding: .2rem .48rem;
+  font: 300 .55rem/1 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.latent-note-chip.kind {
+  border-color: rgba(232,149,79,.30);
+  color: rgba(232,149,79,.90);
+  background: rgba(232,149,79,.07);
+}
+.latent-note-chip.weight {
+  border-color: rgba(238,151,173,.30);
+  color: rgba(244,215,224,.90);
+  background: rgba(238,151,173,.055);
+}
 .latent-note-actions {
   display: flex;
   align-items: flex-start;
@@ -939,14 +968,13 @@ label {
 .undertow-chord {
   display: inline-flex;
   align-items: center;
-  min-height: 1.72rem;
+  min-height: 1.82rem;
   max-width: 100%;
-  border: 1px solid rgba(238, 151, 173, .34);
+  border: 1px solid rgba(238, 151, 173, .42);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(238,151,173,.15), rgba(238,151,173,.055));
-  box-shadow: inset 0 1px rgba(255,236,242,.10), 0 10px 26px rgba(88,34,50,.14);
-  color: rgba(255, 199, 214, .92);
-  padding: .22rem .58rem .24rem;
+  background: rgba(238,151,173,.07);
+  color: rgba(244, 215, 224, .92);
+  padding: .27rem .68rem .29rem;
   font: 300 .78rem/1 var(--font-mono);
   overflow-wrap: anywhere;
 }
@@ -5420,6 +5448,49 @@ function latentDriveLabel(drive) {
   return LATENT_DRIVE_OPTIONS.includes(value) ? value : 'general';
 }
 
+function latentSourceKindLabel(kind) {
+  const value = String(kind || '').trim();
+  const labels = {
+    '悬置': '悬置',
+    '认过': '认过',
+    inner: 'inner',
+    archive: 'archive',
+    old_memory: 'old memory',
+    manual: 'manual',
+    thought_pool: 'thought pool',
+  };
+  return labels[value] || value;
+}
+
+function latentWeightLabel(score) {
+  const value = Number(score);
+  if (!Number.isFinite(value)) return '';
+  if (value >= 1.05) return `heavy ${value.toFixed(2)}`;
+  if (value >= 0.70) return `mid ${value.toFixed(2)}`;
+  return `light ${value.toFixed(2)}`;
+}
+
+function latentMarksLabel(marks) {
+  if (!marks || typeof marks !== 'object') return '';
+  const parts = [];
+  if (Number(marks['悬置']) > 0) parts.push(`悬${Number(marks['悬置'])}`);
+  if (Number(marks['认']) > 0) parts.push(`认${Number(marks['认'])}`);
+  if (Number(marks['不认']) > 0) parts.push(`不认${Number(marks['不认'])}`);
+  return parts.join(' ');
+}
+
+function latentNoteChips(note) {
+  const chips = [
+    { cls: 'kind', text: latentSourceKindLabel(note.source_kind) },
+    { cls: 'weight', text: latentWeightLabel(note.source_score) },
+    { cls: '', text: note.source_wander_mode || note.wander_mode || '' },
+    { cls: '', text: latentMarksLabel(note.source_marks) },
+    { cls: '', text: Number(note.source_outward_score) > 0 ? `outward ${Number(note.source_outward_score)}` : '' },
+  ].filter(chip => String(chip.text || '').trim());
+  if (!chips.length) return '';
+  return `<div class="latent-note-chips">${chips.map(chip => `<span class="latent-note-chip ${esc(chip.cls)}">${esc(chip.text)}</span>`).join('')}</div>`;
+}
+
 async function loadLatentNotes() {
   const list = document.getElementById('latent-note-list');
   try {
@@ -5509,6 +5580,7 @@ function renderLatentNoteRow(note) {
     <div>
       <div class="latent-note-line">${esc(line)}</div>
       <div class="latent-note-meta">${esc(meta)}</div>
+      ${latentNoteChips(note)}
     </div>
     <div class="latent-note-actions">
       ${confirmButton}
