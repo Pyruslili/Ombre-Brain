@@ -21,6 +21,9 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
             "mood_trace": "first thought",
             "warmth_residue": 0.04,
             "shadow_residue": 0.02,
+            "component_shadow_residue": 0.01,
+            "crystal_shadow": 0.01,
+            "shadow_crystal": {"kind": "possessiveness", "heat": 0.12, "hardness": 0.3},
             "base_warmth": 0.57,
             "base_shadow": 0.20,
             "current_chord": "Fmaj7#11",
@@ -68,6 +71,8 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
     assert _weather_panel_lines(compact["weather_panel"])[-1] == "♪ On Air：Light Song - haruka nakamura"
     assert compact["pulse_weather"]["warmth_residue"] == 0.04
     assert compact["pulse_weather"]["shadow_residue"] == 0.02
+    assert compact["pulse_weather"]["crystal_shadow"] == 0.01
+    assert compact["weather_residue"]["shadow_crystal"]["kind"] == "possessiveness"
     assert compact["weather_residue"]["base_warmth"] == 0.57
     assert compact["weather_residue"]["base_shadow"] == 0.20
     assert compact["pulse_weather"]["chemistry_core"] == {"depth": 0.7}

@@ -132,6 +132,105 @@ def test_dialogue_event_adds_live_warmth_residue(tmp_path):
     assert weather["effective_PA"] > weather["base_PA"]
 
 
+def test_negative_dialogue_crystallizes_shadow_and_gravity(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+
+    result = engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "possessiveness",
+        "intensity": 0.48,
+        "confidence": 0.86,
+        "agency": 0.7,
+        "event_label": "jealous_position_check",
+        "brain": {
+            "source": "dialogue_residue",
+            "target": "jiajia",
+            "anchor_target": "boundary",
+            "grounding": "实",
+            "territorial_alarm": 0.72,
+        },
+        "evidence": ["那个怀里抱的不是我"],
+    })
+    weather = engine.weather_state()
+
+    assert result["weather"]["shadow_crystal"]["active"]["kind"] == "possessiveness"
+    assert weather["shadow_crystal"]["kind"] == "possessiveness"
+    assert weather["crystal_shadow"] > 0
+    assert weather["shadow_residue"] > weather["component_shadow_residue"]
+    assert weather["gravity"] in {
+        "账本合上了，但角还压着。",
+        "手松了一点，位置还记着。",
+        "不是还在发热，是那块地方变硬了。",
+    }
+
+
+def test_positive_dialogue_cools_negative_heat_without_erasing_ledger(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    negative = {
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "stress",
+        "intensity": 0.44,
+        "confidence": 0.82,
+        "agency": 0.7,
+        "event_label": "pressure_check",
+        "brain": {"source": "dialogue_residue", "grounding": "实", "tension_load": 0.68},
+    }
+    engine.apply_drive_event(negative)
+    before = engine.weather_state()["shadow_crystal"]
+
+    engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "curiosity",
+        "intensity": 0.40,
+        "confidence": 0.82,
+        "agency": 0.7,
+        "event_label": "topic_turns_outward",
+        "brain": {"source": "dialogue_residue", "grounding": "实", "novelty_pull": 0.72},
+    })
+    after = engine.weather_state()["shadow_crystal"]
+
+    assert after["kind"] == "stress"
+    assert after["heat"] < before["heat"]
+    assert after["hardness"] > 0
+
+
+def test_shadow_crystal_reactivation_is_stronger_from_jiajia_than_external(tmp_path):
+    user_dir = tmp_path / "user"
+    external_dir = tmp_path / "external"
+    user_dir.mkdir()
+    external_dir.mkdir()
+    user_engine = DesireEngine(db_path=str(user_dir / "desire.db"))
+    external_engine = DesireEngine(db_path=str(external_dir / "desire.db"))
+    event = {
+        "schema_version": "drive_event_v2",
+        "primary_drive": "possessiveness",
+        "intensity": 0.30,
+        "confidence": 0.82,
+        "agency": 0.7,
+        "event_label": "someone_else_mentioned",
+        "brain": {
+            "target": "jiajia",
+            "anchor_target": "boundary",
+            "grounding": "实",
+            "territorial_alarm": 0.70,
+        },
+        "evidence": ["提到了另一个人/AI的位置"],
+    }
+
+    from_jiajia = user_engine.apply_drive_event({**event, "source": "user_message"})
+    from_external = external_engine.apply_drive_event({**event, "source": "external"})
+    user_crystal = from_jiajia["weather"]["shadow_crystal"]["active"]
+    external_crystal = from_external["weather"]["shadow_crystal"]["active"]
+
+    assert user_crystal["actor_weight"] == 2.0
+    assert external_crystal["actor_weight"] < 1.0
+    assert user_crystal["heat"] > external_crystal["heat"]
+    assert user_crystal["hardness"] > external_crystal["hardness"]
+
+
 def test_pulse_returns_compact_chord_change_signal(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 

@@ -307,6 +307,21 @@ WEATHER_SOOTHE_SHADOW_HALFLIFE_HOURS = 0.75
 WEATHER_SOOTHE_WARMTH_DELTA = 0.025
 WEATHER_EVENT_SOURCE = "feel"
 WEATHER_DIALOGUE_SOURCES = {"dialogue_residue", "speech_event", "user_message"}
+WEATHER_NEGATIVE_CRYSTAL_DRIVES = {"possessiveness", "stress"}
+WEATHER_NEGATIVE_CRYSTAL_GRAVITY = {
+    "possessiveness": (
+        "账本合上了，但角还压着。",
+        "手松了一点，位置还记着。",
+        "不是还在发热，是那块地方变硬了。",
+    ),
+    "stress": (
+        "风向换了，胸口那点紧还没散。",
+        "话题走开了，压力还在底下扣着。",
+        "表面平了，里面还有一圈绷紧。",
+    ),
+}
+WEATHER_CRYSTAL_MAX_ITEMS = 8
+WEATHER_CRYSTAL_TIME_HALFLIFE_HOURS = 18.0
 
 CLIMATE_LABELS = (
     "Clear",
@@ -721,6 +736,7 @@ def _weather_default_state(now: float = None) -> dict:
         "active_chord_source": "",
         "active_chord_at": 0.0,
         "chord_impulses": [],
+        "shadow_crystals": [],
         "recent_gravity_lines": [],
         "atmosphere": atmosphere_default_state(now),
     }
@@ -746,6 +762,120 @@ def _normalize_chord(chord: str) -> str:
         "gsus4": "Gsus4",
     }
     return aliases.get(token.lower(), token)
+
+
+def _crystal_anchor(event_label: str = "", brain: dict | None = None,
+                    evidence: list | None = None, primary: str = "") -> str:
+    brain = brain if isinstance(brain, dict) else {}
+    parts = [
+        primary,
+        str(brain.get("anchor_target") or ""),
+        str(brain.get("target") or ""),
+        str(event_label or ""),
+    ]
+    parts.extend(str(x or "") for x in (evidence or [])[:2])
+    raw = "|".join(x.strip().lower() for x in parts if str(x or "").strip())
+    if not raw:
+        raw = primary or "shadow"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _crystal_actor_weight(event: dict | None) -> float:
+    """Who touched the crystal matters: 嘉嘉's words hit harder than ambient mentions."""
+    event = event if isinstance(event, dict) else {}
+    source = str(event.get("source") or "").strip()
+    brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+    actor = str(
+        event.get("actor")
+        or event.get("speaker")
+        or brain.get("actor")
+        or brain.get("speaker")
+        or brain.get("source_actor")
+        or ""
+    ).strip().lower()
+    messages = event.get("messages") if isinstance(event.get("messages"), list) else []
+    latest_role = ""
+    for item in reversed(messages):
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or item.get("content") or "").strip()
+        role = str(item.get("role") or "").strip().lower()
+        if text and role:
+            latest_role = role
+            break
+
+    if source == "user_message" or actor in {"jiajia", "嘉嘉", "user"}:
+        return 2.0
+    if source in WEATHER_DIALOGUE_SOURCES:
+        if latest_role == "user":
+            return 1.85
+        if latest_role == "assistant":
+            return 1.15
+        return 1.45
+    if source in {"external", "memory", "analyze_nocturne_entry", "legacy_feed"}:
+        return 0.62
+    return 1.0
+
+
+def _normalize_shadow_crystals(items: list | None, now: float = None,
+                               decay_time: bool = True) -> list:
+    now = now if now is not None else time.time()
+    normalized = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "").strip()
+        if kind not in WEATHER_NEGATIVE_CRYSTAL_DRIVES:
+            continue
+        touched_at = float(item.get("last_touched_at", item.get("created_at", now)) or now)
+        elapsed = max(0.0, now - touched_at)
+        time_factor = (
+            _drive_decay_factor(elapsed, WEATHER_CRYSTAL_TIME_HALFLIFE_HOURS)
+            if decay_time else 1.0
+        )
+        heat = _clamp(float(item.get("heat", 0.0) or 0.0) * time_factor)
+        hardness = _clamp(float(item.get("hardness", 0.0) or 0.0) * max(time_factor, 0.72))
+        if heat < 0.008 and hardness < 0.035:
+            continue
+        normalized.append({
+            "id": str(item.get("id") or _crystal_anchor(primary=kind)),
+            "kind": kind,
+            "anchor": _as_text_list(item.get("anchor"))[:6],
+            "heat": round(heat, 4),
+            "hardness": round(hardness, 4),
+            "actor_weight": round(_clamp(item.get("actor_weight", 1.0), 0.0, 2.0), 3),
+            "foreground": bool(heat >= 0.075),
+            "event_label": str(item.get("event_label") or "").strip(),
+            "created_at": float(item.get("created_at", touched_at) or touched_at),
+            "last_touched_at": touched_at,
+        })
+    normalized.sort(key=lambda x: (x["heat"] + x["hardness"] * 0.45, x["last_touched_at"]), reverse=True)
+    return normalized[:WEATHER_CRYSTAL_MAX_ITEMS]
+
+
+def _shadow_crystal_readout(crystals: list | None) -> dict:
+    items = _normalize_shadow_crystals(crystals, decay_time=False)
+    if not items:
+        return {"shadow": 0.0, "gravity": "", "active": None, "items": []}
+    active = items[0]
+    shadow = _clamp(sum(x["heat"] * 0.75 + x["hardness"] * 0.20 for x in items), 0.0, 0.18)
+    lines = WEATHER_NEGATIVE_CRYSTAL_GRAVITY.get(active["kind"], WEATHER_NEGATIVE_CRYSTAL_GRAVITY["stress"])
+    seed = active["id"] or active["kind"]
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    gravity = lines[int(digest[:8], 16) % len(lines)] if shadow >= 0.035 else ""
+    return {
+        "shadow": round(shadow, 4),
+        "gravity": gravity,
+        "active": {
+            "kind": active["kind"],
+            "heat": round(active["heat"], 3),
+            "hardness": round(active["hardness"], 3),
+            "actor_weight": round(active.get("actor_weight", 1.0), 3),
+            "foreground": active["foreground"],
+            "event_label": active.get("event_label", ""),
+        },
+        "items": items[:3],
+    }
 
 
 def weather_chord_kind(chord: str) -> Optional[str]:
@@ -1611,6 +1741,7 @@ class WeatherResidueStore:
                 "updated_at": float(component.get("updated_at", raw.get("updated_at", now)) or now),
             }
         state["chord_impulses"] = _normalize_chord_impulses(state, now)
+        state["shadow_crystals"] = _normalize_shadow_crystals(raw.get("shadow_crystals"), now)
         state["atmosphere"] = normalize_atmosphere_state(raw.get("atmosphere"), now)
 
         if decay:
@@ -1624,6 +1755,109 @@ class WeatherResidueStore:
         refreshed = self._refresh_totals(state, time.time())
         self._write_raw(refreshed)
         return refreshed
+
+    def touch_shadow_crystals(self, event: dict, now: float = None) -> dict:
+        """Event-based negative residue: heat recedes by turns; hardness remains as ledger."""
+        now = now if now is not None else time.time()
+        event = event if isinstance(event, dict) else {}
+        primary = normalize_drive_key(event.get("primary_drive"))
+        source = str(event.get("source") or "").strip()
+        brain = normalize_drive_event_brain(event.get("brain"))
+        evidence = _as_text_list(event.get("evidence"))
+        event_label = str(event.get("event_label") or "").strip()
+        intensity = _clamp(event.get("intensity", 0.0))
+        confidence = _clamp(event.get("confidence", 0.0))
+        actor_weight = _crystal_actor_weight(event)
+        suppressed = bool(event.get("suppressed", False))
+        state = self.load(now, decay=True)
+        crystals = _normalize_shadow_crystals(state.get("shadow_crystals"), now, decay_time=False)
+
+        # One dialogue turn cools foreground heat. Hardness only sands down slowly.
+        for crystal in crystals:
+            crystal["heat"] = round(_clamp(crystal["heat"] * 0.72), 4)
+            crystal["hardness"] = round(_clamp(crystal["hardness"] * 0.985), 4)
+            crystal["foreground"] = crystal["heat"] >= 0.075
+
+        is_negative = (
+            not suppressed
+            and (source in DRIVE_EVENT_WEATHER_SOURCES or source in {"user_message", "external", "memory"})
+            and (
+                primary in WEATHER_NEGATIVE_CRYSTAL_DRIVES
+                or _feature_value(brain, "territorial_alarm") >= POSSESSIVENESS_TERRITORIAL_GATE
+                or _feature_value(brain, "tension_load") >= 0.45
+                or _feature_value(brain, "discernment_alarm") >= 0.45
+            )
+        )
+        if is_negative:
+            kind = "possessiveness" if (
+                primary == "possessiveness"
+                or _feature_value(brain, "territorial_alarm") >= POSSESSIVENESS_TERRITORIAL_GATE
+            ) else "stress"
+            anchor = _crystal_anchor(event_label, brain, evidence, kind)
+            heat_lift = _clamp(
+                (
+                    0.055
+                    + 0.155 * intensity * confidence
+                    + 0.075 * max(_feature_value(brain, "territorial_alarm"), _feature_value(brain, "tension_load"))
+                ) * actor_weight,
+                0.0,
+                0.28,
+            )
+            hardness_lift = _clamp(
+                (
+                    0.050
+                    + 0.115 * intensity * confidence
+                    + 0.060 * max(_feature_value(brain, "territorial_alarm"), _feature_value(brain, "discernment_alarm"))
+                ) * (0.72 + 0.28 * actor_weight),
+                0.0,
+                0.24,
+            )
+            found = next((x for x in crystals if x["id"] == anchor), None)
+            if not found:
+                found = {
+                    "id": anchor,
+                    "kind": kind,
+                    "anchor": [],
+                    "heat": 0.0,
+                    "hardness": 0.0,
+                    "foreground": False,
+                    "event_label": event_label,
+                    "created_at": now,
+                    "last_touched_at": now,
+                }
+                crystals.append(found)
+            found["kind"] = kind
+            found["anchor"] = [
+                x for x in (
+                    brain.get("anchor_target"),
+                    brain.get("target"),
+                    event_label,
+                    *evidence[:2],
+                )
+                if str(x or "").strip()
+            ][:6]
+            found["event_label"] = event_label
+            found["actor_weight"] = round(actor_weight, 3)
+            found["heat"] = round(_clamp(found.get("heat", 0.0) + heat_lift), 4)
+            found["hardness"] = round(_clamp(max(found.get("hardness", 0.0), hardness_lift)), 4)
+            found["foreground"] = found["heat"] >= 0.075
+            found["last_touched_at"] = now
+        else:
+            positive_grounding = (
+                primary in {"stewardship", "curiosity", "reflection", "social", "attachment"}
+                and str(brain.get("grounding") or "").strip() == "实"
+                and confidence >= 0.55
+            )
+            if positive_grounding:
+                for crystal in crystals:
+                    crystal["heat"] = round(_clamp(crystal["heat"] * 0.82), 4)
+                    crystal["hardness"] = round(_clamp(crystal["hardness"] * 0.965), 4)
+                    crystal["foreground"] = crystal["heat"] >= 0.075
+
+        state["shadow_crystals"] = _normalize_shadow_crystals(crystals, now, decay_time=False)
+        state["updated_at"] = now
+        self._write_raw(self._refresh_totals(state, now))
+        return _shadow_crystal_readout(state["shadow_crystals"])
 
     def apply_atmosphere_delta(self, delta: dict, now: float = None) -> dict:
         now = now if now is not None else time.time()
@@ -3375,8 +3609,13 @@ class DesireEngine:
         now = now if now is not None else time.time()
         base = pa_na_snapshot(state.drives)
         residue = self.weather.load(now, decay=True)
-        effective_pa = _clamp(float(base["PA"]) + float(residue.get("warmth_residue", 0.0)))
-        effective_na = _clamp(float(base["NA"]) + float(residue.get("shadow_residue", 0.0)))
+        crystal = _shadow_crystal_readout(residue.get("shadow_crystals"))
+        warmth_residue = float(residue.get("warmth_residue", 0.0) or 0.0)
+        component_shadow = float(residue.get("shadow_residue", 0.0) or 0.0)
+        crystal_shadow = float(crystal.get("shadow", 0.0) or 0.0)
+        shadow_residue = _clamp(component_shadow + crystal_shadow)
+        effective_pa = _clamp(float(base["PA"]) + warmth_residue)
+        effective_na = _clamp(float(base["NA"]) + shadow_residue)
         recent_gravity = residue.get("recent_gravity_lines")
         recent_gravity = recent_gravity if isinstance(recent_gravity, list) else []
         event_tint = chord_event_tint_from_drive_events(drive_events)
@@ -3391,7 +3630,7 @@ class DesireEngine:
             residue["atmosphere"] = atmosphere
             self.weather._write_raw(residue)
         climate = atmosphere.get("climate") or {}
-        gravity_line = chemistry["gravity_line"]
+        gravity_line = crystal.get("gravity") or chemistry["gravity_line"]
         if gravity_line and (not recent_gravity or recent_gravity[0] != gravity_line):
             residue["recent_gravity_lines"] = [gravity_line] + [
                 line for line in recent_gravity if line and line != gravity_line
@@ -3412,12 +3651,16 @@ class DesireEngine:
             "chord_situation": chemistry["situation"],
             "gravity_pool": chemistry["gravity_pool"],
             "derived_texture": chemistry["derived_texture"],
-            "gravity_line": chemistry["gravity_line"],
-            "gravity": chemistry["gravity"],
+            "gravity_line": gravity_line,
+            "gravity": gravity_line,
             "recent_gravity_lines": residue.get("recent_gravity_lines", []),
             **_active_weather_chord(residue, now),
-            "warmth_residue": round(float(residue.get("warmth_residue", 0.0)), 3),
-            "shadow_residue": round(float(residue.get("shadow_residue", 0.0)), 3),
+            "warmth_residue": round(warmth_residue, 3),
+            "shadow_residue": round(shadow_residue, 3),
+            "component_shadow_residue": round(component_shadow, 3),
+            "crystal_shadow": round(crystal_shadow, 3),
+            "shadow_crystal": crystal.get("active"),
+            "shadow_crystals": crystal.get("items", []),
             "updated_at": residue.get("updated_at"),
             "soothe_until": residue.get("soothe_until", 0.0),
             "last_low_chord_at": residue.get("last_low_chord_at", 0.0),
@@ -3938,6 +4181,20 @@ class DesireEngine:
         weather_result = self._apply_drive_event_weather(
             source, primary, brain, intensity, confidence, agency, suppressed
         )
+        crystal_result = self.weather.touch_shadow_crystals({
+            "source": source,
+            "primary_drive": primary,
+            "event_label": event_label,
+            "intensity": intensity,
+            "confidence": confidence,
+            "agency": agency,
+            "suppressed": suppressed,
+            "brain": brain,
+            "evidence": evidence,
+            "messages": event.get("messages") if isinstance(event.get("messages"), list) else [],
+        }, now=now)
+        if crystal_result.get("active") or crystal_result.get("shadow", 0.0) > 0:
+            weather_result = {**weather_result, "shadow_crystal": crystal_result}
         atmosphere_result = self._apply_atmosphere_from_event(
             source, primary, brain, event_label, intensity, confidence, agency
         )
