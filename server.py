@@ -4390,7 +4390,9 @@ async def api_desire_state(request):
         # get_daily_mood缓存不命中时会同步调DeepSeek(最长10s)，helper会扔进线程池跑，
         # 不然这一个请求会卡住整个事件循环，拖累同时打过来的所有其他请求。
         mood_entry = await _weather_mood_entry()
-        weather = state.get("effective_pa_na") or _desire.weather_state()
+        # The dashboard needs the full WeatherResidue readout. effective_pa_na has
+        # only final PA/NA, so using it here hides base/residue as 0.00.
+        weather = _desire.weather_state()
         warmth = float(weather.get("effective_PA", state.get("pa_na", {}).get("PA", 0.5)))
         shadow = float(weather.get("effective_NA", state.get("pa_na", {}).get("NA", 0.2)))
         latest_thought = next(
