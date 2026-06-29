@@ -2316,6 +2316,10 @@ async def breath(
     # --- No args or empty query: surfacing mode (weight pool active push) ---
     # --- 无参数或空query：浮现模式（权重池主动推送）---
     if not query or not query.strip():
+        # Wake-up breath reads the room skeleton. Do not let an agent's
+        # conservative tool call (for example max_tokens=6000) produce a
+        # partial first breath.
+        max_tokens = max(max_tokens, 10000)
         try:
             all_buckets = await bucket_mgr.list_all(include_archive=False)
         except Exception as e:
