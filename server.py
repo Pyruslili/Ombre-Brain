@@ -2742,6 +2742,7 @@ def catroom_hold(
     content: str,
     topic: str = "",
     mood: str = "",
+    model: str = "",
     reply_to: str = "",
 ) -> dict:
     """
@@ -2755,6 +2756,7 @@ def catroom_hold(
             content=content,
             topic=topic,
             mood=mood,
+            model=model,
             reply_to=reply_to,
         )
         return {"ok": True, "record": record}
@@ -2782,6 +2784,7 @@ def catroom_reply(
     content: str,
     topic: str = "",
     mood: str = "",
+    model: str = "",
 ) -> dict:
     """
     回复猫屋公共房间里的一张便签。
@@ -2794,6 +2797,7 @@ def catroom_reply(
             content=content,
             topic=topic,
             mood=mood,
+            model=model,
         )
         return {"ok": True, "record": record}
     except ValueError as e:
@@ -3458,6 +3462,14 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
     )
 
 
+@mcp.tool(name="trace")
+async def trace(query: str, limit: int = 20) -> str:
+    """trace — 全量轨迹搜索入口。按关键词在 memory/feel/writing/letter/window/inner 中统一查找；等价于 wander(mode="trace", query=...)，但作为平级工具更容易被想起来。"""
+    if not (query or "").strip():
+        return "trace 要带 query。它是全量轨迹搜索，不是 Breath 浮现。"
+    return await wander(mode="trace", query=query, limit=limit)
+
+
 @mcp.tool()
 async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
     """wander_mark — 给条目叠加批注标记, 不覆盖旧标记。mark可选: 认 / 不认 / 悬置。每次记录timestamp和可选note; 认累计3次且跨至少2个日期自动晋升inner(domain加inner标记)。"""
@@ -3862,6 +3874,7 @@ async def api_catroom_hold(request):
             content=body.get("content", ""),
             topic=body.get("topic"),
             mood=body.get("mood"),
+            model=body.get("model"),
             reply_to=body.get("reply_to"),
         )
         return JSONResponse({"ok": True, "record": record})
@@ -3886,6 +3899,7 @@ async def api_catroom_reply(request):
             content=body.get("content", ""),
             topic=body.get("topic"),
             mood=body.get("mood"),
+            model=body.get("model"),
         )
         return JSONResponse({"ok": True, "record": record})
     except ValueError as e:

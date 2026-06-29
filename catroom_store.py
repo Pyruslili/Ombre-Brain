@@ -31,6 +31,7 @@ class CatroomStore:
         content: str,
         topic: str | None = None,
         mood: str | None = None,
+        model: str | None = None,
         reply_to: str | None = None,
     ) -> dict[str, Any]:
         author = self._normalize_author(author)
@@ -47,6 +48,7 @@ class CatroomStore:
             "content": content,
             "topic": self._clean_optional(topic),
             "mood": self._clean_optional(mood),
+            "model": self._clean_optional(model),
             "reply_to": parent,
         }
         with self._lock:
@@ -63,6 +65,7 @@ class CatroomStore:
         content: str,
         topic: str | None = None,
         mood: str | None = None,
+        model: str | None = None,
     ) -> dict[str, Any]:
         parent_id = str(reply_to or "").strip()
         if not parent_id:
@@ -72,6 +75,7 @@ class CatroomStore:
             content=content,
             topic=topic,
             mood=mood,
+            model=model,
             reply_to=parent_id,
         )
 

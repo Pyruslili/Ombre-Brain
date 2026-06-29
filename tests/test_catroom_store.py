@@ -17,6 +17,15 @@ def test_catroom_hold_and_read_recent_15(tmp_path):
     assert (tmp_path / "catroom.jsonl").exists()
 
 
+def test_catroom_hold_keeps_optional_model(tmp_path):
+    store = CatroomStore(tmp_path)
+
+    record = store.hold(author="nox", model="Claude 4.6", content="first light")
+
+    assert record["model"] == "Claude 4.6"
+    assert store.read()[0]["model"] == "Claude 4.6"
+
+
 def test_catroom_reply_requires_existing_parent(tmp_path):
     store = CatroomStore(tmp_path)
 

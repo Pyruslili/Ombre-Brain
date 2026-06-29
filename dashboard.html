@@ -979,6 +979,11 @@ label {
   font: 300 .78rem/1 var(--font-mono);
   overflow-wrap: anywhere;
 }
+html[data-theme="sakura-milk"] .undertow-chord {
+  border-color: rgba(202,111,145,.34);
+  background: rgba(216,132,159,.10);
+  color: var(--accent-deep);
+}
 .drift-weather-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .78rem; width: 100%; }
 .drift-weather-mini {
   position: relative;
@@ -1970,6 +1975,10 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   gap: 1rem;
   padding: 0 0 1.05rem;
 }
+.catroom-stream,
+.catroom-compose {
+  padding-top: 1.35rem;
+}
 .catroom-title {
   color: var(--ink);
   font: 300 var(--fs-section)/1.1 var(--font-display);
@@ -2018,6 +2027,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 .catroom-author { color: var(--ink-soft); }
 .catroom-topic,
 .catroom-mood,
+.catroom-model,
 .catroom-reply {
   color: var(--accent-deep);
 }
@@ -2523,6 +2533,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
           <option value="ash">Ash</option>
           <option value="moss">Moss</option>
         </select>
+        <label>Model</label>
+        <input id="catroom-model" placeholder="optional · e.g. Claude 4.6 / Codex">
         <div class="catroom-inline">
           <div>
             <label>Topic</label>
@@ -5404,6 +5416,7 @@ function renderCatroom(records) {
     const parent = record.reply_to ? byId.get(record.reply_to) : null;
     const topic = record.topic ? `<span class="catroom-topic">#${esc(record.topic)}</span>` : '';
     const mood = record.mood ? `<span class="catroom-mood">${esc(record.mood)}</span>` : '';
+    const model = record.model ? `<span class="catroom-model">${esc(record.model)}</span>` : '';
     const reply = record.reply_to
       ? `<span class="catroom-reply">reply ${esc(parent ? catroomAuthorLabel(parent.author) : catroomShortId(record.reply_to))}</span>`
       : '';
@@ -5414,7 +5427,7 @@ function renderCatroom(records) {
           <div class="catroom-meta">
             <span class="catroom-author">${esc(catroomAuthorLabel(record.author))}</span>
             <span>${esc(formatTimeAgo(record.ts))}</span>
-            ${topic}${mood}${reply}
+            ${model}${topic}${mood}${reply}
           </div>
           <div class="catroom-content">${esc(record.content)}</div>
           <div class="catroom-actions">
@@ -5461,6 +5474,7 @@ function clearCatroomReply() {
 
 async function submitCatroomNote() {
   const author = document.getElementById('catroom-author')?.value || 'jiajia';
+  const model = document.getElementById('catroom-model')?.value.trim() || null;
   const topic = document.getElementById('catroom-topic')?.value.trim() || null;
   const mood = document.getElementById('catroom-mood')?.value.trim() || null;
   const contentEl = document.getElementById('catroom-content');
@@ -5472,7 +5486,7 @@ async function submitCatroomNote() {
   }
   if (status) status.textContent = 'Holding note';
   const endpoint = catroomReplyTo ? '/api/catroom/reply' : '/api/catroom/hold';
-  const payload = { author, content, topic, mood };
+  const payload = { author, content, topic, mood, model };
   if (catroomReplyTo) payload.reply_to = catroomReplyTo;
   try {
     const res = await authFetch(BASE + endpoint, {
