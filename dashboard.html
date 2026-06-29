@@ -319,7 +319,7 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
   top: 0;
   z-index: 25;
   display: grid;
-  grid-template-columns: repeat(8, minmax(0,1fr));
+  grid-template-columns: repeat(9, minmax(0,1fr));
   gap: 0;
   padding: 0 var(--page-pad);
   background: rgba(10,6,3,.76);
@@ -389,6 +389,7 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
 #network-view::before { content: "Constellations"; }
 #desire-view::before { content: "Drift"; }
 #echoes-view::before { content: "Echoes"; }
+#catroom-view::before { content: "Catroom"; }
 #import-view::before { content: "Fragments"; }
 #config-view::before { content: "Axis"; }
 #settings-view::before { content: "Axis / Private"; }
@@ -1948,6 +1949,144 @@ html[data-theme="sakura-milk"] .echo-actions .favorite.active { color: var(--acc
 html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); color: var(--ink); }
 
 /* ============================================================
+   Catroom
+   ============================================================ */
+.catroom-shell {
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+.catroom-stream,
+.catroom-compose {
+  border-top: 1px solid var(--line);
+}
+.catroom-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0 1.05rem;
+}
+.catroom-title {
+  color: var(--ink);
+  font: 300 var(--fs-section)/1.1 var(--font-display);
+}
+.catroom-sub {
+  margin-top: .25rem;
+  color: var(--mute);
+  font: 300 var(--fs-micro)/1.6 var(--font-mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.catroom-list {
+  display: grid;
+  gap: .85rem;
+}
+.catroom-note {
+  display: grid;
+  grid-template-columns: 38px minmax(0,1fr);
+  gap: .8rem;
+  padding: .95rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.catroom-avatar {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--accent-deep);
+  background: var(--surface-soft);
+  font: 400 .72rem/1 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.catroom-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .45rem .65rem;
+  color: var(--mute);
+  font: 300 var(--fs-micro)/1.4 var(--font-mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.catroom-author { color: var(--ink-soft); }
+.catroom-topic,
+.catroom-mood,
+.catroom-reply {
+  color: var(--accent-deep);
+}
+.catroom-content {
+  margin-top: .35rem;
+  color: var(--ink);
+  font: 300 var(--fs-body)/1.72 var(--font-body);
+  white-space: pre-wrap;
+}
+.catroom-actions {
+  margin-top: .7rem;
+}
+.catroom-actions button {
+  min-height: auto;
+  padding: .24rem 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--mute);
+  background: transparent;
+}
+.catroom-actions button:hover { color: var(--accent-deep); background: transparent; }
+.catroom-compose {
+  position: sticky;
+  top: 96px;
+  padding-top: 1rem;
+}
+.catroom-compose-grid {
+  display: grid;
+  gap: .85rem;
+}
+.catroom-compose textarea {
+  min-height: 170px;
+  resize: vertical;
+}
+.catroom-inline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .85rem;
+}
+.catroom-replying {
+  display: none;
+  padding: .65rem .75rem;
+  border: 1px solid var(--line-soft);
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+  font: 300 var(--fs-meta)/1.5 var(--font-body);
+}
+.catroom-replying.active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+}
+.catroom-status {
+  min-height: 1.2rem;
+  color: var(--mute);
+  font: 300 var(--fs-micro)/1.4 var(--font-mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.catroom-empty {
+  padding: 4rem 0;
+  color: var(--mute);
+  font: 300 var(--fs-micro)/1.7 var(--font-mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
    Motion / responsive
    ============================================================ */
 @keyframes revealDown { from { opacity: 0; transform: translateY(-10px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
@@ -1990,7 +2129,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .archive-title { line-height: .78; }
   .archive-title em { margin-left: 0; }
   .archive-subtitle, .archive-ledger { margin-left: 0; }
-  .tabs { overflow-x: auto; grid-template-columns: repeat(8, minmax(124px,1fr)); }
+  .tabs { overflow-x: auto; grid-template-columns: repeat(9, minmax(124px,1fr)); }
   .tab { min-height: 64px; }
   .bucket-row { grid-template-columns: 36px minmax(0,1fr) 72px; }
   .bucket-row .preview { display: none; }
@@ -2007,6 +2146,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .latent-note-editor { grid-template-columns: 1fr; }
   .latent-editor-actions { justify-content: flex-start; }
   .drift-weather-values { grid-template-columns: 1fr; }
+  .catroom-shell { grid-template-columns: 1fr; }
+  .catroom-compose { position: static; }
 }
 @media (max-width: 620px) {
   .topbar { padding-top: 1rem; }
@@ -2055,6 +2196,10 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   .echo-actions { justify-content: flex-start; }
   .echoes-foot { grid-template-columns: 1fr; }
   .echoes-status { text-align: left; }
+  .catroom-head { align-items: flex-start; flex-direction: column; }
+  .catroom-inline { grid-template-columns: 1fr; }
+  .catroom-note { grid-template-columns: 32px minmax(0,1fr); }
+  .catroom-avatar { width: 32px; height: 32px; font-size: .62rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -2125,9 +2270,10 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   <div class="tab" data-index="03" data-tab="reverie">Reverie</div>
   <div class="tab" data-index="04" data-tab="desire">Drift</div>
   <div class="tab" data-index="05" data-tab="echoes">Echoes</div>
-  <div class="tab" data-index="06" data-tab="network">Constellations</div>
-  <div class="tab" data-index="07" data-tab="import">Fragments</div>
-  <div class="tab" data-index="08" data-tab="config">Axis</div>
+  <div class="tab" data-index="06" data-tab="catroom">Catroom</div>
+  <div class="tab" data-index="07" data-tab="network">Constellations</div>
+  <div class="tab" data-index="08" data-tab="import">Fragments</div>
+  <div class="tab" data-index="09" data-tab="config">Axis</div>
   <div class="tab secondary-tab" data-tab="settings">Private settings</div>
 </nav>
 
@@ -2343,6 +2489,60 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <p class="section-note">读取本机 <code>localhost:3721</code> 的最近二十条声音。收藏会写回本地索引；删除会同时移除音频文件。</p>
       <div class="echoes-status" id="echoes-status">Reading local echo bridge</div>
     </div>
+  </div>
+</div>
+
+<div class="content" id="catroom-view" style="display:none">
+  <div class="catroom-shell">
+    <section class="catroom-stream">
+      <div class="catroom-head">
+        <div>
+          <div class="catroom-title">Public room</div>
+          <div class="catroom-sub">Recent 15 · outside Breath / Weather / Memory</div>
+        </div>
+        <button onclick="loadCatroom()">Revisit</button>
+      </div>
+      <div class="catroom-list" id="catroom-list">
+        <div class="catroom-empty">Reading Catroom</div>
+      </div>
+    </section>
+
+    <aside class="catroom-compose">
+      <div class="catroom-head">
+        <div>
+          <div class="catroom-title">Leave a note</div>
+          <div class="catroom-sub">hold / read / reply</div>
+        </div>
+      </div>
+      <div class="catroom-compose-grid">
+        <label>Author</label>
+        <select id="catroom-author">
+          <option value="jiajia">Jiajia</option>
+          <option value="nox">Nox</option>
+          <option value="ink">Ink</option>
+          <option value="ash">Ash</option>
+          <option value="moss">Moss</option>
+        </select>
+        <div class="catroom-inline">
+          <div>
+            <label>Topic</label>
+            <input id="catroom-topic" placeholder="optional">
+          </div>
+          <div>
+            <label>Mood</label>
+            <input id="catroom-mood" placeholder="optional">
+          </div>
+        </div>
+        <div class="catroom-replying" id="catroom-replying">
+          <span id="catroom-replying-text"></span>
+          <button onclick="clearCatroomReply()">Clear</button>
+        </div>
+        <label>Content</label>
+        <textarea id="catroom-content" placeholder="Write what wants to stay in the room."></textarea>
+        <button class="btn-primary" onclick="submitCatroomNote()">Hold</button>
+        <div class="catroom-status" id="catroom-status"></div>
+      </div>
+    </aside>
   </div>
 </div>
    
@@ -2563,6 +2763,7 @@ let echoPlayToken = 0;
 let openingGate = null;
 let desireThoughts = [];
 let editingThoughtId = null;
+let catroomReplyTo = null;
 const mouse = { x: -1000, y: -1000 };
 const RETIRED_SPEECH_SOMA_LINES = new Set([
   '那句话还没说完想法，先卡在这儿了。',
@@ -5182,6 +5383,115 @@ function initEvents() {
   }
 }
 
+function catroomAuthorLabel(author) {
+  const map = { jiajia: '嘉嘉', nox: 'Nox', ink: 'Ink', ash: 'Ash', moss: 'Moss' };
+  return map[String(author || '').toLowerCase()] || author || 'Unknown';
+}
+
+function catroomShortId(id) {
+  return String(id || '').replace(/^cat_/, '').slice(0, 6);
+}
+
+function renderCatroom(records) {
+  const list = document.getElementById('catroom-list');
+  if (!list) return;
+  if (!records || !records.length) {
+    list.innerHTML = '<div class="catroom-empty">No notes in the room yet</div>';
+    return;
+  }
+  const byId = new Map(records.map(r => [r.id, r]));
+  list.innerHTML = records.map(record => {
+    const parent = record.reply_to ? byId.get(record.reply_to) : null;
+    const topic = record.topic ? `<span class="catroom-topic">#${esc(record.topic)}</span>` : '';
+    const mood = record.mood ? `<span class="catroom-mood">${esc(record.mood)}</span>` : '';
+    const reply = record.reply_to
+      ? `<span class="catroom-reply">reply ${esc(parent ? catroomAuthorLabel(parent.author) : catroomShortId(record.reply_to))}</span>`
+      : '';
+    return `
+      <article class="catroom-note" data-note-id="${esc(record.id)}">
+        <div class="catroom-avatar">${esc(catroomAuthorLabel(record.author).slice(0, 2))}</div>
+        <div>
+          <div class="catroom-meta">
+            <span class="catroom-author">${esc(catroomAuthorLabel(record.author))}</span>
+            <span>${esc(formatTimeAgo(record.ts))}</span>
+            ${topic}${mood}${reply}
+          </div>
+          <div class="catroom-content">${esc(record.content)}</div>
+          <div class="catroom-actions">
+            <button onclick="setCatroomReply('${esc(record.id)}','${esc(catroomAuthorLabel(record.author))}')">Reply</button>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+async function loadCatroom() {
+  const status = document.getElementById('catroom-status');
+  if (status) status.textContent = 'Reading room';
+  try {
+    const res = await authFetch(BASE + '/api/catroom/read?limit=15');
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderCatroom(data.records || []);
+    if (status) status.textContent = `${data.count || 0} notes`;
+  } catch (e) {
+    const list = document.getElementById('catroom-list');
+    if (list) list.innerHTML = `<div class="catroom-empty">Catroom is out of reach · ${esc(e.message)}</div>`;
+    if (status) status.textContent = 'Read failed';
+  }
+}
+
+function setCatroomReply(id, author) {
+  catroomReplyTo = id;
+  const bar = document.getElementById('catroom-replying');
+  const text = document.getElementById('catroom-replying-text');
+  if (bar) bar.classList.add('active');
+  if (text) text.textContent = `Replying to ${author}`;
+  document.getElementById('catroom-content')?.focus();
+}
+
+function clearCatroomReply() {
+  catroomReplyTo = null;
+  document.getElementById('catroom-replying')?.classList.remove('active');
+  const text = document.getElementById('catroom-replying-text');
+  if (text) text.textContent = '';
+}
+
+async function submitCatroomNote() {
+  const author = document.getElementById('catroom-author')?.value || 'jiajia';
+  const topic = document.getElementById('catroom-topic')?.value.trim() || null;
+  const mood = document.getElementById('catroom-mood')?.value.trim() || null;
+  const contentEl = document.getElementById('catroom-content');
+  const status = document.getElementById('catroom-status');
+  const content = contentEl?.value.trim() || '';
+  if (!content) {
+    if (status) status.textContent = 'Content is empty';
+    return;
+  }
+  if (status) status.textContent = 'Holding note';
+  const endpoint = catroomReplyTo ? '/api/catroom/reply' : '/api/catroom/hold';
+  const payload = { author, content, topic, mood };
+  if (catroomReplyTo) payload.reply_to = catroomReplyTo;
+  try {
+    const res = await authFetch(BASE + endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (contentEl) contentEl.value = '';
+    clearCatroomReply();
+    if (status) status.textContent = 'Held';
+    await loadCatroom();
+  } catch (e) {
+    if (status) status.textContent = `Hold failed · ${e.message}`;
+  }
+}
+
 function switchChapter(target, options = {}) {
   const visibleTarget = target === 'settings' ? 'config' : target;
   if (target !== 'network') {
@@ -5191,7 +5501,7 @@ function switchChapter(target, options = {}) {
   document.querySelectorAll('.tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === visibleTarget);
   });
-  ['list','breath','reverie','network','config','import','settings','desire','echoes'].forEach(v => {
+  ['list','breath','reverie','network','config','import','settings','desire','echoes','catroom'].forEach(v => {
     const el = document.getElementById(v + '-view');
     if (el) el.style.display = target === v ? '' : 'none';
   });
@@ -5202,6 +5512,7 @@ function switchChapter(target, options = {}) {
   if (target === 'settings') loadSettingsStatus();
   if (target === 'desire') loadDesire();
   if (target === 'echoes') loadEchoes();
+  if (target === 'catroom') loadCatroom();
   if (options.scroll !== false) {
     document.getElementById('chapter-index').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }

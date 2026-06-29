@@ -53,6 +53,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp.server.fastmcp import FastMCP
 
 from bucket_manager import BucketManager
+from catroom_store import CatroomStore
 from dehydrator import Dehydrator
 from decay_engine import DecayEngine
 from embedding_engine import EmbeddingEngine
@@ -136,6 +137,7 @@ dehydrator = Dehydrator(config)                      # Dehydrator / 脱水器
 decay_engine = DecayEngine(config, bucket_mgr)       # Decay engine / 衰减引擎
 import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)
 BUCKETS_DIR = config["buckets_dir"]
+catroom_store = CatroomStore(BUCKETS_DIR)
 
 
 def _bucket_path(*parts: str) -> str:
@@ -2734,6 +2736,70 @@ def pass_tool(drive_key: str, reason: str = "") -> dict:
     return _desire.pass_intent(drive_key, reason=reason if reason.strip() else None)
 
 
+@mcp.tool(name="catroom_hold")
+def catroom_hold(
+    author: str,
+    content: str,
+    topic: str = "",
+    mood: str = "",
+    reply_to: str = "",
+) -> dict:
+    """
+    在猫屋公共房间留一张便签。
+    不进 Breath，不推 Weather，不写正式 memory。
+    author: ink|ash|moss|nox|jiajia
+    """
+    try:
+        record = catroom_store.hold(
+            author=author,
+            content=content,
+            topic=topic,
+            mood=mood,
+            reply_to=reply_to,
+        )
+        return {"ok": True, "record": record}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@mcp.tool(name="catroom_read")
+def catroom_read(limit: int = 15, topic: str = "", author: str = "") -> dict:
+    """
+    读取猫屋公共房间最近便签，默认最近15条。
+    这是公共房间读取，不是 Breath/memory 检索。
+    """
+    try:
+        records = catroom_store.read(limit=limit, topic=topic, author=author)
+        return {"ok": True, "records": records, "count": len(records)}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@mcp.tool(name="catroom_reply")
+def catroom_reply(
+    author: str,
+    reply_to: str,
+    content: str,
+    topic: str = "",
+    mood: str = "",
+) -> dict:
+    """
+    回复猫屋公共房间里的一张便签。
+    只建立 reply_to 关系，不触发群聊 loop 或 weather。
+    """
+    try:
+        record = catroom_store.reply(
+            author=author,
+            reply_to=reply_to,
+            content=content,
+            topic=topic,
+            mood=mood,
+        )
+        return {"ok": True, "record": record}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
 SIGNAL_HINT_KEYS = {
     "discernment": ("discernment", "皱眉", "不认", "真实性洁癖"),
     "territorial": ("territorial", "边界", "替代警报", "占位感"),
@@ -3756,6 +3822,74 @@ async def api_bucket_delete(request):
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@mcp.custom_route("/api/catroom/read", methods=["GET"])
+async def api_catroom_read(request):
+    """Read recent Catroom notes. Catroom is intentionally outside Breath/weather."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    params = request.query_params
+    try:
+        limit = int(params.get("limit", "15") or "15")
+    except ValueError:
+        limit = 15
+    try:
+        records = catroom_store.read(
+            limit=limit,
+            topic=params.get("topic", ""),
+            author=params.get("author", ""),
+        )
+        return JSONResponse({"ok": True, "records": records, "count": len(records)})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@mcp.custom_route("/api/catroom/hold", methods=["POST"])
+async def api_catroom_hold(request):
+    """Append a Catroom note."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    try:
+        record = catroom_store.hold(
+            author=body.get("author", ""),
+            content=body.get("content", ""),
+            topic=body.get("topic"),
+            mood=body.get("mood"),
+            reply_to=body.get("reply_to"),
+        )
+        return JSONResponse({"ok": True, "record": record})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@mcp.custom_route("/api/catroom/reply", methods=["POST"])
+async def api_catroom_reply(request):
+    """Append a Catroom reply."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    try:
+        record = catroom_store.reply(
+            author=body.get("author", ""),
+            reply_to=body.get("reply_to", ""),
+            content=body.get("content", ""),
+            topic=body.get("topic"),
+            mood=body.get("mood"),
+        )
+        return JSONResponse({"ok": True, "record": record})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
 @mcp.custom_route("/api/search", methods=["GET"])
