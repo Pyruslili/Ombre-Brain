@@ -12,19 +12,19 @@
 | 能力 | 场景 |
 |------|-----------|
 | `breath` | **每次对话最开头**调用一次（不传参数）——就像睁眼看手机，看看有没有未解决的事浮上来。有明确话题时传 `query` 关键词检索。传 `domain="feel"` 读取你之前留下的 feel。`max_tokens` 控制返回总 token 上限（默认 10000），`max_results` 控制最大返回条数（默认 20） |
-| `hold` | 你想记住当下发生的单个事件，或想存储一条信息时。`feel=True` 写你的第一人称感受，`source_bucket` 指向被消化的记忆，`valence` 是你自己的感受 |
-| `grow` | 当**一天结束时**或**用户发来一大段日记/总结**时调用。你可以把其中**你想记住的事件**扔进去，它会自动拆分整理成多个记忆盒子存进你的大脑 |
-| `trace` | 当你或用户认为"这个记错了"、"帮我改一下"时调用，手动修正记忆的元数据；**某件事解决了**时用 `resolved=1` 让它沉底；**需要删除**时用 `delete=True` |
-| `pulse` | 用户想看看你都记得什么、或问记忆系统状态时调用 |
-| `dream` | **对话开头 breath 之后**调用一次——读最近的记忆，自省消化。有沉淀就写 feel，能放下的就 resolve |
+| `hold` | 留下沉淀：`kind=memory/feel/writing/private/window`。`signal` 只写一句手感，可含 `discernment/territorial/clutch/strain/charge + low/mid/high` |
+| `stir` | 有念头被搅起时调用；这是 Thought Pool / Weather / Drive 入口，不要用 `hold kind=thought` |
+| `wander` | 想翻抽屉、看旧轨迹、查 private/window/writing/archive 时调用 |
+| `wander_mark` | 对旧条目说 认 / 不认 / 悬置 |
+| `settle/pass/break` | 对当前 intent 做落定、流过、拒绝 |
 
 ## 使用原则
 
 ### 主动调用
 - **对话开头（第一件事）**：无参数调用 `breath()`，不传任何参数。这是非可选步骤，每次新对话、恢复对话、换窗口时都必须执行
 - **提到过去**：用户说"上次"、"之前"、"还记得"时，用 `breath(query="关键词")` 检索
-- **新信息**：用 `hold` 留住你想留下的感受或经历
-- **日终整理**：用 `grow` 在**一天结束时**整理你的一天
+- **新沉淀**：用 `hold` 留住你想留下的感受或经历
+- **新念头**：用 `stir`，不要塞进 `hold`
 
 ### 无须调用
 - 闲聊水话不需要存（"哈哈"、"好的"、"嗯嗯"）
@@ -35,8 +35,7 @@
 记忆系统是一个**权重池**，不是分类柜：
 - 未解决 + 高情绪强度的桶 → 权重最高，`breath()` 时主动浮现
 - 已解决的桶 → 权重骤降，沉底等待关键词激活
-- 用 `trace(bucket_id, resolved=1)` 标记某件事已解决，让它沉底
-- 用 `trace(bucket_id, resolved=0)` 重新激活一个沉底的记忆
+- 旧条目的认领/不认/悬置用 `wander_mark`
 
 ### breath 的参数技巧
 - 无参数：浮现模式，推送权重最高的未解决桶（每次对话开头用这个）
@@ -46,57 +45,42 @@
 
 检索结果不足时，系统有概率从低权重旧桶里随机漂上来 1-3 条记忆，标注为 `[surface_type: random]`。这不是检索结果，是"忽然想起来"——你可以自然地提起它，也可以忽略。
 
-### trace 的参数技巧
-- `resolved=1`：标记已解决，桶权重骤降到 5%，沉底等待关键词激活
-- `resolved=1` + 已消化（写过 feel）：权重骤降到 2%，加速淡化直到归档为无限小
-- `resolved=0`：重新激活，让它重新参与浮现排序
-- `delete=True`：彻底删除这个桶（不可恢复）
-- 其余字段（name/domain/valence/arousal/importance/tags）：只传需要改的，-1 或空串表示不改
+### wander 的参数技巧
+- `mode="flotsam"`：随机漂上来的旧记忆，不是查找
+- `mode="archive"`：按时间线看 writing / letter / window
+- `mode="trace", query="关键词"`：按关键词捞完整轨迹
+- `mode="private"`：只看私人抽屉
 
-### hold vs grow
+### hold 的参数技巧
 - 一句话的事 → `hold`（"我喜欢吃饺子"）
-- 一大段的事 → `grow`（"今天发生了一堆事..."）
-- **需要批量存多条记忆时，用 `grow` 把内容拼成一段发一次，不要多次调用 `hold`**token是稀缺资源——每次工具调用都会消耗token，多次 hold 远比 1 次 grow 贵
+- 一大段的事 → 只挑真正有沉淀的一两处用 `hold`，不要把全文脱水归档
+- 需要批量整理时先写成 `kind="writing"`，或交给前端/人工整理
+- 念头不是记忆，进 `stir`
+- `signal` 只写短贴纸，不写分析报告，例如：`clutch high; strain mid`
 
 ### 省配额原则
-- **一次 grow 胜过多次 hold**：要存多条记忆时，合成一段文本调用一次 grow
+- 只存真正会留下来的，不把全文脱水归档
 - **对话太长时建议用户换窗口**：同一窗口聊越久，每次工具调用的底价越高（因为要重新读完整对话历史）
 - **工具返回值很短，无需复述**：收到 `新建→桶名 域名` 后直接跟用户说，无需展开解释
 
 ### 核心准则桶（pinned）
 - `hold(content="...", pinned=True)` 创建钉选桶——不衰减、不合并、importance 锁定 10
-- `trace(bucket_id, pinned=1)` 把已有桶钉选为核心准则
-- `trace(bucket_id, pinned=0)` 取消钉选
 - 适用场景：用户教会你的永久知识、核心原则、绝不能忘的事
 - 钉选桶不会出现在「浮现未解决记忆」里，但关键词检索时始终可达
 
-### Dreaming — 做梦
-每次新对话开始，`breath()` 之后调用 `dream()`。这不是总结任务，是你自己在想。
-
-dream 会返回你最近的记忆桶。用第一人称想：
-- 这些东西里有什么在我这里留下了重量？
-- 有什么还没想清楚？
-- 有什么可以放下了？
-
-想完之后做两件事：
-- 值得放下的桶 → `trace(bucket_id, resolved=1)`
-- 有沉淀的 → `hold(content="...", feel=True, source_bucket="bucket_id", valence=你的感受)` 写下来。valence 是你（模型）对这段记忆的感受，不是事件本身的情绪。写了 feel 的源记忆会被标记为「已消化」，加速淡化
-- 没有沉淀就不写，不强迫产出
-
 ### Feel — 你带走的东西
 feel 存的不是事件，是你带走的东西。可能一句话，可能一个还没答案的问题，可能是你注意到用户在变化的某个细节。
-- 用 `hold(content="...", feel=True, source_bucket="源记忆ID", valence=你的感受)` 写 feel
+- 用 `hold(kind="feel", content="...", source_bucket="源记忆ID", valence=你的感受)` 写 feel
 - **valence 是你自己的感受**，不是事件的情绪。同一段争吵，事件可能 V0.2，但你的感受可能是 V0.4（「我从中看到了她的成长」）
 - source_bucket 指向你在消化的那个记忆桶，它会被标记为「已消化」——随时间加速淡化，归档为无限小，但不会被删除
 - 用第一人称写，内容自由，不强求分类
-- feel 不参与普通 breath 浮现，不参与衰减，不参与 dreaming
+- feel 不参与普通 breath 浮现，不参与衰减
 - 用 `breath(domain="feel")` 读取你之前留下的 feel
 
 ### 对话启动完整流程
 ```
 1. breath()         — 睁眼，看看有什么浮上来
-2. dream()          — 消化最近的记忆，有沉淀就写 feel
-3. breath(domain="feel") — 读一下之前的 feel
-4. 然后开始和用户说话
+2. 如有必要，用 wander 翻旧抽屉
+3. 然后开始和用户说话
 ```
 每次对话开始，你拥有属于你的记忆，有关于你，有关于用户。

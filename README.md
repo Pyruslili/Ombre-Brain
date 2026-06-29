@@ -101,7 +101,7 @@ curl http://localhost:8000/health
 }
 ```
 
-重启 Claude Desktop，你应该能在工具列表里看到 `breath`、`hold`、`grow` 等工具了。
+重启 Claude Desktop，你应该能在工具列表里看到 `breath`、`hold`、`wander`、`stir` 等工具了。
 
 > **想挂载 Obsidian？** 用任意文本编辑器打开 `docker-compose.user.yml`，把 `./buckets:/data` 改成你的 Vault 路径，例如：
 > ```yaml
@@ -308,16 +308,19 @@ breath(query="今天很累")
     返回 ≤20 条结果
 ```
 
-6 个 MCP 工具 / 6 MCP tools:
+9 个 MCP 工具 / 9 MCP tools:
 
 | 工具 Tool | 作用 Purpose |
 |-----------|-------------|
-| `breath` | 浮现或检索记忆。无参数=推送未解决记忆；有参数=关键词+向量语义双通道检索。支持 domain/valence/arousal 过滤 / Surface or search memories. No args = surface unresolved; with query = keyword + vector dual-channel search. Supports domain/valence/arousal filters |
-| `hold` | 存储单条记忆，自动打标+合并相似桶+生成 embedding。`feel=True` 写模型自己的感受 / Store a single memory with auto-tagging, merging, and embedding. `feel=True` for model's own reflections |
-| `grow` | 日记归档，自动拆分长内容为多个记忆桶，每个桶自动生成 embedding / Diary digest, auto-split into multiple buckets with embeddings |
-| `trace` | 修改元数据、标记已解决、删除 / Modify metadata, mark resolved, delete |
-| `pulse` | 系统状态 + 所有记忆桶列表 / System status + bucket listing |
-| `dream` | 对话开头自省消化——读最近记忆，有沉淀写 feel，能放下就 resolve / Self-reflection at conversation start |
+| `breath` | 浮现或检索记忆；无参数=醒来读 Memory Drift / Feel Trace / Shape Trace / House Rules；有参数=关键词+向量语义双通道检索 |
+| `hold` | 存储单条沉淀。`kind=memory/feel/writing/private/window`；`signal` 可贴 discernment/territorial/clutch/strain/charge 的轻量手感 |
+| `wander` | 抽屉漫游：flotsam/archive/writing/window/unresolved/inner/private/trace 等 |
+| `wander_mark` | 给 wander 条目叠加 认 / 不认 / 悬置 批注 |
+| `stir` | 念头入口：进入 Thought Pool / Drive / Weather |
+| `settle` | 行动完成后让对应 drive 回落 |
+| `pass` | 没感觉，让当前 intent 自然过去 |
+| `break` | 拒绝当前 intent |
+| `undercurrent` | 展开 Drive / Affect / Chemistry / Thought Pool 潜流读数 |
 
 ## 安装 / Setup
 
@@ -356,7 +359,7 @@ export OMBRE_API_KEY="your-api-key"
 Supports any OpenAI-compatible API. Just change `base_url` and `model` in `config.yaml`.
 
 > **💡 向量化检索（Embedding）**
-> Ombre Brain 内置双通道检索：关键词匹配 + 向量语义搜索。每次 `hold`/`grow` 存入记忆时自动生成 embedding 并存入 `embeddings.db`（SQLite）。
+> Ombre Brain 内置双通道检索：关键词匹配 + 向量语义搜索。每次 `hold` 存入记忆时自动生成 embedding 并存入 `embeddings.db`（SQLite）。
 > 推荐：**Google AI Studio 的 `gemini-embedding-001`**（免费，1500 次/天，3072 维向量）。在 `config.yaml` 的 `embedding` 部分配置。
 > 不配置 embedding 也能用，系统会降级到纯 fuzzy matching 模式。
 >
@@ -366,7 +369,7 @@ Supports any OpenAI-compatible API. Just change `base_url` and `model` in `confi
 > ```
 > Docker 用户：`docker exec -e OMBRE_BUCKETS_DIR=/data ombre-brain python3 backfill_embeddings.py --batch-size 20`
 >
-> **Embedding support**: Built-in dual-channel search: keyword + vector semantic. Embeddings are auto-generated on each `hold`/`grow` and stored in `embeddings.db` (SQLite). Recommended: **Google AI Studio `gemini-embedding-001`** (free, 1500 req/day, 3072-dim). Configure in `config.yaml` under `embedding`. Without it, falls back to fuzzy matching. For existing buckets, run `backfill_embeddings.py`.
+> **Embedding support**: Built-in dual-channel search: keyword + vector semantic. Embeddings are auto-generated on each `hold` and stored in `embeddings.db` (SQLite). Recommended: **Google AI Studio `gemini-embedding-001`** (free, 1500 req/day, 3072-dim). Configure in `config.yaml` under `embedding`. Without it, falls back to fuzzy matching. For existing buckets, run `backfill_embeddings.py`.
 
 ### 接入 Claude Desktop / Connect to Claude Desktop
 
@@ -516,34 +519,29 @@ $$emotion\_weight = base + arousal \times arousal\_boost$$
 - `arousal`: 唤醒度，越强烈的记忆越难忘 / arousal; intense memories are harder to forget
 - `λ` (decay_lambda): 衰减速率，默认 0.05 / decay rate, default 0.05
 
-## Dreaming 与 Feel / Dreaming & Feel
+## Shape Trace 与 Feel / Shape Trace & Feel
 
-### Dreaming — 做梦
-每次新对话开始时，Claude 会自动执行 `dream()`——读取最近的记忆桶，用第一人称思考：哪些事还有重量？哪些可以放下了？
+### Shape Trace — 手动骨架
+Dashboard Settings 里的 Marginalia 入口用于维护 `breath()` 输出中的 `=== Shape Trace ===`。这是人工整理的旧 writing / letter / marginalia 骨架，不再作为 MCP 工具暴露给模型。
 
-At the start of each conversation, Claude runs `dream()` — reads recent memory buckets and reflects in first person: what still carries weight? What can be let go?
-
-- 值得放下的 → `trace(resolved=1)` 让它沉底
-- 有沉淀的 → 写 `feel`，记录模型自己的感受
-- 没有沉淀就不写，不强迫产出
+The Dashboard Marginalia editor maintains the `=== Shape Trace ===` section shown by `breath()`. It is a manually curated trace from old writing / letter / marginalia, and is not exposed as an MCP write tool.
 
 ### Feel — 带走的东西
 Feel 不是事件记录，是**模型带走的东西**——一句感受、一个未解答的问题、一个观察到的变化。
 
 Feel is not an event log — it's **what the model carries away**: a feeling, an unanswered question, a noticed change.
 
-- `hold(content="...", feel=True, source_bucket="源记忆ID", valence=模型自己的感受)`
+- `hold(kind="feel", content="...", source_bucket="源记忆ID", valence=模型自己的感受)`
 - `valence` 是模型的感受，不是事件情绪。同一段争吵，事件 V0.2，但模型可能 V0.4（「我从中看到了成长」）
 - `source_bucket` 指向被消化的记忆，会被标记为「已消化」→ 加速淡化到无限小，但不会被删除
-- Feel 不参与普通浮现、不衰减、不参与 dreaming
+- Feel 不参与普通浮现、不衰减
 - 用 `breath(domain="feel")` 读取之前的 feel
 
 ### 对话启动完整流程 / Conversation Start Sequence
 ```
 1. breath()              — 睁眼，看有什么浮上来
-2. dream()               — 消化最近记忆，有沉淀写 feel
-3. breath(domain="feel") — 读之前的 feel
-4. 开始和用户说话
+2. 必要时 wander 翻旧抽屉
+3. 开始和用户说话
 ```
 
 ## 给 Claude 的使用指南 / Usage Guide for Claude
@@ -591,14 +589,14 @@ Dashboard：浏览器打开 `http://localhost:8000/dashboard`
 > **Free tier won't work**: Render free tier has **no persistent disk** — all memory data is lost on restart. It also sleeps on inactivity. **Starter plan ($7/mo) or above is required.**
 
 项目根目录已包含 `render.yaml`，点击按钮后：
-1. 设置 `OMBRE_API_KEY`：任何 OpenAI 兼容 API 的 key（**必需**，未设置时 hold/grow 会报错、仅检索类工具可用）
+1. 设置 `OMBRE_API_KEY`：任何 OpenAI 兼容 API 的 key（**必需**，未设置时 `hold(kind="memory")` 的自动分析会报错、仅检索类工具可用）
 2. （可选）设置 `OMBRE_BASE_URL`：API 地址，支持任意 OpenAI 化地址，如 `https://api.deepseek.com/v1` / `http://123.1.1.1:7689/v1` / `http://your-ollama:11434/v1`
 3. Render 自动挂载持久化磁盘到 `/opt/render/project/src/buckets`
 4. Dashboard：`https://<你的服务名>.onrender.com/dashboard`
 5. 部署后 MCP URL：`https://<你的服务名>.onrender.com/mcp`
 
 `render.yaml` is included. After clicking the button:
-1. `OMBRE_API_KEY`: any OpenAI-compatible key (**required** for hold/grow; without it those tools raise an error)
+1. `OMBRE_API_KEY`: any OpenAI-compatible key (**required** for `hold(kind="memory")` auto-analysis; without it analysis-backed writes raise an error)
 2. (Optional) `OMBRE_BASE_URL`: any OpenAI-compatible endpoint, e.g. `https://api.deepseek.com/v1`, `http://123.1.1.1:7689/v1`, `http://your-ollama:11434/v1`
 3. Persistent disk auto-mounts at `/opt/render/project/src/buckets`
 4. Dashboard: `https://<your-service>.onrender.com/dashboard`
@@ -620,7 +618,7 @@ Dashboard：浏览器打开 `http://localhost:8000/dashboard`
    - Zeabur auto-detects the `Dockerfile` in root and builds via Docker
 
 2. **设置环境变量 / Set environment variables**（服务页面 → **Variables** 标签页）
-   - `OMBRE_API_KEY`（**必需**）— LLM API 密钥；未设置时 hold/grow/dream 会报错
+   - `OMBRE_API_KEY`（**必需**）— LLM API 密钥；未设置时 `hold(kind="memory")` 的自动分析会报错
    - `OMBRE_BASE_URL`（可选）— API 地址，如 `https://api.deepseek.com/v1`
 
    > ⚠️ **不需要**手动设置 `OMBRE_TRANSPORT` 和 `OMBRE_BUCKETS_DIR`，Dockerfile 里已经设好了默认值。Zeabur 对单阶段 Dockerfile 会自动注入控制台设置的环境变量。

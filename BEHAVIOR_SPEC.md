@@ -15,7 +15,7 @@
 | **OB 服务端** | `server.py` + 各模块 | 接收 MCP 工具调用，执行持久化、搜索、衰减；对 Claude 不透明 |
 
 ### 1.2 Claude 端职责边界
-- **必须做**：每次新对话第一步无参调用 `breath()`；对话内容有记忆价值时主动调用 `hold` / `grow`
+- **必须做**：每次新对话第一步无参调用 `breath()`；对话内容有沉淀价值时主动调用 `hold`；有念头被搅动时调用 `stir`
 - **不做**：不直接读写 `.md` 文件；不执行衰减计算；不操作 SQLite
 - **决策权**：Claude 决定是否存、存哪些、何时 resolve；OB 决定如何存（合并/新建）
 
@@ -23,7 +23,7 @@
 
 | 模块 | 核心职责 |
 |------|---------|
-| `server.py` | 注册 MCP 工具（`breath/hold/grow/trace/pulse/dream`）；路由 Dashboard HTTP 请求；`_merge_or_create()` 合并逻辑中枢 |
+| `server.py` | 注册 MCP 工具（`breath/hold/wander/wander_mark/stir/settle/pass/break/undercurrent`）；路由 Dashboard HTTP 请求；`_merge_or_create()` 合并逻辑中枢 |
 | `bucket_manager.py` | 桶 CRUD；多维搜索（fuzzy + embedding 双通道）；`touch()` 激活刷新；`_time_ripple()` 时间波纹 |
 | `dehydrator.py` | `analyze()` 自动打标；`merge()` 内容融合；`digest()` 日记拆分；`dehydrate()` 内容压缩 |
 | `embedding_engine.py` | `generate_and_store()` 生成向量并存 SQLite；`search_similar()` 余弦相似度检索 |
@@ -75,9 +75,8 @@ breath(query="", max_tokens=10000, domain="", valence=-1, arousal=-1, max_result
 **Claude 行为（完整对话启动序列，来自 CLAUDE_PROMPT.md）**：
 ```
 1. breath()               — 浮现未解决记忆
-2. dream()                — 消化最近记忆，有沉淀写 feel
-3. breath(domain="feel")  — 读取之前的 feel
-4. 开始和用户说话
+2. 必要时 wander 翻旧抽屉
+3. 开始和用户说话
 ```
 
 **`breath(domain="feel")` 内部流程**：
@@ -95,10 +94,10 @@ breath(query="", max_tokens=10000, domain="", valence=-1, arousal=-1, max_result
 
 **Claude 行为**：判断值得记忆，调用：
 ```python
-hold(content="用户拿到实习 offer，情绪激动", importance=7)
+hold(kind="memory", content="用户拿到实习 offer，情绪激动", importance=7)
 ```
 
-**OB 工具调用**：`hold(content, tags="", importance=7, pinned=False, feel=False, source_bucket="", valence=-1, arousal=-1)`
+**OB 工具调用**：`hold(kind="memory", content, tags="", importance=7, pinned=False, source_bucket="", valence=-1, arousal=-1, signal="")`
 
 **系统内部发生什么**：
 
@@ -337,8 +336,8 @@ trace(bucket_id="abc123", delete=True)
 6. 返回标准 header 说明（引导 Claude 自省）+ 记忆列表 + 连接提示 + 结晶提示
 
 **Claude 后续行为**（根据 CLAUDE_PROMPT 引导）：
-- `trace(bucket_id, resolved=1)` 放下可以放下的
-- `hold(content="...", feel=True, source_bucket="xxx", valence=0.6)` 写感受
+- 有沉淀就 `hold(kind="feel", content="...", source_bucket="xxx", valence=0.6)` 写感受
+- 对旧条目的认 / 不认 / 悬置用 `wander_mark`
 - 无沉淀则不操作
 
 ---
@@ -349,12 +348,12 @@ trace(bucket_id="abc123", delete=True)
 
 **OB 工具调用**：
 ```python
-hold(content="她问起了警校的事，我感觉她在用问题保护自己，问是为了不去碰那个真实的恐惧。", feel=True, source_bucket="abc123", valence=0.45, arousal=0.4)
+hold(kind="feel", content="她问起了警校的事，我感觉她在用问题保护自己，问是为了不去碰那个真实的恐惧。", source_bucket="abc123", valence=0.45, arousal=0.4)
 ```
 
 **系统内部发生什么**：
 
-1. `feel=True` → 进入 feel 专用路径，跳过自动打标和合并检测
+1. `kind="feel"`（兼容旧 `feel=True`）→ 进入 feel 专用路径，跳过自动打标和合并检测
 2. `feel_valence = valence`（Claude 自身视角的情绪，非事件情绪）
 3. `bucket_mgr.create(content, tags=[], importance=5, domain=[], valence=feel_valence, arousal=feel_arousal, bucket_type="feel")` → 写入 `feel/` 目录
 4. `embedding_engine.generate_and_store(bucket_id, content)` — feel 桶同样有向量（供 dream 结晶检测使用）
@@ -520,11 +519,11 @@ Claude 决策: hold / grow / 自动
           │      → _time_ripple(source_id, now, hours=48)           │
           │        对 48h 内邻近桶 activation_count += 0.3           │
           │                                                           │
-          │  被 dream() 消化:                                        │
-          │    hold(feel=True, source_bucket=id) →                  │
+          │  写入 feel 消化:                                        │
+          │    hold(kind="feel", source_bucket=id) →                │
           │    bucket_mgr.update(id, digested=True)                 │
           │                                                           │
-          │  被 trace(resolved=1) 标记:                              │
+          │  被前端/管理入口标记 resolved:                          │
           │    resolved=True → decay score ×0.05 (或 ×0.02)        │
           │                                                           │
           └───────────────────────────────────────────────────────────┘
@@ -553,13 +552,13 @@ Claude 决策: hold / grow / 自动
                          │
                          ▼
              记忆桶归档（不再参与浮现/搜索）
-             但文件仍存在，可通过 pulse(include_archive=True) 查看
+             但文件仍存在，可通过前端/管理入口查看
 ```
 
 ### 4.2 feel 桶的特殊路径
 
 ```
-hold(feel=True, source_bucket="xxx", valence=0.45)
+hold(kind="feel", source_bucket="xxx", valence=0.45)
          │
          ▼
   bucket_mgr.create(bucket_type="feel")

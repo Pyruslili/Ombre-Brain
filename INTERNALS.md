@@ -58,13 +58,12 @@
 - 搜索时若指定 valence，展示层对匹配桶 valence 微调 ±0.1，模拟「当前心情影响回忆色彩」
 
 **模型感受/反思系统**
-- **Feel 写入**（`hold(feel=True)`）：存模型第一人称感受，标记源记忆为 digested
-- **Dream 做梦**（`dream()`）：返回最近 10 条 + 自省引导 + 连接提示 + 结晶化提示
-- **对话启动流程**：breath() → dream() → breath(domain="feel") → 开始对话
+- **Feel 写入**（`hold(kind="feel")`，兼容 `feel=True`）：存模型第一人称感受，标记源记忆为 digested
+- **对话启动流程**：breath() → 开始对话；需要翻旧抽屉时用 wander
 
 **自动化处理**
 - 存入时 LLM 自动分析 domain/valence/arousal/tags/name
-- 大段日记 LLM 拆分为 2~6 条独立记忆
+- 大段内容不再通过模型工具自动脱水拆分；只挑真正有沉淀的部分 hold
 - 浮现时自动脱水压缩（LLM 压缩保语义，API 不可用时直接报错，无静默降级）
 - Wikilink `[[]]` 由 LLM 在内容中标记
 
@@ -72,16 +71,19 @@
 
 ### 技术能力
 
-**6 个 MCP 工具**
+**9 个 MCP 工具**
 
 | 工具 | 关键参数 | 功能 |
 |---|---|---|
 | `breath` | query, max_tokens, domain, valence, arousal, max_results, **importance_min** | 检索/浮现记忆 |
-| `hold` | content, tags, importance, pinned, feel, source_bucket, valence, arousal | 存储记忆 |
-| `grow` | content | 日记拆分归档 |
-| `trace` | bucket_id, name, domain, valence, arousal, importance, tags, resolved, pinned, digested, content, delete | 修改元数据/内容/删除 |
-| `pulse` | include_archive | 系统状态 |
-| `dream` | （无） | 做梦自省 |
+| `hold` | content, kind, tags, importance, pinned, feel, source_bucket, valence, arousal, chord, domain, signal, created_at | 存储沉淀 |
+| `wander` | mode, query, limit | 抽屉漫游 |
+| `wander_mark` | bucket_id, mark, note | 叠加批注 |
+| `stir` | drive_key, delta, thought, chord | 念头/天气入口 |
+| `settle` | drive_key | drive 落定 |
+| `pass` | drive_key, reason | 让 intent 流过 |
+| `break` | drive_key, reason | 拒绝 intent |
+| `undercurrent` | （无） | 展开潜流 |
 
 **工具详细行为**
 
@@ -92,26 +94,18 @@
 - **重要度批量模式**（`importance_min>=1`）：跳过语义搜索，直接筛选 importance≥importance_min 的桶，按 importance 降序，最多 20 条
 - 若指定 valence，对匹配桶的 valence 微调 ±0.1（情感记忆重构）
 
-**`hold`** — 两种模式：
-- **普通模式**（`feel=False`，默认）：自动 LLM 分析 domain/valence/arousal/tags/name → 向量相似度查重 → 相似度>0.85 则合并到已有桶 → 否则新建 dynamic 桶 → 生成 embedding
-- **Feel 模式**（`feel=True`）：跳过 LLM 分析，直接存为 `feel` 类型桶（存入 `feel/` 目录），不参与普通浮现/衰减/合并。若提供 `source_bucket`，标记源记忆为 `digested=True` 并写入 `model_valence`。返回格式：`🫧feel→{bucket_id}`
+**`hold`** — 五种 kind：
+- `memory`：普通记忆，自动分析、合并或新建 dynamic 桶
+- `feel`：第一人称感受，直接存为 `feel` 类型桶；`feel=True` 旧参数兼容为 `kind=feel`
+- `writing` / `private` / `window`：直接建桶，不合并
+- `signal` 是轻量手感贴纸，只识别 `discernment/territorial/clutch/strain/charge` 和 `low/mid/high`，不要求模型写分析报告
 
-**`dream`** — 做梦/自省触发器：
-- 返回最近 10 条 dynamic 桶摘要 + 自省引导词
-- 检测 feel 结晶化：≥3 条相似 feel（embedding 相似度>0.7）→ 提示升级为钉选准则
-- 检测未消化记忆：列出 `digested=False` 的桶供模型反思
+**`stir`** — 念头入口：
+- 进入 Thought Pool / Drive / Weather；念头不要通过 `hold kind=thought` 存储
 
-**`trace`** — 记忆编辑：
-- 修改任意元数据字段（name/domain/valence/arousal/importance/tags/resolved/pinned）
-- `digested=0/1`：隐藏/取消隐藏记忆（控制是否在 dream 中出现）
-- `content="..."`：替换正文内容并重新生成 embedding
-- `delete=True`：删除桶文件
-
-**`grow`** — 日记拆分：
-- 大段日记文本 → LLM 拆为 2~6 条独立记忆 → 每条走 hold 普通模式流程
-
-**`pulse`** — 系统状态：
-- 返回各类型桶数量、衰减引擎状态、未解决/钉选/feel 统计
+**旧 `pulse/grow/trace/dream` MCP 入口**：
+- 1.0 不再暴露给模型，避免脱水、误编辑和旧自省链路误调用
+- 状态检查、编辑、Shape Trace 维护改走前端或专门管理入口
 
 **REST API（17 个端点）**
 
@@ -155,7 +149,7 @@
 3. 记忆网络：Canvas 力导向图（节点=桶，边=相似度）
 4. 配置：热更新脱水/embedding/合并参数
 5. 导入：历史对话拖拽上传 → 分块处理进度条 → 词频规律分析 → 导入结果审阅
-6. 设置：服务状态监控、修改密码、退出登录
+6. 设置：服务状态监控、修改密码、Marginalia/Shape Trace 维护、退出登录
 
 **部署选项**
 1. 本地 stdio（`python server.py`）
@@ -170,7 +164,7 @@
 **降级策略**
 - 脱水 API 不可用 → 直接抛 RuntimeError（设计决策，详见 BEHAVIOR_SPEC.md 三、降级行为表）
 - 向量搜索不可用 → 纯 fuzzy match
-- 逐条错误隔离（grow 中单条失败不影响其他）
+- 批量导入逐条错误隔离，避免单条失败拖垮整批
 
 **安全**：路径遍历防护（`safe_path()`）、API Key 脱敏、API Key 不持久化到 yaml、输入范围钳制
 

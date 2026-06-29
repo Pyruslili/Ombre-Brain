@@ -970,10 +970,10 @@ label {
   align-items: center;
   min-height: 1.82rem;
   max-width: 100%;
-  border: 1px solid rgba(238, 151, 173, .48);
+  border: 1px solid rgba(232, 149, 79, .34);
   border-radius: 999px;
-  background: rgba(238,151,173,.07);
-  color: rgba(255, 241, 246, .98);
+  background: rgba(232,149,79,.10);
+  color: var(--accent-deep);
   padding: .27rem .68rem .29rem;
   font: 300 .78rem/1 var(--font-mono);
   overflow-wrap: anywhere;
@@ -1551,6 +1551,23 @@ label {
 .config-row { display: grid; grid-template-columns: 125px 1fr; gap: 1rem; align-items: center; margin: .8rem 0; }
 .config-row label { font-size: .64rem; letter-spacing: .12em; }
 .config-row input, .config-row select { margin: 0; font-size: var(--fs-body-sm); }
+.marginalia-editor {
+  display: block;
+  width: 100%;
+  min-height: 240px;
+  max-height: 460px;
+  margin-top: .8rem;
+  padding: .78rem .86rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  font: 300 .82rem/1.72 Inter, 'PingFang SC', system-ui, sans-serif;
+  resize: vertical;
+  overflow-y: auto;
+}
+.marginalia-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .65rem; }
+.marginalia-count { margin-left: auto; color: var(--mute); font: 300 .66rem/1.4 var(--font-mono); }
 .config-help {
   padding-left: calc(125px + 1rem);
   margin: -.2rem 0 .75rem;
@@ -2469,6 +2486,18 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
         <button class="btn-primary" onclick="saveHostVault()">保存到 .env</button>
         <button onclick="loadHostVault()">重新加载</button>
         <span id="settings-host-vault-msg" style="font-size:0.7rem;font-family:'JetBrains Mono',monospace;"></span>
+      </div>
+    </div>
+
+    <div class="config-section">
+      <h3>Marginalia</h3>
+      <p class="section-note">手动维护 breath 里的 Shape Trace。这里保留骨架，不替 Nox 写结论。</p>
+      <textarea id="settings-marginalia" class="marginalia-editor" maxlength="6000" placeholder="放入要在 breath 里展示的 Shape Trace..."></textarea>
+      <div class="marginalia-actions">
+        <button class="btn-primary" onclick="saveMarginalia()">Update Shape Trace</button>
+        <button onclick="loadMarginalia()">重新加载</button>
+        <span id="settings-marginalia-msg" style="font-size:0.7rem;font-family:'JetBrains Mono',monospace;"></span>
+        <span id="settings-marginalia-count" class="marginalia-count">0 / 6000</span>
       </div>
     </div>
 
@@ -3755,6 +3784,7 @@ async function loadSettingsStatus() {
     `;
   } catch(e) { el.textContent = '加载失败: ' + e; }
   loadHostVault();
+  loadMarginalia();
 }
 
 async function loadHostVault() {
@@ -3787,6 +3817,76 @@ async function saveHostVault() {
     if (resp.ok) { msg.style.color = 'var(--positive)'; msg.textContent = '已保存 → ' + (d.env_file || '.env'); }
     else { msg.style.color = 'var(--negative)'; msg.textContent = d.error || '保存失败'; }
   } catch(e) { msg.style.color = 'var(--negative)'; msg.textContent = '保存失败'; }
+}
+
+function updateMarginaliaCount() {
+  const input = document.getElementById('settings-marginalia');
+  const count = document.getElementById('settings-marginalia-count');
+  if (!input || !count) return;
+  count.textContent = `${input.value.length} / ${input.maxLength || 6000}`;
+}
+
+async function loadMarginalia() {
+  const input = document.getElementById('settings-marginalia');
+  const msg = document.getElementById('settings-marginalia-msg');
+  if (!input) return;
+  if (msg) {
+    msg.textContent = '读取中';
+    msg.style.color = 'var(--mute)';
+  }
+  try {
+    const resp = await authFetch('/api/marginalia');
+    if (!resp) return;
+    const d = await resp.json();
+    input.maxLength = d.max_chars || 6000;
+    input.value = d.content || '';
+    updateMarginaliaCount();
+    if (msg) {
+      msg.textContent = d.ts ? '已读取' : '尚未写入';
+      msg.style.color = 'var(--mute)';
+    }
+  } catch(e) {
+    if (msg) {
+      msg.style.color = 'var(--negative)';
+      msg.textContent = '读取失败';
+    }
+  }
+}
+
+async function saveMarginalia() {
+  const input = document.getElementById('settings-marginalia');
+  const msg = document.getElementById('settings-marginalia-msg');
+  if (!input) return;
+  const content = input.value || '';
+  if (msg) {
+    msg.textContent = '保存中';
+    msg.style.color = 'var(--mute)';
+  }
+  try {
+    const resp = await authFetch('/api/marginalia', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content})
+    });
+    if (!resp) return;
+    const d = await resp.json();
+    if (resp.ok) {
+      if (d.content !== undefined && d.content !== content) input.value = d.content;
+      updateMarginaliaCount();
+      if (msg) {
+        msg.style.color = 'var(--positive)';
+        msg.textContent = `已保存 ${d.chars ?? content.length} 字`;
+      }
+    } else if (msg) {
+      msg.style.color = 'var(--negative)';
+      msg.textContent = d.error || '保存失败';
+    }
+  } catch(e) {
+    if (msg) {
+      msg.style.color = 'var(--negative)';
+      msg.textContent = '保存失败';
+    }
+  }
 }
 
 async function authFetch(url, options) {
@@ -5050,6 +5150,9 @@ function initEvents() {
         if (q) searchBuckets(q);
         else renderBuckets(allBuckets);
       }, 300);
+    }
+    if (e.target.id === 'settings-marginalia') {
+      updateMarginaliaCount();
     }
   });
 

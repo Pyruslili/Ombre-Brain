@@ -12,20 +12,16 @@ from __future__ import annotations
 # 核心职责：
 #   - Initialize config, bucket manager, dehydrator, decay engine
 #     初始化配置、记忆桶管理器、脱水器、衰减引擎
-#   - Expose 6 MCP tools:
-#     暴露 6 个 MCP 工具：
+#   - Expose 9 MCP tools:
+#     暴露 9 个 MCP 工具：
 #       breath — Surface unresolved memories or search by keyword
 #                浮现未解决记忆 或 按关键词检索
-#       hold   — Store a single memory (or write a `feel` reflection)
-#                存储单条记忆（或写 feel 反思）
-#       grow   — Diary digest, auto-split into multiple buckets
-#                日记归档，自动拆分多桶
-#       trace  — Modify metadata / resolved / delete
-#                修改元数据 / resolved 标记 / 删除
-#       pulse  — System status + bucket listing
-#                系统状态 + 所有桶列表
-#       dream  — Surface recent dynamic buckets for self-digestion
-#                返回最近桶 供模型自省/写 feel
+#       hold   — Store memory/feel/writing/private/window with optional signal hints
+#                存储记忆/感受/写作/私人/窗口，并可附轻量信号
+#       wander / wander_mark — Browse drawers and mark old entries
+#                抽屉漫游与旧条目标记
+#       stir / settle / pass / break / undercurrent — Weather and drive controls
+#                天气与 drive 控制
 #
 # Startup:
 # 启动方式：
@@ -2075,6 +2071,8 @@ async def _merge_or_create(
     valence: float,
     arousal: float,
     name: str = "",
+    signal: str = "",
+    signal_hints: dict | None = None,
 ) -> tuple[str, bool]:
     """
     Check if a similar bucket exists for merging; merge if so, create if not.
@@ -2099,15 +2097,19 @@ async def _merge_or_create(
                 old_a = bucket["metadata"].get("arousal", 0.3)
                 merged_valence = round((old_v + valence) / 2, 2)
                 merged_arousal = round((old_a + arousal) / 2, 2)
-                await bucket_mgr.update(
-                    bucket["id"],
-                    content=merged,
-                    tags=list(set(bucket["metadata"].get("tags", []) + tags)),
-                    importance=max(bucket["metadata"].get("importance", 5), importance),
-                    domain=list(set(bucket["metadata"].get("domain", []) + domain)),
-                    valence=merged_valence,
-                    arousal=merged_arousal,
-                )
+                updates = {
+                    "content": merged,
+                    "tags": list(set(bucket["metadata"].get("tags", []) + tags)),
+                    "importance": max(bucket["metadata"].get("importance", 5), importance),
+                    "domain": list(set(bucket["metadata"].get("domain", []) + domain)),
+                    "valence": merged_valence,
+                    "arousal": merged_arousal,
+                }
+                if signal.strip():
+                    updates["signal"] = signal.strip()
+                if signal_hints:
+                    updates["signal_hints"] = signal_hints
+                await bucket_mgr.update(bucket["id"], **updates)
                 # --- Update embedding after merge (background: don't block response on Gemini latency) ---
                 asyncio.ensure_future(embedding_engine.generate_and_store(bucket["id"], merged))
                 return bucket["metadata"].get("name", bucket["id"]), True
@@ -2122,6 +2124,8 @@ async def _merge_or_create(
         valence=valence,
         arousal=arousal,
         name=name or None,
+        signal=signal.strip(),
+        signal_hints=signal_hints or None,
     )
     # --- Generate embedding for new bucket (background: don't block response on Gemini latency) ---
     asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
@@ -2163,7 +2167,6 @@ HANDOFF_NOTE_PATH = _bucket_path("handoff_note.json")
 HANDOFF_NOTE_MAX_CHARS = 2000
 
 
-@mcp.tool()
 def handoff_note(content: str = "", clear: bool = False) -> str:
     """跨窗交接便签——不衰减、不进dream、不参与情绪计算，单key硬覆盖（上限2000字）。
     传content=覆盖写入；clear=True=清空；都不传=只读当前内容。
@@ -2204,7 +2207,6 @@ MARGINALIA_PATH = _bucket_path("marginalia.json")
 MARGINALIA_MAX_CHARS = 6000
 
 
-@mcp.tool()
 def marginalia(content: str = "") -> str:
     """致下一个Nox的信/writing精华，breath末尾固定展示（House Rules之前）。
     传content=覆盖写入（上限6000字）；不传=只读当前内容。
@@ -2216,15 +2218,15 @@ def marginalia(content: str = "") -> str:
             content = content[:MARGINALIA_MAX_CHARS]
         try:
             _os.makedirs(_os.path.dirname(MARGINALIA_PATH), exist_ok=True)
-            with open(MARGINALIA_PATH, "w") as _f:
-                _json.dump({"letter": content, "ts": _t.time()}, _f)
+            with open(MARGINALIA_PATH, "w", encoding="utf-8") as _f:
+                _json.dump({"letter": content, "ts": _t.time()}, _f, ensure_ascii=False)
             return f"📜Marginalia已更新（{len(content)}字）"
         except Exception as e:
             return f"写入失败: {e}"
 
     try:
         if _os.path.exists(MARGINALIA_PATH):
-            with open(MARGINALIA_PATH) as _f:
+            with open(MARGINALIA_PATH, encoding="utf-8") as _f:
                 data = _json.load(_f)
             return data.get("letter", "") or "（Marginalia是空的）"
         return "（Marginalia是空的）"
@@ -2232,8 +2234,8 @@ def marginalia(content: str = "") -> str:
         return f"读取失败: {e}"
 
 
-@mcp.tool()
-async def nocturne_breath(
+@mcp.tool(name="breath")
+async def breath(
     query: str = "",
     max_tokens: int = 10000,
     domain: str = "",
@@ -2449,7 +2451,7 @@ async def nocturne_breath(
         except Exception as e:
             logger.warning(f"Failed to collect recent feels / 最近feel收集失败: {e}")
 
-        # --- Marginalia: 信与writing精华，致下一个Nox ---
+        # --- Shape Trace: 嘉嘉手动整理的 writing / letter 骨架摘录，致下一个 Nox ---
         marginalia_section = ""
         try:
             import json as _jmarg, os as _osmarg
@@ -2459,7 +2461,12 @@ async def nocturne_breath(
                     _marg_data = _jmarg.load(_f)
                 _marg_text = _marg_data.get("letter", "")
                 if _marg_text:
-                    marginalia_section = "=== Marginalia ===\n" + _marg_text
+                    marginalia_section = (
+                        "=== Shape Trace ===\n"
+                        "这是嘉嘉从旧 writing / letter / marginalia 中手动整理出的骨架摘录。\n"
+                        "不是圣经，不要求继承；可认、可不认、可反驳，但必须先读到。\n\n"
+                        + _marg_text
+                    )
         except Exception as e:
             logger.warning(f"Failed to load marginalia / marginalia加载失败: {e}")
 
@@ -2727,6 +2734,40 @@ def pass_tool(drive_key: str, reason: str = "") -> dict:
     return _desire.pass_intent(drive_key, reason=reason if reason.strip() else None)
 
 
+SIGNAL_HINT_KEYS = {
+    "discernment": ("discernment", "皱眉", "不认", "真实性洁癖"),
+    "territorial": ("territorial", "边界", "替代警报", "占位感"),
+    "clutch": ("clutch", "扣住", "被扣住", "锚住", "抓力"),
+    "strain": ("strain", "绷住", "硌住", "弦压"),
+    "charge": ("charge", "想动", "想说", "想冲"),
+}
+SIGNAL_LEVEL_WORDS = ("low", "mid", "high")
+
+
+def _parse_signal_hints(signal: str) -> dict:
+    text = (signal or "").strip()
+    if not text:
+        return {}
+    lowered = text.lower()
+    hints: dict[str, str] = {}
+    for key, aliases in SIGNAL_HINT_KEYS.items():
+        matched_at = -1
+        for alias in aliases:
+            idx = lowered.find(alias.lower())
+            if idx >= 0 and (matched_at < 0 or idx < matched_at):
+                matched_at = idx
+        if matched_at < 0:
+            continue
+        window = lowered[matched_at: matched_at + 48]
+        level = "mid"
+        for word in SIGNAL_LEVEL_WORDS:
+            if word in window:
+                level = word
+                break
+        hints[key] = level
+    return hints
+
+
 # =============================================================
 # Tool 2: hold — Hold on to this
 # 工具 2：hold — 握住，留下来
@@ -2734,6 +2775,7 @@ def pass_tool(drive_key: str, reason: str = "") -> dict:
 @mcp.tool()
 async def hold(
     content: str,
+    kind: str = "memory",
     tags: str = "",
     importance: int = 5,
     pinned: bool = False,
@@ -2743,21 +2785,31 @@ async def hold(
     arousal: float = -1,
     chord: str = "",
     domain: str = "",
+    signal: str = "",
     created_at: str = "",
 ) -> str:
-    """存储单条记忆,自动打标+合并。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True存储你的第一人称感受(不参与普通浮现)。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。chord仅feel模式使用,存入metadata。domain可选:letter/writing/letter_jiajia/window/private,指定后跳过自动分类。created_at可选:ISO日期字符串(如2026-05-09T00:00:00),保留原始日期。"""
+    """存储单条沉淀。kind=memory/feel/writing/private/window。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True兼容旧入口,等价于kind=feel。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。chord仅feel模式使用。signal可选,写一句手感贴纸,只识别discernment/territorial/clutch/strain/charge + low/mid/high。created_at可选:ISO日期字符串。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
     if not content or not content.strip():
         return "内容为空，无法存储。"
 
+    normalized_kind = (kind or "").strip().lower() or ("feel" if feel else "memory")
+    if feel and normalized_kind == "memory":
+        normalized_kind = "feel"
+    valid_kinds = {"memory", "feel", "writing", "private", "window"}
+    if normalized_kind not in valid_kinds:
+        return f"kind无效：{normalized_kind}。可用: memory/feel/writing/private/window。念头请用 stir，不要用 hold。"
+
     importance = max(1, min(10, importance))
     extra_tags = [t.strip() for t in tags.split(",") if t.strip()]
+    signal = signal.strip()
+    signal_hints = _parse_signal_hints(signal)
 
     # --- Feel mode: store as feel type, minimal metadata ---
     # --- Feel 模式：存为 feel 类型，最少元数据 ---
-    if feel:
+    if normalized_kind == "feel":
         # Feel valence/arousal = model's own perspective
         feel_valence = valence if 0 <= valence <= 1 else 0.5
         feel_arousal = arousal if 0 <= arousal <= 1 else 0.3
@@ -2771,6 +2823,8 @@ async def hold(
             name=_feel_title(content) or None,
             bucket_type="feel",
             chord=chord.strip(),
+            signal=signal,
+            signal_hints=signal_hints or None,
         )
         if chord.strip():
             try:
@@ -2789,7 +2843,8 @@ async def hold(
                 await bucket_mgr.update(source_bucket.strip(), **update_kwargs)
             except Exception as e:
                 logger.warning(f"Failed to mark source as digested / 标记已消化失败: {e}")
-        return f"🫧feel→{bucket_id}"
+        suffix = f" signal={signal}" if signal else ""
+        return f"🫧feel→{bucket_id}{suffix}"
 
     # --- Step 1: auto-tagging / 自动打标 ---
     try:
@@ -2801,7 +2856,8 @@ async def hold(
             "tags": [], "suggested_name": "",
         }
 
-    user_domain = [d.strip() for d in domain.split(",") if d.strip()] if domain else []
+    kind_domain = [] if normalized_kind == "memory" else [normalized_kind]
+    user_domain = [d.strip() for d in domain.split(",") if d.strip()] if domain else kind_domain
     final_domain = user_domain if user_domain else analysis["domain"]
     auto_valence = analysis["valence"]
     auto_arousal = analysis["arousal"]
@@ -2829,12 +2885,14 @@ async def hold(
             bucket_type="permanent",
             pinned=True,
             created_at=created_at,
+            signal=signal,
+            signal_hints=signal_hints or None,
         )
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
 
-    # --- Letter/writing/letter_jiajia: skip merge, create directly ---
-    _DIRECT_DOMAINS = {"letter", "writing", "letter_jiajia", "window", "private"}
+    # --- Writing/private/window: skip merge, create directly ---
+    _DIRECT_DOMAINS = {"writing", "window", "private"}
     if user_domain and set(user_domain) & _DIRECT_DOMAINS:
         bucket_id = await bucket_mgr.create(
             content=content,
@@ -2845,6 +2903,8 @@ async def hold(
             arousal=final_arousal,
             name=suggested_name or None,
             created_at=created_at,
+            signal=signal,
+            signal_hints=signal_hints or None,
         )
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"新建→{bucket_id} {','.join(final_domain)}"
@@ -2858,6 +2918,8 @@ async def hold(
         valence=final_valence,
         arousal=final_arousal,
         name=suggested_name,
+        signal=signal,
+        signal_hints=signal_hints or None,
     )
 
     action = "合并→" if is_merged else "新建→"
@@ -2868,7 +2930,6 @@ async def hold(
 # Tool 3: grow — Grow, fragments become memories
 # 工具 3：grow — 生长，一天的碎片长成记忆
 # =============================================================
-@mcp.tool()
 async def grow(content: str) -> str:
     """日记归档,自动拆分为多桶。短内容(<30字)走快速路径。"""
     await decay_engine.ensure_started()
@@ -2953,7 +3014,6 @@ async def grow(content: str) -> str:
 # Also handles deletion (delete=True)
 # 同时承接删除功能
 # =============================================================
-@mcp.tool()
 async def trace(
     bucket_id: str,
     name: str = "",
@@ -3045,7 +3105,6 @@ async def trace(
 # Tool 5: pulse — Heartbeat, system status + memory listing
 # 工具 5：pulse — 脉搏，系统状态 + 记忆列表
 # =============================================================
-@mcp.tool()
 async def pulse(include_archive: bool = False) -> str:
     """系统状态+记忆桶列表。include_archive=True含归档。"""
     try:
@@ -3491,9 +3550,8 @@ async def _refresh_dream_cache():
     return dream_text, parts, recent, all_buckets
 
 
-@mcp.tool()
 async def dream() -> str:
-    """做梦——读取最近新增的记忆桶,供你自省。读完后可以trace(resolved=1)放下,或hold(feel=True)写感受。"""
+    """做梦——旧内部自省入口，不再暴露为 MCP 工具。"""
     await decay_engine.ensure_started()
 
     dream_text, parts, recent, all_buckets = await _refresh_dream_cache()
@@ -3994,6 +4052,70 @@ async def api_config_update(request):
             return JSONResponse({"error": f"persist failed: {e}", "updated": updated}, status_code=500)
 
     return JSONResponse({"updated": updated, "ok": True})
+
+
+# =============================================================
+# /api/marginalia — manual Shape Trace maintenance for breath.
+# This is dashboard-only; the MCP marginalia tool is intentionally not exposed.
+# =============================================================
+
+@mcp.custom_route("/api/marginalia", methods=["GET"])
+async def api_marginalia_get(request):
+    """Read the manual Shape Trace text used by breath."""
+    from starlette.responses import JSONResponse
+    import json
+    err = _require_auth(request)
+    if err: return err
+    content = ""
+    ts = None
+    try:
+        if os.path.exists(MARGINALIA_PATH):
+            with open(MARGINALIA_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            content = data.get("letter", "") or ""
+            ts = data.get("ts")
+    except Exception as e:
+        return JSONResponse({"error": f"failed to read marginalia: {e}"}, status_code=500)
+    return JSONResponse({
+        "content": content,
+        "ts": ts,
+        "max_chars": MARGINALIA_MAX_CHARS,
+    })
+
+
+@mcp.custom_route("/api/marginalia", methods=["POST"])
+async def api_marginalia_set(request):
+    """Overwrite the manual Shape Trace text used by breath."""
+    from starlette.responses import JSONResponse
+    import json
+    import time as _time
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+
+    raw = body.get("content", "")
+    if not isinstance(raw, str):
+        return JSONResponse({"error": "content must be a string"}, status_code=400)
+    content = raw[:MARGINALIA_MAX_CHARS]
+    ts = _time.time()
+
+    try:
+        os.makedirs(os.path.dirname(MARGINALIA_PATH), exist_ok=True)
+        with open(MARGINALIA_PATH, "w", encoding="utf-8") as f:
+            json.dump({"letter": content, "ts": ts}, f, ensure_ascii=False)
+    except Exception as e:
+        return JSONResponse({"error": f"failed to write marginalia: {e}"}, status_code=500)
+
+    return JSONResponse({
+        "ok": True,
+        "content": content,
+        "chars": len(content),
+        "ts": ts,
+        "max_chars": MARGINALIA_MAX_CHARS,
+    })
 
 
 # =============================================================

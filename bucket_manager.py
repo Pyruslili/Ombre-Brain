@@ -112,6 +112,8 @@ class BucketManager:
         protected: bool = False,
         created_at: str = "",
         chord: str = "",
+        signal: str = "",
+        signal_hints: dict = None,
     ) -> str:
         """
         Create a new memory bucket, return bucket ID.
@@ -152,6 +154,10 @@ class BucketManager:
         }
         if chord:
             metadata["chord"] = str(chord).strip()
+        if signal:
+            metadata["signal"] = str(signal).strip()
+        if signal_hints:
+            metadata["signal_hints"] = signal_hints
         if pinned:
             metadata["pinned"] = True
         if protected:
@@ -286,6 +292,10 @@ class BucketManager:
             post["digested"] = bool(kwargs["digested"])
         if "model_valence" in kwargs:
             post["model_valence"] = max(0.0, min(1.0, float(kwargs["model_valence"])))
+        if "signal" in kwargs:
+            post["signal"] = str(kwargs["signal"]).strip()
+        if "signal_hints" in kwargs:
+            post["signal_hints"] = kwargs["signal_hints"]
         if "created" in kwargs:
             post["created"] = kwargs["created"]
 
