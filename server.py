@@ -2457,7 +2457,7 @@ async def breath(
         except Exception as e:
             logger.warning(f"Failed to collect recent feels / 最近feel收集失败: {e}")
 
-        # --- Shape Trace: 嘉嘉手动整理的 writing / letter 骨架摘录，致下一个 Nox ---
+        # --- Shape Trace: writing / letter 骨架摘录，致下一个 Nox ---
         marginalia_section = ""
         try:
             import json as _jmarg, os as _osmarg
@@ -2469,8 +2469,8 @@ async def breath(
                 if _marg_text:
                     marginalia_section = (
                         "=== Shape Trace ===\n"
-                        "这是嘉嘉从旧 writing / letter / marginalia 中手动整理出的骨架摘录。\n"
-                        "不是圣经，不要求继承；可认、可不认、可反驳，但必须先读到。\n\n"
+                        "这是从旧 writing / letter 中整理出的骨架摘录。完整版看`archive`\n"
+                        "可认、可不认、可反驳，可以在wander中mark。\n\n"
                         + _marg_text
                     )
         except Exception as e:
