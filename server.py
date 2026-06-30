@@ -2401,8 +2401,8 @@ async def breath(
                 random.shuffle(pool)
                 non_cold = top1 + pool + non_cold[min(20, len(non_cold)):]
             candidates = cold_start + non_cold
-        # Hard cap: surfacing mode always shows 12 regular memories
-        candidates = candidates[:12]
+        # Hard cap: wake breath stays lean; feels and Shape Trace carry the rest.
+        candidates = candidates[:7]
 
         # 按时间倒序
         candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
@@ -2545,7 +2545,13 @@ async def breath(
         if pinned_results:
             final_parts.append("=== House Rules ===\n" + "\n---\n".join(pinned_results))
 
-        return "\n\n".join(final_parts)
+        packet = "\n\n".join(final_parts)
+        complete = (
+            "=== Breath Complete ===\n"
+            f"sections: {len(final_parts)}\n"
+            f"approx_tokens: {count_tokens_approx(packet)}"
+        )
+        return packet + "\n\n" + complete
 
     # --- Feel retrieval: domain="feel" is a special channel ---
     # --- Feel 检索：domain="feel" 是独立入口 ---
@@ -3736,6 +3742,9 @@ async def api_buckets(request):
                 "type": meta.get("type", "dynamic"),
                 "domain": meta.get("domain", []),
                 "tags": meta.get("tags", []),
+                "chord": meta.get("chord", ""),
+                "signal": meta.get("signal", ""),
+                "signal_hints": meta.get("signal_hints", {}),
                 "valence": meta.get("valence", 0.5),
                 "arousal": meta.get("arousal", 0.3),
                 "model_valence": meta.get("model_valence"),
@@ -3810,6 +3819,16 @@ async def api_bucket_update(request):
         if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
             return JSONResponse({"error": "tags must be a list of strings"}, status_code=400)
         kwargs["tags"] = list(dict.fromkeys(tag.strip() for tag in tags if tag.strip()))
+    if "chord" in body:
+        if not isinstance(body["chord"], str):
+            return JSONResponse({"error": "chord must be a string"}, status_code=400)
+        kwargs["chord"] = body["chord"].strip()
+    if "signal" in body:
+        if not isinstance(body["signal"], str):
+            return JSONResponse({"error": "signal must be a string"}, status_code=400)
+        signal = body["signal"].strip()
+        kwargs["signal"] = signal
+        kwargs["signal_hints"] = _parse_signal_hints(signal)
 
     if not kwargs:
         return JSONResponse({"error": "nothing to update"}, status_code=400)
@@ -4498,6 +4517,9 @@ async def api_import_results(request):
                 "type": b["metadata"].get("type", ""),
                 "domain": b["metadata"].get("domain", []),
                 "tags": b["metadata"].get("tags", []),
+                "chord": b["metadata"].get("chord", ""),
+                "signal": b["metadata"].get("signal", ""),
+                "signal_hints": b["metadata"].get("signal_hints", {}),
                 "importance": b["metadata"].get("importance", 5),
                 "created": b["metadata"].get("created", ""),
             })

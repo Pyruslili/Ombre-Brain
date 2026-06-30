@@ -450,6 +450,7 @@ label {
 .list-search svg { position: absolute; left: 0; top: 1rem; width: 13px; height: 13px; color: var(--accent); }
 .list-search .search-input { padding-left: 1.8rem; font-size: .78rem; }
 .filters { display: flex; flex-wrap: wrap; gap: .45rem 1.2rem; padding: .45rem 0 1.1rem; border-bottom: 1px solid var(--line-soft); }
+.trace-marginalia-toggle { margin-left: auto; color: var(--accent-deep); }
 .filter-btn {
   min-height: auto; padding: .2rem 0;
   display: inline-flex; align-items: center; gap: .34rem;
@@ -461,6 +462,28 @@ label {
 .filter-btn[data-filter="window"] svg { width: 9px; height: 9px; flex-basis: 9px; margin-inline: 1px; }
 .filter-btn:hover, .filter-btn.active { color: var(--ink); background: none; }
 .filter-btn.active::before { content: none; }
+.trace-marginalia-panel {
+  display: none;
+  padding: .95rem 0 1.15rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.trace-marginalia-panel.open { display: block; }
+.trace-marginalia-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  color: var(--mute);
+  font: 300 .62rem/1.5 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.trace-marginalia-panel .marginalia-editor {
+  min-height: 180px;
+  max-height: 360px;
+  margin-top: .6rem;
+  border-radius: 0;
+}
 
 .bucket-list { border-top: 1px solid var(--line); }
 .bucket-row {
@@ -1704,6 +1727,25 @@ html[data-theme="sakura-milk"] .upload-zone.dragover {
 .title-editor { margin-bottom: .85rem; }
 .title-editor label { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .title-editor input { padding: .62rem .75rem; border: 1px solid var(--line); font-size: .92rem; }
+.signal-editor { margin-top: .85rem; }
+.signal-editor > label { display: block; margin-bottom: .45rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.signal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
+  gap: .5rem .75rem;
+}
+.signal-cell {
+  display: grid;
+  gap: .28rem;
+  padding: .5rem .55rem;
+  border: 1px solid var(--line-soft);
+  background: rgba(255,224,186,.026);
+}
+.signal-cell span { color: var(--ink-soft); font: 300 .64rem/1.35 var(--font-mono); letter-spacing: .04em; }
+.signal-cell select { margin: 0; padding: .4rem 0; border: 0; border-bottom: 1px solid var(--line); font-size: .72rem; }
+.chord-editor { margin-top: .85rem; }
+.chord-editor label { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.chord-editor input { padding: .62rem .75rem; border: 1px solid var(--line); font-size: .84rem; }
 .tag-editor { margin-top: .8rem; }
 .tag-editor label { display: block; margin-bottom: .35rem; }
 .tag-editor textarea { min-height: 84px; max-height: none; padding: .62rem .75rem; border: 1px solid var(--line); font-size: .84rem; line-height: 1.65; resize: vertical; overflow: hidden; }
@@ -2298,6 +2340,18 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <input class="search-input" type="search" id="search-input" name="memory-search" autocomplete="off" placeholder="Search traces">
     </div>
     <div class="filters" id="filters"></div>
+    <div class="trace-marginalia-panel" id="trace-marginalia-panel">
+      <div class="trace-marginalia-head">
+        <span>Marginalia · Shape Trace</span>
+        <span id="settings-marginalia-count" class="marginalia-count">0 / 6000</span>
+      </div>
+      <textarea id="settings-marginalia" class="marginalia-editor" maxlength="6000" placeholder="放入要在 breath 里展示的 Shape Trace..."></textarea>
+      <div class="marginalia-actions">
+        <button class="btn-primary" onclick="saveMarginalia()">Update Shape Trace</button>
+        <button onclick="loadMarginalia()">重新加载</button>
+        <span id="settings-marginalia-msg" style="font-size:0.7rem;font-family:'JetBrains Mono',monospace;"></span>
+      </div>
+    </div>
   </div>
   <div class="bucket-list" id="bucket-list">
     <div class="loading">Gathering traces</div>
@@ -2702,18 +2756,6 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     </div>
 
     <div class="config-section">
-      <h3>Marginalia</h3>
-      <p class="section-note">手动维护 breath 里的 Shape Trace。这里保留骨架，不替 Nox 写结论。</p>
-      <textarea id="settings-marginalia" class="marginalia-editor" maxlength="6000" placeholder="放入要在 breath 里展示的 Shape Trace..."></textarea>
-      <div class="marginalia-actions">
-        <button class="btn-primary" onclick="saveMarginalia()">Update Shape Trace</button>
-        <button onclick="loadMarginalia()">重新加载</button>
-        <span id="settings-marginalia-msg" style="font-size:0.7rem;font-family:'JetBrains Mono',monospace;"></span>
-        <span id="settings-marginalia-count" class="marginalia-count">0 / 6000</span>
-      </div>
-    </div>
-
-    <div class="config-section">
       <h3>Account</h3>
       <p class="section-note">离开这间私人档案室。</p>
       <button onclick="doLogout()" style="color:var(--negative);border-color:var(--negative);">Sign out</button>
@@ -2776,6 +2818,14 @@ let openingGate = null;
 let desireThoughts = [];
 let editingThoughtId = null;
 let catroomReplyTo = null;
+const SIGNAL_KEYS = ['discernment', 'territorial', 'clutch', 'strain', 'charge'];
+const SIGNAL_LABELS = {
+  discernment: '皱眉',
+  territorial: '边界',
+  clutch: '抓力',
+  strain: '弦压',
+  charge: '动能'
+};
 const mouse = { x: -1000, y: -1000 };
 const RETIRED_SPEECH_SOMA_LINES = new Set([
   '那句话还没说完想法，先卡在这儿了。',
@@ -3997,7 +4047,6 @@ async function loadSettingsStatus() {
     `;
   } catch(e) { el.textContent = '加载失败: ' + e; }
   loadHostVault();
-  loadMarginalia();
 }
 
 async function loadHostVault() {
@@ -4037,6 +4086,14 @@ function updateMarginaliaCount() {
   const count = document.getElementById('settings-marginalia-count');
   if (!input || !count) return;
   count.textContent = `${input.value.length} / ${input.maxLength || 6000}`;
+}
+
+function toggleTraceMarginalia() {
+  const panel = document.getElementById('trace-marginalia-panel');
+  if (!panel) return;
+  const opening = !panel.classList.contains('open');
+  panel.classList.toggle('open', opening);
+  if (opening) loadMarginalia();
 }
 
 async function loadMarginalia() {
@@ -4156,11 +4213,12 @@ function buildFilters() {
   ];
   filters.innerHTML = types.map(t =>
     `<button class="filter-btn ${t.key === currentFilter ? 'active' : ''}" data-filter="${t.key}">${t.icon}${t.label}</button>`
-  ).join('');
+  ).join('') + `<button class="filter-btn trace-marginalia-toggle" type="button" onclick="toggleTraceMarginalia()">Marginalia</button>`;
 
   filters.onclick = (e) => {
     const btn = e.target.closest('.filter-btn');
     if (!btn) return;
+    if (!btn.dataset.filter) return;
     filters.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentFilter = btn.dataset.filter;
@@ -4181,6 +4239,42 @@ function filterBuckets(buckets) {
   if (currentFilter === 'writing') return buckets.filter(b => bucketFacets(b).includes('writing'));
   if (currentFilter === 'archived') return buckets.filter(b => b.type === 'archived' || finiteNumber(b.score) < .3);
   return buckets;
+}
+
+function parseSignalString(signal) {
+  const parsed = {};
+  const text = String(signal || '').toLowerCase();
+  SIGNAL_KEYS.forEach(key => {
+    const match = text.match(new RegExp(`${key}\\s*[:=]?\\s*(low|mid|high)`));
+    parsed[key] = match ? match[1] : '';
+  });
+  return parsed;
+}
+
+function renderSignalControls(prefix, signal = '') {
+  const parsed = parseSignalString(signal);
+  return `<div class="signal-editor">
+    <label>Signal</label>
+    <div class="signal-grid">
+      ${SIGNAL_KEYS.map(key => `
+        <label class="signal-cell">
+          <span>${key} · ${SIGNAL_LABELS[key]}</span>
+          <select id="${prefix}-signal-${key}">
+            <option value="">空</option>
+            <option value="low" ${parsed[key] === 'low' ? 'selected' : ''}>low</option>
+            <option value="mid" ${parsed[key] === 'mid' ? 'selected' : ''}>mid</option>
+            <option value="high" ${parsed[key] === 'high' ? 'selected' : ''}>high</option>
+          </select>
+        </label>`).join('')}
+    </div>
+  </div>`;
+}
+
+function readSignalControls(prefix) {
+  return SIGNAL_KEYS.map(key => {
+    const value = document.getElementById(`${prefix}-signal-${key}`)?.value || '';
+    return value ? `${key} ${value}` : '';
+  }).filter(Boolean).join('; ');
 }
 
 function renderBuckets(buckets) {
@@ -4252,10 +4346,12 @@ async function showDetail(id) {
     const detailScore = finiteNumber(b.score, 0).toFixed(4);
     const detailTags = normalizeTags(meta.tags);
     const detailDomains = normalizeTags(meta.domain);
+    const detailSignal = String(meta.signal || '');
+    const detailChord = String(meta.chord || '');
     const valence = finiteNumber(meta.valence, .5);
     const arousal = finiteNumber(meta.arousal, .3);
     const modelValence = meta.model_valence == null ? null : finiteNumber(meta.model_valence, null);
-    activeDetail = { id, name: String(meta.name || id), content: String(b.content || ''), tags: [...detailTags] };
+    activeDetail = { id, name: String(meta.name || id), content: String(b.content || ''), tags: [...detailTags], signal: detailSignal, chord: detailChord };
     content.innerHTML =
       `<h2>${esc(meta.name || id)}</h2>
        <label class="detail-body-label">正文</label>
@@ -4271,6 +4367,8 @@ async function showDetail(id) {
          <div class="field"><label>类型</label>${esc(meta.type || 'dynamic')}</div>
          <div class="field"><label>域</label>${detailDomains.map(esc).join(', ') || '—'}</div>
          <div class="field"><label>标签</label>${detailTags.map(esc).join(', ') || '—'}</div>
+         <div class="field"><label>Chord</label>${esc(detailChord || '—')}</div>
+         <div class="field"><label>Signal</label>${esc(detailSignal || '—')}</div>
          <div class="field"><label>事件效价</label><span class="numeric">V${valence.toFixed(2)}</span></div>
          <div class="field"><label>唤醒度</label><span class="numeric">A${arousal.toFixed(2)}</span></div>
          <div class="field"><label>模型视角</label><span class="numeric">${modelValence != null ? 'V' + modelValence.toFixed(2) : '—'}</span></div>
@@ -4294,6 +4392,8 @@ function startEdit() {
   const currentContent = activeDetail?.id === id ? activeDetail.content : body.textContent;
   const currentName = activeDetail?.id === id ? activeDetail.name : (document.querySelector('#detail-content > h2')?.textContent || id);
   const currentTags = activeDetail?.id === id ? [...activeDetail.tags] : [];
+  const currentSignal = activeDetail?.id === id ? activeDetail.signal : '';
+  const currentChord = activeDetail?.id === id ? activeDetail.chord : '';
   const actions = document.querySelector('#detail-content > .detail-actions');
   if (actions) actions.style.display = 'none';
   body.classList.add('detail-edit');
@@ -4302,6 +4402,11 @@ function startEdit() {
       <input id="edit-title" type="text" aria-label="标题">
     </div>
     <textarea id="edit-ta" aria-label="正文"></textarea>
+    <div class="chord-editor">
+      <label for="edit-chord">Chord</label>
+      <input id="edit-chord" type="text" placeholder="例如 Em7 → Fmaj7">
+    </div>
+    ${renderSignalControls('edit', currentSignal)}
     <div class="tag-editor">
       <label for="edit-tags">标签</label>
       <textarea id="edit-tags" rows="3" placeholder="用逗号分隔标签"></textarea>
@@ -4314,9 +4419,11 @@ function startEdit() {
   const contentField = document.getElementById('edit-ta');
   const titleField = document.getElementById('edit-title');
   const tagField = document.getElementById('edit-tags');
+  const chordField = document.getElementById('edit-chord');
   titleField.value = currentName;
   contentField.value = currentContent;
   tagField.value = currentTags.join(', ');
+  chordField.value = currentChord;
   autoSizeEditField(contentField, 180, 360);
   autoSizeEditField(tagField, 84);
   contentField.addEventListener('input', () => autoSizeEditField(contentField, 180, 360));
@@ -4334,10 +4441,12 @@ async function saveBucket(id) {
   const text = document.getElementById('edit-ta').value;
   const name = (document.getElementById('edit-title')?.value || '').trim() || id;
   const tags = parseTags(document.getElementById('edit-tags').value);
+  const chord = (document.getElementById('edit-chord')?.value || '').trim();
+  const signal = readSignalControls('edit');
   const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({content: text, name, tags})
+    body: JSON.stringify({content: text, name, tags, chord, signal})
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -5211,6 +5320,9 @@ async function startImportEdit(id) {
     <div class="import-editor">
       <label for="ir-content-${id}">正文</label>
       <textarea id="ir-content-${id}" oninput="autoGrowTextarea(this)"></textarea>
+      <label for="ir-chord-${id}">Chord</label>
+      <input id="ir-chord-${id}" type="text" placeholder="例如 Em7 → Fmaj7">
+      ${renderSignalControls('ir-' + id, meta.signal || '')}
       <label for="ir-tags-${id}">标签</label>
       <input id="ir-tags-${id}" type="text" placeholder="用逗号分隔标签">
       <div class="import-editor-actions">
@@ -5221,6 +5333,7 @@ async function startImportEdit(id) {
     const textarea = document.getElementById('ir-content-' + id);
     textarea.value = bucket.content || '';
     autoGrowTextarea(textarea);
+    document.getElementById('ir-chord-' + id).value = meta.chord || '';
     document.getElementById('ir-tags-' + id).value = tags.join(', ');
   } catch (e) {
     card.classList.remove('editing');
@@ -5237,10 +5350,12 @@ function autoGrowTextarea(textarea) {
 async function saveImportEdit(id) {
   const content = document.getElementById('ir-content-' + id).value;
   const tags = parseTags(document.getElementById('ir-tags-' + id).value);
+  const chord = (document.getElementById('ir-chord-' + id)?.value || '').trim();
+  const signal = readSignalControls('ir-' + id);
   const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
     method: 'POST', credentials: 'include',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({content, tags})
+    body: JSON.stringify({content, tags, chord, signal})
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -5527,6 +5642,7 @@ function switchChapter(target, options = {}) {
   if (target === 'desire') loadDesire();
   if (target === 'echoes') loadEchoes();
   if (target === 'catroom') loadCatroom();
+  if (target === 'list') loadMarginalia();
   if (options.scroll !== false) {
     document.getElementById('chapter-index').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
@@ -6305,7 +6421,7 @@ initArchiveStars();
 initSakuraPetals();
 initExperienceMotion();
 applyTheme(localStorage.getItem('nocturne_theme') || 'nocturne');
-checkAuth().then(() => loadBuckets());
+checkAuth().then(() => { loadBuckets(); loadMarginalia(); });
 </script>
 </body>
 </html>

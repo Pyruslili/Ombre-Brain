@@ -296,6 +296,8 @@ class BucketManager:
             post["signal"] = str(kwargs["signal"]).strip()
         if "signal_hints" in kwargs:
             post["signal_hints"] = kwargs["signal_hints"]
+        if "chord" in kwargs:
+            post["chord"] = str(kwargs["chord"]).strip()
         if "created" in kwargs:
             post["created"] = kwargs["created"]
 
