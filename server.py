@@ -2236,6 +2236,55 @@ def marginalia(content: str = "") -> str:
         return f"读取失败: {e}"
 
 
+def _split_breath_packet(packet: str) -> list[tuple[str, str]]:
+    sections: list[tuple[str, str]] = []
+    current_header: str | None = None
+    current_lines: list[str] = []
+    for line in packet.splitlines():
+        if line.startswith("=== ") and line.endswith(" ==="):
+            if current_header is not None:
+                sections.append((current_header, "\n".join(current_lines).strip()))
+            current_header = line[4:-4].strip()
+            current_lines = []
+            continue
+        if current_header is not None:
+            current_lines.append(line)
+    if current_header is not None:
+        sections.append((current_header, "\n".join(current_lines).strip()))
+    return sections
+
+
+def _limit_trace_entries(body: str, limit: int) -> str:
+    entries = [entry.strip() for entry in body.split("\n---\n") if entry.strip()]
+    return "\n---\n".join(entries[:limit])
+
+
+def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5) -> str:
+    sections = _split_breath_packet(packet)
+    if not sections:
+        return packet
+
+    compact_parts: list[str] = []
+    for header, body in sections:
+        if header == "Breath Complete":
+            continue
+        if header == "Memory Drift":
+            body = _limit_trace_entries(body, memory_limit)
+        elif header == "Feel Trace":
+            body = _limit_trace_entries(body, feel_limit)
+        if body:
+            compact_parts.append(f"=== {header} ===\n{body}")
+
+    compact = "\n\n".join(compact_parts)
+    complete = (
+        "=== Breath Lite Complete ===\n"
+        f"sections: {len(compact_parts)}\n"
+        f"approx_tokens: {count_tokens_approx(compact)}\n"
+        f"limits: memory_drift={memory_limit}, feel_trace={feel_limit}"
+    )
+    return compact + "\n\n" + complete if compact else packet
+
+
 @mcp.tool(name="breath")
 async def breath(
     query: str = "",
@@ -2689,6 +2738,31 @@ async def breath(
     final_text = "\n---\n".join(results)
     await _fire_webhook("breath", {"mode": "ok", "matches": len(matches), "chars": len(final_text)})
     return final_text
+
+
+@mcp.tool(name="breath_lite")
+async def breath_lite(
+    query: str = "",
+    max_tokens: int = 10000,
+    domain: str = "",
+    valence: float = -1,
+    arousal: float = -1,
+    max_results: int = 20,
+    importance_min: int = -1,
+) -> str:
+    """breath_lite — API-line wake breath with the same core skeleton as breath, but shorter wake traces. Keeps Shape Trace intact; wake mode trims Memory Drift to 4 entries and Feel Trace to 5 entries."""
+    packet = await breath(
+        query=query,
+        max_tokens=max_tokens,
+        domain=domain,
+        valence=valence,
+        arousal=arousal,
+        max_results=max_results,
+        importance_min=importance_min,
+    )
+    if query.strip() or domain.strip() or importance_min >= 1:
+        return packet
+    return _breath_lite_packet(packet, memory_limit=4, feel_limit=5)
 @mcp.tool(name="undercurrent")
 def undercurrent_tool() -> dict:
     """
