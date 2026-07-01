@@ -1292,6 +1292,12 @@ def _normalize_latent_note_type(note_type: str) -> str:
     return value if value in VALID_LATENT_NOTE_TYPES else "inward"
 
 
+def _normalize_latent_source_kind(kind: str, default: str = "manual") -> str:
+    value = str(kind or "").strip()
+    allowed = {"manual", "thought_pool", "inner", "archive", "old_memory", "悬置", "认过"}
+    return value if value in allowed else default
+
+
 def _default_latent_drive_tag(note_type: str) -> str:
     return "curiosity" if _normalize_latent_note_type(note_type) == "outward" else "reflection"
 
@@ -5060,7 +5066,7 @@ async def api_latent_notes_create(request):
         "note_type": note_type,
         "drive_tag": _normalize_latent_drive_tag(body.get("drive_tag"), note_type),
         "source_bucket_id": "",
-        "source_kind": "manual",
+        "source_kind": _normalize_latent_source_kind(body.get("source_kind")),
         "source_title": str(body.get("source_title") or "手动便签").strip()[:80],
         "source_created": "",
         "source_fragment": str(body.get("source_fragment") or dream_line).strip()[:200],

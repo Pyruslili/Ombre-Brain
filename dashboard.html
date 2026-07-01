@@ -877,6 +877,11 @@ label {
   color: rgba(232,149,79,.90);
   background: rgba(232,149,79,.07);
 }
+.latent-note-chip.pin {
+  border-color: rgba(232,149,79,.40);
+  color: rgba(255,207,151,.95);
+  background: rgba(232,149,79,.095);
+}
 .latent-note-chip.weight {
   border-color: rgba(238,151,173,.30);
   color: rgba(244,215,224,.90);
@@ -1267,6 +1272,21 @@ html[data-theme="sakura-milk"] .undertow-chord {
 .thought-source-collision { color: #d9bd8f; background: rgba(217,189,143,.08); }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
 .thought-meta { color: var(--mute); font: 300 .64rem/1.5 var(--font-mono); white-space: nowrap; }
+.thought-mark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.22rem;
+  margin-left: .34rem;
+  padding: .14rem .38rem;
+  border: 1px solid rgba(120,166,209,.28);
+  border-radius: 999px;
+  background: rgba(120,166,209,.06);
+  color: rgba(183,212,236,.9);
+  font: 300 .54rem/1 var(--font-mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .thought-side { grid-column: 2; display: flex; align-items: center; justify-content: space-between; width: 100%; gap: .65rem; margin-top: 0; }
 .thought-actions { display: flex; gap: .42rem; }
 .thought-actions button {
@@ -3597,10 +3617,31 @@ function renderThoughtPool(thoughts = desireThoughts) {
     thoughtsEl.innerHTML = '<span style="color:var(--ink-soft);font-size:0.78rem">No visible drift.</span>';
     return;
   }
-  thoughtsEl.innerHTML = thoughts.map(t => renderThoughtRow(t)).join('');
+  const copiedKeys = latentThoughtKeys();
+  thoughtsEl.innerHTML = thoughts.map(t => renderThoughtRow(t, copiedKeys)).join('');
 }
 
-function renderThoughtRow(t) {
+function thoughtLatentKey(text) {
+  return String(text || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function thoughtLatentNote(note) {
+  const kind = String(note?.source_kind || '').trim();
+  const title = String(note?.source_title || '').trim().toLowerCase();
+  return kind === 'thought_pool' || title === 'thought pool';
+}
+
+function latentThoughtKeys() {
+  const keys = new Set();
+  (latentNotes || []).forEach(note => {
+    if (!thoughtLatentNote(note)) return;
+    const fragment = thoughtLatentKey(note.source_fragment || note.dream_line || note.line);
+    if (fragment) keys.add(fragment);
+  });
+  return keys;
+}
+
+function renderThoughtRow(t, copiedKeys = latentThoughtKeys()) {
   const tid = String(t.tid || '');
   const text = String(t.text || '（无来源）');
   const drive = String(t.drive || '—');
@@ -3632,7 +3673,7 @@ function renderThoughtRow(t) {
     ${thoughtSourceIcon(t.source)}
     <span class="thought-text">${esc(text)}</span>
     <span class="thought-side">
-      <span class="thought-meta">${esc(drive)} · ${Math.round(strength * 100)}%</span>
+      <span class="thought-meta">${esc(drive)} · ${Math.round(strength * 100)}%${copiedKeys.has(thoughtLatentKey(text)) ? '<span class="thought-mark" title="已入潜流池">潜</span>' : ''}</span>
       ${tid ? `<span class="thought-actions"><button onclick="copyThoughtToLatent('${esc(tid)}')">入潜流</button><button onclick="startThoughtEdit('${esc(tid)}')">编辑</button><button class="danger" onclick="deleteThought('${esc(tid)}')">删除</button></span>` : ''}
     </span>
   </div>`;
@@ -6025,6 +6066,7 @@ function latentMarksLabel(marks) {
 
 function latentNoteChips(note) {
   const chips = [
+    { cls: 'pin', text: note.pinned ? '◆ 常驻' : '' },
     { cls: 'kind', text: latentSourceKindLabel(note.source_kind) },
     { cls: 'weight', text: latentWeightLabel(note.source_score) },
     { cls: '', text: note.source_wander_mode || note.wander_mode || '' },
@@ -6047,6 +6089,7 @@ async function loadLatentNotes() {
     return;
   }
   renderLatentNotes();
+  renderThoughtPool();
 }
 
 function renderLatentNotes() {
@@ -6060,7 +6103,7 @@ function renderLatentNotes() {
   const approvedEl = document.getElementById('latent-count-approved');
   const usedEl = document.getElementById('latent-count-used');
   if (draftEl) draftEl.textContent = draftCount;
-  if (approvedEl) approvedEl.textContent = approvedCount;
+  if (approvedEl) approvedEl.textContent = pinnedCount ? `${approvedCount} ◆${pinnedCount}` : approvedCount;
   if (usedEl) usedEl.textContent = usedCount;
   if (sub) sub.textContent = `${draftCount} drafts · ${approvedCount} approved · ${usedCount} used · ${pinnedCount} pinned`;
   document.querySelectorAll('[data-latent-tab]').forEach(btn => {
@@ -6072,7 +6115,7 @@ function renderLatentNotes() {
     n.status === latentNoteTab &&
     (latentDriveTab === 'all' || latentDriveLabel(n.drive_tag) === latentDriveTab)
   ).sort((a, b) =>
-    Number(!!a.pinned) - Number(!!b.pinned) ||
+    Number(!!b.pinned) - Number(!!a.pinned) ||
     String(b.created_at || '').localeCompare(String(a.created_at || ''))
   );
   const rows = [];
