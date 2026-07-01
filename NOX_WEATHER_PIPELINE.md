@@ -771,7 +771,7 @@ Latent Notes 生成前会先从 bucket / marks / domain 中挑候选源。
 - 不在对话中途硬插入。
 - 不追求把 Drive 推到触顶。
 - 白天和夜间分开计数；夜间 1-8 点最多 2 条，白天仍允许 4-6 条。
-- max silence 可以越过 tmux window activity 的短 idle 重置，但真正注入前仍检查 pane busy，避免打断正在跑的 Claude / tool。
+- max silence 只能放宽投递模式，不能越过窗口 idle 门；真正注入前仍检查 pane busy，避免打断正在跑的 Claude / tool。
 
 触发依据：
 
