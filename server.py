@@ -2266,8 +2266,6 @@ def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5)
 
     compact_parts: list[str] = []
     for header, body in sections:
-        if header == "Breath Complete":
-            continue
         if header == "Memory Drift":
             body = _limit_trace_entries(body, memory_limit)
         elif header == "Feel Trace":
@@ -2276,13 +2274,7 @@ def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5)
             compact_parts.append(f"=== {header} ===\n{body}")
 
     compact = "\n\n".join(compact_parts)
-    complete = (
-        "=== Breath Lite Complete ===\n"
-        f"sections: {len(compact_parts)}\n"
-        f"approx_tokens: {count_tokens_approx(compact)}\n"
-        f"limits: memory_drift={memory_limit}, feel_trace={feel_limit}"
-    )
-    return compact + "\n\n" + complete if compact else packet
+    return compact if compact else packet
 
 
 @mcp.tool(name="breath")
@@ -2594,13 +2586,7 @@ async def breath(
         if pinned_results:
             final_parts.append("=== House Rules ===\n" + "\n---\n".join(pinned_results))
 
-        packet = "\n\n".join(final_parts)
-        complete = (
-            "=== Breath Complete ===\n"
-            f"sections: {len(final_parts)}\n"
-            f"approx_tokens: {count_tokens_approx(packet)}"
-        )
-        return packet + "\n\n" + complete
+        return "\n\n".join(final_parts)
 
     # --- Feel retrieval: domain="feel" is a special channel ---
     # --- Feel 检索：domain="feel" 是独立入口 ---
