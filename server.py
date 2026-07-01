@@ -58,6 +58,7 @@ from dehydrator import Dehydrator
 from decay_engine import DecayEngine
 from embedding_engine import EmbeddingEngine
 from import_memory import ImportEngine
+from room_store import RoomStore
 from utils import load_config, setup_logging, strip_wikilinks, count_tokens_approx, now_iso
 from desire_engine import (
     DRIVE_KEYS,
@@ -138,6 +139,7 @@ decay_engine = DecayEngine(config, bucket_mgr)       # Decay engine / 衰减引�
 import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)
 BUCKETS_DIR = config["buckets_dir"]
 catroom_store = CatroomStore(BUCKETS_DIR)
+room_store = RoomStore(BUCKETS_DIR)
 
 
 def _bucket_path(*parts: str) -> str:
@@ -2870,6 +2872,45 @@ def catroom_reply(
             model=model,
         )
         return {"ok": True, "record": record}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@mcp.tool(name="room_hold")
+def room_hold(
+    cat: str,
+    content: str,
+    kind: str = "residue",
+    weight: float = -1.0,
+    tags: str = "",
+) -> dict:
+    """
+    存进单猫自己的房间墙。
+    cat: ink|ash|moss
+    只存能影响下一次轨迹的痕迹；不进正式 Breath，不推 Weather。
+    """
+    try:
+        record = room_store.hold(
+            cat=cat,
+            content=content,
+            kind=kind,
+            weight=weight if weight >= 0 else None,
+            tags=tags,
+        )
+        return {"ok": True, "record": record}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@mcp.tool(name="room_breath")
+def room_breath(cat: str, limit: int = 6) -> dict:
+    """
+    读取单猫房间门牌和最近痕迹，默认6条。
+    这是醒来偏移用的轻量呼吸，不是全量搜索。
+    """
+    try:
+        text, records = room_store.breath(cat=cat, limit=limit)
+        return {"ok": True, "cat": cat.strip().lower(), "breath": text, "records": records}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
 
