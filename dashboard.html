@@ -2886,6 +2886,7 @@ const CATROOM_ROOMS = [
   { value: 'MossRoom', label: 'MossRoom', sub: 'Moss room · structure, repairs, things that should not vanish' },
   { value: 'NoxRoom', label: 'NoxRoom', sub: 'Nox room · different Nox bases, wardrobe bones, boundary drafts' },
 ];
+const CATROOM_TOPIC_TO_CAT = { InkRoom: 'ink', AshRoom: 'ash', MossRoom: 'moss', NoxRoom: 'nox' };
 const SIGNAL_KEYS = ['discernment', 'territorial', 'clutch', 'strain', 'charge'];
 const SIGNAL_LABELS = {
   discernment: '皱眉',
@@ -5707,6 +5708,14 @@ function renderCatroom(records) {
   }).join('');
 }
 
+function mergeCatroomRecords(primary, roomRecords) {
+  const byId = new Map();
+  [...(primary || []), ...(roomRecords || [])].forEach(record => {
+    if (record && record.id) byId.set(record.id, record);
+  });
+  return Array.from(byId.values()).sort((a, b) => String(a.ts || '').localeCompare(String(b.ts || '')));
+}
+
 async function loadCatroom() {
   const status = document.getElementById('catroom-status');
   if (status) status.textContent = 'Reading room';
@@ -5716,8 +5725,21 @@ async function loadCatroom() {
     if (!res) return;
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    renderCatroom(data.records || []);
-    if (status) status.textContent = `${data.count || 0} notes`;
+    let records = data.records || [];
+    let wallCount = records.filter(record => record.source === 'room' || String(record.id || '').startsWith('room_')).length;
+    const cat = CATROOM_TOPIC_TO_CAT[currentCatroomTopic];
+    if (cat) {
+      const wallRes = await authFetch(BASE + `/api/room/read?limit=15&cat=${encodeURIComponent(cat)}`);
+      if (wallRes) {
+        const wallData = await wallRes.json();
+        if (wallRes.ok && wallData.ok) {
+          wallCount = wallData.count || 0;
+          records = mergeCatroomRecords(records, wallData.records || []);
+        }
+      }
+    }
+    renderCatroom(records);
+    if (status) status.textContent = cat ? `${records.length} notes · ${wallCount} wall` : `${records.length} notes`;
   } catch (e) {
     const list = document.getElementById('catroom-list');
     if (list) list.innerHTML = `<div class="catroom-empty">Catroom is out of reach · ${esc(e.message)}</div>`;

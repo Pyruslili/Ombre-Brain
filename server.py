@@ -4133,6 +4133,26 @@ async def api_catroom_hold(request):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
+@mcp.custom_route("/api/room/read", methods=["GET"])
+async def api_room_read(request):
+    """Read old private room-wall notes for the Room dashboard."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    params = request.query_params
+    cat = params.get("cat", "")
+    topic = next((name for name, room_cat in ROOM_TOPIC_TO_CAT.items() if room_cat == cat), "")
+    try:
+        limit = int(params.get("limit", "15") or "15")
+    except ValueError:
+        limit = 15
+    try:
+        records = [_room_record_for_dashboard(r, topic or f"{cat.title()}Room") for r in room_store.read(cat=cat, limit=limit)]
+        return JSONResponse({"ok": True, "records": records, "count": len(records), "source": "room"})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
 @mcp.custom_route("/api/catroom/reply", methods=["POST"])
 async def api_catroom_reply(request):
     """Append a Catroom reply."""
