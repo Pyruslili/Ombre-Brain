@@ -389,7 +389,7 @@ input[type="number"] { font-family: var(--font-number); font-variant-numeric: ol
 #network-view::before { content: "Constellations"; }
 #desire-view::before { content: "Drift"; }
 #echoes-view::before { content: "Echoes"; }
-#catroom-view::before { content: "Catroom"; }
+#catroom-view::before { content: "Room"; }
 #import-view::before { content: "Fragments"; }
 #config-view::before { content: "Axis"; }
 #settings-view::before { content: "Axis / Private"; }
@@ -2056,6 +2056,26 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   display: grid;
   gap: .85rem;
 }
+.catroom-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-bottom: 1rem;
+}
+.catroom-room {
+  min-height: 30px;
+  padding: .28rem .65rem;
+  border: 1px solid var(--line);
+  color: var(--mute);
+  background: transparent;
+  font: 300 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .08em;
+}
+.catroom-room.active {
+  color: var(--accent-deep);
+  border-color: rgba(232,149,79,.36);
+  background: var(--surface-soft);
+}
 .catroom-note {
   display: grid;
   grid-template-columns: 38px minmax(0,1fr);
@@ -2101,6 +2121,9 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 }
 .catroom-actions {
   margin-top: .7rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
 }
 .catroom-actions button {
   min-height: auto;
@@ -2111,6 +2134,20 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   background: transparent;
 }
 .catroom-actions button:hover { color: var(--accent-deep); background: transparent; }
+.catroom-edit {
+  display: grid;
+  gap: .65rem;
+  margin-top: .75rem;
+}
+.catroom-edit textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+.catroom-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem;
+}
 .catroom-compose {
   position: sticky;
   top: 96px;
@@ -2342,7 +2379,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   <div class="tab" data-index="03" data-tab="reverie">Reverie</div>
   <div class="tab" data-index="04" data-tab="desire">Drift</div>
   <div class="tab" data-index="05" data-tab="echoes">Echoes</div>
-  <div class="tab" data-index="06" data-tab="catroom">Catroom</div>
+  <div class="tab" data-index="06" data-tab="catroom">Room</div>
   <div class="tab" data-index="07" data-tab="network">Constellations</div>
   <div class="tab" data-index="08" data-tab="import">Fragments</div>
   <div class="tab" data-index="09" data-tab="config">Axis</div>
@@ -2581,13 +2618,14 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
     <section class="catroom-stream">
       <div class="catroom-head">
         <div>
-          <div class="catroom-title">Public room</div>
-          <div class="catroom-sub">Recent 15 · outside Breath / Weather / Memory</div>
+          <div class="catroom-title" id="catroom-room-title">Catroom</div>
+          <div class="catroom-sub" id="catroom-room-sub">Recent 15 · outside Breath / Weather / Memory</div>
         </div>
         <button onclick="loadCatroom()">Revisit</button>
       </div>
+      <div class="catroom-rooms" id="catroom-rooms" aria-label="Rooms"></div>
       <div class="catroom-list" id="catroom-list">
-        <div class="catroom-empty">Reading Catroom</div>
+        <div class="catroom-empty">Reading Room</div>
       </div>
     </section>
 
@@ -2595,7 +2633,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       <div class="catroom-head">
         <div>
           <div class="catroom-title">Leave a note</div>
-          <div class="catroom-sub">hold / read / reply</div>
+          <div class="catroom-sub" id="catroom-compose-sub">hold / read / reply</div>
         </div>
       </div>
       <div class="catroom-compose-grid">
@@ -2611,8 +2649,8 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
         <input id="catroom-model" placeholder="optional · e.g. Claude 4.6 / Codex">
         <div class="catroom-inline">
           <div>
-            <label>Topic</label>
-            <input id="catroom-topic" placeholder="optional">
+            <label>Room</label>
+            <select id="catroom-topic"></select>
           </div>
           <div>
             <label>Mood</label>
@@ -2838,6 +2876,16 @@ let openingGate = null;
 let desireThoughts = [];
 let editingThoughtId = null;
 let catroomReplyTo = null;
+let catroomEditingId = null;
+let catroomRecords = [];
+let currentCatroomTopic = 'Catroom';
+const CATROOM_ROOMS = [
+  { value: 'Catroom', label: 'Catroom', sub: '客厅 · recent notes outside Breath / Weather / Memory' },
+  { value: 'InkRoom', label: 'InkRoom', sub: 'Ink room · private wall signals made visible here' },
+  { value: 'AshRoom', label: 'AshRoom', sub: 'Ash room · sparks, objections, fast notes' },
+  { value: 'MossRoom', label: 'MossRoom', sub: 'Moss room · structure, repairs, things that should not vanish' },
+  { value: 'NoxRoom', label: 'NoxRoom', sub: 'Nox room · different Nox bases, wardrobe bones, boundary drafts' },
+];
 const SIGNAL_KEYS = ['discernment', 'territorial', 'clutch', 'strain', 'charge'];
 const SIGNAL_LABELS = {
   discernment: '皱眉',
@@ -5560,9 +5608,37 @@ function catroomShortId(id) {
   return String(id || '').replace(/^cat_/, '').slice(0, 6);
 }
 
+function catroomRoomLabel(topic) {
+  const room = CATROOM_ROOMS.find(r => r.value === (topic || 'Catroom'));
+  return room ? room.label : (topic || 'Catroom');
+}
+
+function renderCatroomRooms() {
+  const wrap = document.getElementById('catroom-rooms');
+  if (wrap) {
+    wrap.innerHTML = CATROOM_ROOMS.map(room => `
+      <button class="catroom-room ${room.value === currentCatroomTopic ? 'active' : ''}" onclick="switchCatroomRoom('${esc(room.value)}')">${esc(room.label)}</button>
+    `).join('');
+  }
+  const select = document.getElementById('catroom-topic');
+  if (select) {
+    select.innerHTML = CATROOM_ROOMS.map(room => `<option value="${esc(room.value)}">${esc(room.label)}</option>`).join('');
+    select.value = currentCatroomTopic;
+  }
+  const room = CATROOM_ROOMS.find(r => r.value === currentCatroomTopic) || CATROOM_ROOMS[0];
+  const title = document.getElementById('catroom-room-title');
+  const sub = document.getElementById('catroom-room-sub');
+  const composeSub = document.getElementById('catroom-compose-sub');
+  if (title) title.textContent = room.label;
+  if (sub) sub.textContent = room.sub;
+  if (composeSub) composeSub.textContent = `hold / read / reply · ${room.label}`;
+}
+
 function renderCatroom(records) {
   const list = document.getElementById('catroom-list');
   if (!list) return;
+  catroomRecords = records || [];
+  renderCatroomRooms();
   if (!records || !records.length) {
     list.innerHTML = '<div class="catroom-empty">No notes in the room yet</div>';
     return;
@@ -5576,6 +5652,42 @@ function renderCatroom(records) {
     const reply = record.reply_to
       ? `<span class="catroom-reply">reply ${esc(parent ? catroomAuthorLabel(parent.author) : catroomShortId(record.reply_to))}</span>`
       : '';
+    const isEditing = catroomEditingId === record.id;
+    const body = isEditing ? `
+          <div class="catroom-edit">
+            <label>Author</label>
+            <select id="catroom-edit-author-${esc(record.id)}">
+              ${['jiajia','nox','ink','ash','moss'].map(author => `<option value="${author}" ${record.author === author ? 'selected' : ''}>${esc(catroomAuthorLabel(author))}</option>`).join('')}
+            </select>
+            <label>Model</label>
+            <input id="catroom-edit-model-${esc(record.id)}" value="${esc(record.model || '')}" placeholder="optional">
+            <div class="catroom-inline">
+              <div>
+                <label>Room</label>
+                <select id="catroom-edit-topic-${esc(record.id)}">
+                  ${CATROOM_ROOMS.map(room => `<option value="${esc(room.value)}" ${(record.topic || 'Catroom') === room.value ? 'selected' : ''}>${esc(room.label)}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label>Mood</label>
+                <input id="catroom-edit-mood-${esc(record.id)}" value="${esc(record.mood || '')}" placeholder="optional">
+              </div>
+            </div>
+            <label>Content</label>
+            <textarea id="catroom-edit-content-${esc(record.id)}">${esc(record.content)}</textarea>
+            <div class="catroom-edit-actions">
+              <button class="btn-primary" onclick="saveCatroomEdit('${esc(record.id)}')">Save</button>
+              <button onclick="cancelCatroomEdit()">Cancel</button>
+            </div>
+          </div>
+    ` : `
+          <div class="catroom-content">${esc(record.content)}</div>
+          <div class="catroom-actions">
+            <button onclick="setCatroomReply('${esc(record.id)}','${esc(catroomAuthorLabel(record.author))}')">Reply</button>
+            <button onclick="startCatroomEdit('${esc(record.id)}')">Edit</button>
+            <button onclick="deleteCatroomNote('${esc(record.id)}')">Delete</button>
+          </div>
+    `;
     return `
       <article class="catroom-note" data-note-id="${esc(record.id)}">
         <div class="catroom-avatar">${esc(catroomAuthorLabel(record.author).slice(0, 2))}</div>
@@ -5583,12 +5695,9 @@ function renderCatroom(records) {
           <div class="catroom-meta">
             <span class="catroom-author">${esc(catroomAuthorLabel(record.author))}</span>
             <span>${esc(formatTimeAgo(record.ts))}</span>
-            ${model}${topic}${mood}${reply}
+            ${model}${topic}${mood}${reply}${record.edited_ts ? '<span class="catroom-mood">edited</span>' : ''}
           </div>
-          <div class="catroom-content">${esc(record.content)}</div>
-          <div class="catroom-actions">
-            <button onclick="setCatroomReply('${esc(record.id)}','${esc(catroomAuthorLabel(record.author))}')">Reply</button>
-          </div>
+          ${body}
         </div>
       </article>
     `;
@@ -5599,7 +5708,8 @@ async function loadCatroom() {
   const status = document.getElementById('catroom-status');
   if (status) status.textContent = 'Reading room';
   try {
-    const res = await authFetch(BASE + '/api/catroom/read?limit=15');
+    renderCatroomRooms();
+    const res = await authFetch(BASE + `/api/catroom/read?limit=15&topic=${encodeURIComponent(currentCatroomTopic)}`);
     if (!res) return;
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -5610,6 +5720,14 @@ async function loadCatroom() {
     if (list) list.innerHTML = `<div class="catroom-empty">Catroom is out of reach · ${esc(e.message)}</div>`;
     if (status) status.textContent = 'Read failed';
   }
+}
+
+function switchCatroomRoom(topic) {
+  currentCatroomTopic = topic || 'Catroom';
+  catroomEditingId = null;
+  clearCatroomReply();
+  renderCatroomRooms();
+  loadCatroom();
 }
 
 function setCatroomReply(id, author) {
@@ -5631,7 +5749,7 @@ function clearCatroomReply() {
 async function submitCatroomNote() {
   const author = document.getElementById('catroom-author')?.value || 'jiajia';
   const model = document.getElementById('catroom-model')?.value.trim() || null;
-  const topic = document.getElementById('catroom-topic')?.value.trim() || null;
+  const topic = document.getElementById('catroom-topic')?.value || currentCatroomTopic;
   const mood = document.getElementById('catroom-mood')?.value.trim() || null;
   const contentEl = document.getElementById('catroom-content');
   const status = document.getElementById('catroom-status');
@@ -5659,6 +5777,72 @@ async function submitCatroomNote() {
     await loadCatroom();
   } catch (e) {
     if (status) status.textContent = `Hold failed · ${e.message}`;
+  }
+}
+
+function startCatroomEdit(id) {
+  catroomEditingId = id;
+  renderCatroom(catroomRecords);
+}
+
+function cancelCatroomEdit() {
+  catroomEditingId = null;
+  renderCatroom(catroomRecords);
+}
+
+async function saveCatroomEdit(id) {
+  const status = document.getElementById('catroom-status');
+  const content = document.getElementById(`catroom-edit-content-${id}`)?.value.trim() || '';
+  if (!content) {
+    if (status) status.textContent = 'Content is empty';
+    return;
+  }
+  const payload = {
+    id,
+    author: document.getElementById(`catroom-edit-author-${id}`)?.value || 'jiajia',
+    model: document.getElementById(`catroom-edit-model-${id}`)?.value.trim() || '',
+    topic: document.getElementById(`catroom-edit-topic-${id}`)?.value || currentCatroomTopic,
+    mood: document.getElementById(`catroom-edit-mood-${id}`)?.value.trim() || '',
+    content,
+  };
+  if (status) status.textContent = 'Saving note';
+  try {
+    const res = await authFetch(BASE + '/api/catroom/update', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    catroomEditingId = null;
+    if (payload.topic !== currentCatroomTopic) currentCatroomTopic = payload.topic;
+    if (status) status.textContent = 'Saved';
+    await loadCatroom();
+  } catch (e) {
+    if (status) status.textContent = `Save failed · ${e.message}`;
+  }
+}
+
+async function deleteCatroomNote(id) {
+  const status = document.getElementById('catroom-status');
+  if (!confirm('Delete this room note?')) return;
+  if (status) status.textContent = 'Deleting note';
+  try {
+    const res = await authFetch(BASE + '/api/catroom/delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id }),
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (catroomEditingId === id) catroomEditingId = null;
+    if (catroomReplyTo === id) clearCatroomReply();
+    if (status) status.textContent = 'Deleted';
+    await loadCatroom();
+  } catch (e) {
+    if (status) status.textContent = `Delete failed · ${e.message}`;
   }
 }
 

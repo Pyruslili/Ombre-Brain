@@ -22,7 +22,7 @@ class CatroomStore:
 
     def __init__(self, buckets_dir: str | os.PathLike[str]):
         self.path = Path(buckets_dir) / "catroom.jsonl"
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def hold(
         self,
@@ -93,7 +93,10 @@ class CatroomStore:
             author_filter = self._normalize_author(author_filter)
             records = [r for r in records if r.get("author") == author_filter]
         if topic_filter:
-            records = [r for r in records if r.get("topic") == topic_filter]
+            if topic_filter.lower() == "catroom":
+                records = [r for r in records if not r.get("topic") or r.get("topic") == "Catroom"]
+            else:
+                records = [r for r in records if r.get("topic") == topic_filter]
         limit = max(1, min(int(limit or 15), 100))
         return records[-limit:]
 
@@ -105,6 +108,55 @@ class CatroomStore:
             if record.get("id") == target:
                 return record
         return None
+
+    def update(
+        self,
+        record_id: str,
+        *,
+        author: str | None = None,
+        content: str | None = None,
+        topic: str | None = None,
+        mood: str | None = None,
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        target = str(record_id or "").strip()
+        if not target:
+            raise ValueError("id is required")
+        with self._lock:
+            records = self._read_all()
+            for idx, record in enumerate(records):
+                if record.get("id") != target:
+                    continue
+                if author is not None:
+                    record["author"] = self._normalize_author(author)
+                if content is not None:
+                    cleaned_content = str(content or "").strip()
+                    if not cleaned_content:
+                        raise ValueError("content is required")
+                    record["content"] = cleaned_content
+                if topic is not None:
+                    record["topic"] = self._clean_optional(topic)
+                if mood is not None:
+                    record["mood"] = self._clean_optional(mood)
+                if model is not None:
+                    record["model"] = self._clean_optional(model)
+                record["edited_ts"] = now_iso()
+                records[idx] = record
+                self._write_all(records)
+                return record
+        raise ValueError(f"note not found: {target}")
+
+    def delete(self, record_id: str) -> dict[str, Any]:
+        target = str(record_id or "").strip()
+        if not target:
+            raise ValueError("id is required")
+        with self._lock:
+            records = self._read_all()
+            kept = [r for r in records if r.get("id") != target]
+            if len(kept) == len(records):
+                raise ValueError(f"note not found: {target}")
+            self._write_all(kept)
+        return {"id": target}
 
     def _read_all(self) -> list[dict[str, Any]]:
         if not self.path.exists():
@@ -121,6 +173,14 @@ class CatroomStore:
                 if isinstance(item, dict):
                     records.append(item)
         return records
+
+    def _write_all(self, records: list[dict[str, Any]]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+        with tmp_path.open("w", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        tmp_path.replace(self.path)
 
     @staticmethod
     def _clean_optional(value: str | None) -> str | None:

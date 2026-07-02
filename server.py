@@ -2882,6 +2882,49 @@ def catroom_reply(
         return {"ok": False, "error": str(e)}
 
 
+@mcp.tool(name="catroom_update")
+def catroom_update(
+    note_id: str,
+    author: str | None = None,
+    content: str | None = None,
+    topic: str | None = None,
+    mood: str | None = None,
+    model: str | None = None,
+) -> dict:
+    """
+    编辑猫屋公共房间里的一张便签。
+    允许修正作者、内容、房间/topic、mood和模型名。
+    """
+    updates = {}
+    if author is not None:
+        updates["author"] = author
+    if content is not None:
+        updates["content"] = content
+    if topic is not None:
+        updates["topic"] = topic
+    if mood is not None:
+        updates["mood"] = mood
+    if model is not None:
+        updates["model"] = model
+    try:
+        record = catroom_store.update(note_id, **updates)
+        return {"ok": True, "record": record}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@mcp.tool(name="catroom_delete")
+def catroom_delete(note_id: str) -> dict:
+    """
+    删除猫屋公共房间里的一张便签。
+    """
+    try:
+        deleted = catroom_store.delete(note_id)
+        return {"ok": True, "deleted": deleted}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
 @mcp.tool(name="room_hold")
 def room_hold(
     cat: str,
@@ -4032,6 +4075,44 @@ async def api_catroom_reply(request):
             model=body.get("model"),
         )
         return JSONResponse({"ok": True, "record": record})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@mcp.custom_route("/api/catroom/update", methods=["POST"])
+async def api_catroom_update(request):
+    """Edit a Catroom note in place."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    updates = {}
+    for key in ("author", "content", "topic", "mood", "model"):
+        if key in body:
+            updates[key] = "" if body.get(key) is None else body.get(key)
+    try:
+        record = catroom_store.update(body.get("id", ""), **updates)
+        return JSONResponse({"ok": True, "record": record})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@mcp.custom_route("/api/catroom/delete", methods=["POST"])
+async def api_catroom_delete(request):
+    """Delete a Catroom note."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    try:
+        deleted = catroom_store.delete(body.get("id", ""))
+        return JSONResponse({"ok": True, "deleted": deleted})
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 

@@ -49,3 +49,51 @@ def test_catroom_filters_and_author_validation(tmp_path):
 
     with pytest.raises(ValueError, match="author must be one of"):
         store.hold(author="stranger", content="nope")
+
+
+def test_catroom_catroom_topic_includes_legacy_untagged_notes(tmp_path):
+    store = CatroomStore(tmp_path)
+    store.hold(author="moss", content="old public")
+    store.hold(author="ink", content="named public", topic="Catroom")
+    store.hold(author="ash", content="private spark", topic="AshRoom")
+
+    assert [r["content"] for r in store.read(topic="Catroom")] == ["old public", "named public"]
+    assert [r["content"] for r in store.read(topic="AshRoom")] == ["private spark"]
+
+
+def test_catroom_update_edits_metadata_and_rewrites_jsonl(tmp_path):
+    store = CatroomStore(tmp_path)
+    first = store.hold(author="moss", content="rough", topic="MossRoom", model="Codex")
+    store.hold(author="ash", content="leave me", topic="AshRoom")
+
+    updated = store.update(
+        first["id"],
+        author="nox",
+        content="clean",
+        topic="NoxRoom",
+        mood="wardrobe",
+        model="Claude",
+    )
+
+    assert updated["author"] == "nox"
+    assert updated["content"] == "clean"
+    assert updated["topic"] == "NoxRoom"
+    assert updated["mood"] == "wardrobe"
+    assert updated["model"] == "Claude"
+    assert updated["edited_ts"]
+    assert [r["content"] for r in store.read(limit=10)] == ["clean", "leave me"]
+
+
+def test_catroom_update_can_clear_optional_fields_and_delete(tmp_path):
+    store = CatroomStore(tmp_path)
+    first = store.hold(author="moss", content="keep", topic="MossRoom", mood="steady", model="Codex")
+    second = store.hold(author="ink", content="remove", topic="InkRoom")
+
+    cleared = store.update(first["id"], topic="", mood="", model="")
+    deleted = store.delete(second["id"])
+
+    assert cleared["topic"] is None
+    assert cleared["mood"] is None
+    assert cleared["model"] is None
+    assert deleted["id"] == second["id"]
+    assert [r["id"] for r in store.read(limit=10)] == [first["id"]]
