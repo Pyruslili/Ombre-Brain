@@ -4082,6 +4082,11 @@ def _room_topic_records(topic: str, limit: int, author: str = "") -> list[dict]:
     catroom_records = catroom_store.read(limit=limit, topic=topic, author=author)
     if not cat:
         return catroom_records
+    if not author:
+        by_id = {record.get("id"): record for record in catroom_records}
+        for record in catroom_store.read(limit=limit, author=cat):
+            by_id[record.get("id")] = record
+        catroom_records = list(by_id.values())
     room_records = [_room_record_for_dashboard(r, topic) for r in room_store.read(cat=cat, limit=limit)]
     author_filter = str(author or "").strip().lower()
     if author_filter:

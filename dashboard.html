@@ -5721,7 +5721,8 @@ async function loadCatroom() {
   if (status) status.textContent = 'Reading room';
   try {
     renderCatroomRooms();
-    const res = await authFetch(BASE + `/api/catroom/read?limit=15&topic=${encodeURIComponent(currentCatroomTopic)}`);
+    const topicParam = currentCatroomTopic === 'Catroom' ? '' : `&topic=${encodeURIComponent(currentCatroomTopic)}`;
+    const res = await authFetch(BASE + `/api/catroom/read?limit=15${topicParam}`);
     if (!res) return;
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
