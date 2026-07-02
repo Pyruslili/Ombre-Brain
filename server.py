@@ -4079,6 +4079,13 @@ def _room_record_for_dashboard(record: dict, topic: str) -> dict:
     }
 
 
+def _legacy_room_topic_record(record: dict, topic: str) -> dict:
+    item = dict(record)
+    item["topic"] = topic
+    item["source"] = "legacy_room_topic"
+    return item
+
+
 def _room_topic_records(topic: str, limit: int, author: str = "") -> list[dict]:
     cat = ROOM_TOPIC_TO_CAT.get(topic)
     catroom_records = catroom_store.read(limit=limit, topic=topic, author=author)
@@ -4157,6 +4164,10 @@ async def api_room_read(request):
         limit = 15
     try:
         records = [_room_record_for_dashboard(r, topic or f"{cat.title()}Room") for r in room_store.read(cat=cat, limit=limit)]
+        if topic:
+            records.extend(_legacy_room_topic_record(r, topic) for r in catroom_store.read(limit=limit, topic=topic))
+            records.sort(key=lambda r: str(r.get("ts") or ""))
+            records = records[-max(1, min(int(limit or 15), 100)):]
         return JSONResponse({"ok": True, "records": records, "count": len(records), "source": "room"})
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)

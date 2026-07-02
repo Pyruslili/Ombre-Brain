@@ -5674,7 +5674,7 @@ function renderCatroom(records) {
   const byId = new Map(records.map(r => [r.id, r]));
   list.innerHTML = records.map(record => {
     const parent = record.reply_to ? byId.get(record.reply_to) : null;
-    const isRoomSource = record.source === 'room' || String(record.id || '').startsWith('room_');
+    const isRoomSource = record.source === 'room' || record.source === 'legacy_room_topic' || String(record.id || '').startsWith('room_');
     const authorOptions = isRoomSource ? ['nox','ink','ash','moss'] : ['jiajia','nox','ink','ash','moss'];
     const roomOptions = isRoomSource ? CATROOM_ROOMS.filter(room => room.value !== 'Catroom') : CATROOM_ROOMS;
     const topic = record.topic ? `<span class="catroom-topic">#${esc(record.topic)}</span>` : '';
