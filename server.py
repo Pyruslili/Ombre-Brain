@@ -4187,6 +4187,37 @@ async def api_room_hold(request):
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
 
+@mcp.custom_route("/api/room/copy_catroom", methods=["POST"])
+async def api_room_copy_catroom(request):
+    """Copy a public Catroom note into its author's private room wall."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    note_id = str(body.get("id", "") or "")
+    try:
+        note = catroom_store.get(note_id)
+        if not note:
+            return JSONResponse({"ok": False, "error": f"note not found: {note_id}"}, status_code=404)
+        cat = body.get("cat") or note.get("author")
+        room_topic = next((name for name, room_cat in ROOM_TOPIC_TO_CAT.items() if room_cat == cat), "")
+        if not room_topic:
+            raise ValueError("note author does not have a room")
+        kind = body.get("kind") or note.get("mood") or note.get("topic") or "catroom_note"
+        record = room_store.hold(
+            cat=cat,
+            content=note.get("content", ""),
+            kind=kind,
+            model=note.get("model"),
+        )
+        return JSONResponse({"ok": True, "record": _room_record_for_dashboard(record, room_topic)})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
 @mcp.custom_route("/api/room/plate", methods=["GET"])
 async def api_room_plate_read(request):
     """Read editable room breath copy."""

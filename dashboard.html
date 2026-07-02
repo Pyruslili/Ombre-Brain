@@ -2912,6 +2912,7 @@ const CATROOM_ROOMS = [
   { value: 'NoxRoom', label: 'NoxRoom', sub: 'Nox room · different Nox bases, wardrobe bones, boundary drafts' },
 ];
 const CATROOM_TOPIC_TO_CAT = { InkRoom: 'ink', AshRoom: 'ash', MossRoom: 'moss', NoxRoom: 'nox' };
+const CATROOM_AUTHOR_ROOM = { ink: 'InkRoom', ash: 'AshRoom', moss: 'MossRoom', nox: 'NoxRoom' };
 const SIGNAL_KEYS = ['discernment', 'territorial', 'clutch', 'strain', 'charge'];
 const SIGNAL_LABELS = {
   discernment: '皱眉',
@@ -5686,6 +5687,9 @@ function renderCatroom(records) {
     const replyButton = !isRoomSource
       ? `<button onclick="setCatroomReply('${esc(record.id)}','${esc(catroomAuthorLabel(record.author))}')">Reply</button>`
       : '';
+    const copyButton = !isRoomSource && CATROOM_AUTHOR_ROOM[String(record.author || '').toLowerCase()]
+      ? `<button onclick="copyCatroomNoteToRoom('${esc(record.id)}')">Copy to room</button>`
+      : '';
     const body = isEditing ? `
           <div class="catroom-edit">
             <label>Author</label>
@@ -5717,6 +5721,7 @@ function renderCatroom(records) {
           <div class="catroom-content">${esc(record.content)}</div>
           <div class="catroom-actions">
             ${replyButton}
+            ${copyButton}
             <button onclick="startCatroomEdit('${esc(record.id)}')">Edit</button>
             <button onclick="deleteCatroomNote('${esc(record.id)}')">Delete</button>
           </div>
@@ -5888,6 +5893,30 @@ function startCatroomEdit(id) {
 function cancelCatroomEdit() {
   catroomEditingId = null;
   renderCatroom(catroomRecords);
+}
+
+async function copyCatroomNoteToRoom(id) {
+  const status = document.getElementById('catroom-status');
+  const record = catroomRecords.find(note => note.id === id);
+  const targetRoom = CATROOM_AUTHOR_ROOM[String(record?.author || '').toLowerCase()];
+  if (!targetRoom) {
+    if (status) status.textContent = 'No room for this author';
+    return;
+  }
+  if (status) status.textContent = `Copying to ${targetRoom}`;
+  try {
+    const res = await authFetch(BASE + '/api/room/copy_catroom', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id }),
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (status) status.textContent = `Copied to ${targetRoom}`;
+  } catch (e) {
+    if (status) status.textContent = `Copy failed · ${e.message}`;
+  }
 }
 
 async function saveCatroomEdit(id) {
