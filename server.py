@@ -140,6 +140,12 @@ import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)
 BUCKETS_DIR = config["buckets_dir"]
 catroom_store = CatroomStore(BUCKETS_DIR)
 room_store = RoomStore(BUCKETS_DIR)
+ROOM_TOPIC_TO_CAT = {
+    "InkRoom": "ink",
+    "AshRoom": "ash",
+    "MossRoom": "moss",
+    "NoxRoom": "nox",
+}
 
 
 def _bucket_path(*parts: str) -> str:
@@ -2907,7 +2913,21 @@ def catroom_update(
     if model is not None:
         updates["model"] = model
     try:
-        record = catroom_store.update(note_id, **updates)
+        if str(note_id or "").startswith("room_"):
+            room_body = {}
+            if author is not None:
+                room_body["author"] = author
+            if content is not None:
+                room_body["content"] = content
+            if topic is not None:
+                room_body["topic"] = topic
+            if mood is not None:
+                room_body["mood"] = mood
+            if model is not None:
+                room_body["model"] = model
+            record = _update_room_note_for_dashboard(note_id, room_body)
+        else:
+            record = catroom_store.update(note_id, **updates)
         return {"ok": True, "record": record}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
@@ -2919,7 +2939,10 @@ def catroom_delete(note_id: str) -> dict:
     删除猫屋公共房间里的一张便签。
     """
     try:
-        deleted = catroom_store.delete(note_id)
+        if str(note_id or "").startswith("room_"):
+            deleted = room_store.delete(note_id)
+        else:
+            deleted = catroom_store.delete(note_id)
         return {"ok": True, "deleted": deleted}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
@@ -4021,14 +4044,69 @@ async def api_catroom_read(request):
     except ValueError:
         limit = 15
     try:
-        records = catroom_store.read(
-            limit=limit,
-            topic=params.get("topic", ""),
-            author=params.get("author", ""),
-        )
+        topic = params.get("topic", "")
+        if topic in ROOM_TOPIC_TO_CAT:
+            records = _room_topic_records(topic, limit, author=params.get("author", ""))
+        else:
+            records = catroom_store.read(
+                limit=limit,
+                topic=topic,
+                author=params.get("author", ""),
+            )
         return JSONResponse({"ok": True, "records": records, "count": len(records)})
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+def _room_record_for_dashboard(record: dict, topic: str) -> dict:
+    cat = str(record.get("cat") or "").strip().lower()
+    return {
+        "id": record.get("id"),
+        "ts": record.get("ts"),
+        "author": cat or topic.replace("Room", "").lower(),
+        "content": record.get("content"),
+        "topic": topic,
+        "mood": record.get("kind"),
+        "model": record.get("model"),
+        "reply_to": None,
+        "edited_ts": record.get("edited_ts"),
+        "source": "room",
+        "room_kind": record.get("kind"),
+        "weight": record.get("weight"),
+        "tags": record.get("tags") or [],
+    }
+
+
+def _room_topic_records(topic: str, limit: int, author: str = "") -> list[dict]:
+    cat = ROOM_TOPIC_TO_CAT.get(topic)
+    catroom_records = catroom_store.read(limit=limit, topic=topic, author=author)
+    if not cat:
+        return catroom_records
+    room_records = [_room_record_for_dashboard(r, topic) for r in room_store.read(cat=cat, limit=limit)]
+    author_filter = str(author or "").strip().lower()
+    if author_filter:
+        room_records = [r for r in room_records if r.get("author") == author_filter]
+    records = catroom_records + room_records
+    records.sort(key=lambda r: str(r.get("ts") or ""))
+    return records[-max(1, min(int(limit or 15), 100)):]
+
+
+def _update_room_note_for_dashboard(note_id: str, body: dict) -> dict:
+    topic = body.get("topic")
+    updates = {}
+    if "author" in body:
+        updates["cat"] = body.get("author")
+    if "content" in body:
+        updates["content"] = body.get("content")
+    if "topic" in body:
+        updates["cat"] = ROOM_TOPIC_TO_CAT.get(str(topic or ""), body.get("author"))
+    if "mood" in body:
+        updates["kind"] = body.get("mood")
+    if "model" in body:
+        updates["model"] = body.get("model")
+    record = room_store.update(note_id, **updates)
+    room_topic = next((name for name, cat in ROOM_TOPIC_TO_CAT.items() if cat == record.get("cat")), "Catroom")
+    return _room_record_for_dashboard(record, room_topic)
 
 
 @mcp.custom_route("/api/catroom/hold", methods=["POST"])
@@ -4094,7 +4172,11 @@ async def api_catroom_update(request):
         if key in body:
             updates[key] = "" if body.get(key) is None else body.get(key)
     try:
-        record = catroom_store.update(body.get("id", ""), **updates)
+        note_id = str(body.get("id", "") or "")
+        if note_id.startswith("room_"):
+            record = _update_room_note_for_dashboard(note_id, body)
+        else:
+            record = catroom_store.update(note_id, **updates)
         return JSONResponse({"ok": True, "record": record})
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
@@ -4111,7 +4193,11 @@ async def api_catroom_delete(request):
     except Exception:
         return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
     try:
-        deleted = catroom_store.delete(body.get("id", ""))
+        note_id = str(body.get("id", "") or "")
+        if note_id.startswith("room_"):
+            deleted = room_store.delete(note_id)
+        else:
+            deleted = catroom_store.delete(note_id)
         return JSONResponse({"ok": True, "deleted": deleted})
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)

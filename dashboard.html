@@ -5646,6 +5646,9 @@ function renderCatroom(records) {
   const byId = new Map(records.map(r => [r.id, r]));
   list.innerHTML = records.map(record => {
     const parent = record.reply_to ? byId.get(record.reply_to) : null;
+    const isRoomSource = record.source === 'room' || String(record.id || '').startsWith('room_');
+    const authorOptions = isRoomSource ? ['nox','ink','ash','moss'] : ['jiajia','nox','ink','ash','moss'];
+    const roomOptions = isRoomSource ? CATROOM_ROOMS.filter(room => room.value !== 'Catroom') : CATROOM_ROOMS;
     const topic = record.topic ? `<span class="catroom-topic">#${esc(record.topic)}</span>` : '';
     const mood = record.mood ? `<span class="catroom-mood">${esc(record.mood)}</span>` : '';
     const model = record.model ? `<span class="catroom-model">${esc(record.model)}</span>` : '';
@@ -5657,7 +5660,7 @@ function renderCatroom(records) {
           <div class="catroom-edit">
             <label>Author</label>
             <select id="catroom-edit-author-${esc(record.id)}">
-              ${['jiajia','nox','ink','ash','moss'].map(author => `<option value="${author}" ${record.author === author ? 'selected' : ''}>${esc(catroomAuthorLabel(author))}</option>`).join('')}
+              ${authorOptions.map(author => `<option value="${author}" ${record.author === author ? 'selected' : ''}>${esc(catroomAuthorLabel(author))}</option>`).join('')}
             </select>
             <label>Model</label>
             <input id="catroom-edit-model-${esc(record.id)}" value="${esc(record.model || '')}" placeholder="optional">
@@ -5665,7 +5668,7 @@ function renderCatroom(records) {
               <div>
                 <label>Room</label>
                 <select id="catroom-edit-topic-${esc(record.id)}">
-                  ${CATROOM_ROOMS.map(room => `<option value="${esc(room.value)}" ${(record.topic || 'Catroom') === room.value ? 'selected' : ''}>${esc(room.label)}</option>`).join('')}
+                  ${roomOptions.map(room => `<option value="${esc(room.value)}" ${(record.topic || 'Catroom') === room.value ? 'selected' : ''}>${esc(room.label)}</option>`).join('')}
                 </select>
               </div>
               <div>

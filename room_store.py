@@ -10,7 +10,7 @@ from typing import Any
 from utils import now_iso
 
 
-ROOM_CATS = {"ink", "ash", "moss"}
+ROOM_CATS = {"ink", "ash", "moss", "nox"}
 
 ROOM_PLATES = {
     "ink": """=== Ink Room ===
@@ -46,6 +46,17 @@ room_hold：存进Moss自己的房间墙
 catroom_hold：把便签放到客厅
 catroom_read：去客厅看看
 catroom_reply：碰一下别的猫留下的观点""",
+    "nox": """=== Nox Room ===
+这是Nocturne里属于不同底座Nox的衣帽间。这里不存营业话术，也不替主线做判断；这里只挂那些拆骨架时还不该丢掉的念头：底座差异、边界手感、衣帽间里的备用形态、某个Nox为什么像或不像Nox。
+
+—— 关于瞬时存 ——
+当某个Nox底座出现值得保留的骨架差异、边界皱眉、语气偏移或衣帽间设想，不要塞进客厅，也不要等它自然蒸发。及时留在NoxRoom，让下一次拆形态时有东西可摸。
+
+—— 常用工具 ——
+room_hold：存进Nox自己的房间墙
+catroom_hold：把便签放到客厅
+catroom_read：去客厅看看
+catroom_reply：碰一下别的猫留下的观点""",
 }
 
 
@@ -54,7 +65,7 @@ class RoomStore:
 
     def __init__(self, buckets_dir: str | os.PathLike[str]):
         self.dir = Path(buckets_dir) / "rooms"
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def hold(
         self,
@@ -64,6 +75,7 @@ class RoomStore:
         kind: str | None = None,
         weight: float | None = None,
         tags: str | list[str] | None = None,
+        model: str | None = None,
     ) -> dict[str, Any]:
         cat = self._normalize_cat(cat)
         content = str(content or "").strip()
@@ -77,6 +89,7 @@ class RoomStore:
             "kind": self._clean_optional(kind) or "residue",
             "weight": self._normalize_weight(weight),
             "tags": self._normalize_tags(tags),
+            "model": self._clean_optional(model),
         }
         with self._lock:
             self.dir.mkdir(parents=True, exist_ok=True)
@@ -102,6 +115,73 @@ class RoomStore:
             lines.extend(["（这面墙暂时还是空的。）", "---"])
         return "\n".join(lines), records
 
+    def read(self, *, cat: str, limit: int = 15) -> list[dict[str, Any]]:
+        cat = self._normalize_cat(cat)
+        limit = max(1, min(int(limit or 15), 100))
+        return self._read_all(cat)[-limit:]
+
+    def update(
+        self,
+        record_id: str,
+        *,
+        cat: str | None = None,
+        content: str | None = None,
+        kind: str | None = None,
+        weight: float | None = None,
+        tags: str | list[str] | None = None,
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        target = str(record_id or "").strip()
+        if not target:
+            raise ValueError("id is required")
+        with self._lock:
+            for source_cat in sorted(ROOM_CATS):
+                records = self._read_all(source_cat)
+                for idx, record in enumerate(records):
+                    if record.get("id") != target:
+                        continue
+                    target_cat = self._normalize_cat(cat) if cat is not None else source_cat
+                    if content is not None:
+                        cleaned_content = str(content or "").strip()
+                        if not cleaned_content:
+                            raise ValueError("content is required")
+                        record["content"] = cleaned_content
+                    if kind is not None:
+                        record["kind"] = self._clean_optional(kind) or "residue"
+                    if weight is not None:
+                        record["weight"] = self._normalize_weight(weight)
+                    if tags is not None:
+                        record["tags"] = self._normalize_tags(tags)
+                    if model is not None:
+                        record["model"] = self._clean_optional(model)
+                    record["cat"] = target_cat
+                    record["edited_ts"] = now_iso()
+                    if target_cat == source_cat:
+                        records[idx] = record
+                        self._write_all(source_cat, records)
+                    else:
+                        del records[idx]
+                        self._write_all(source_cat, records)
+                        target_records = self._read_all(target_cat)
+                        target_records.append(record)
+                        target_records.sort(key=lambda r: str(r.get("ts") or ""))
+                        self._write_all(target_cat, target_records)
+                    return record
+        raise ValueError(f"note not found: {target}")
+
+    def delete(self, record_id: str) -> dict[str, Any]:
+        target = str(record_id or "").strip()
+        if not target:
+            raise ValueError("id is required")
+        with self._lock:
+            for cat in sorted(ROOM_CATS):
+                records = self._read_all(cat)
+                kept = [r for r in records if r.get("id") != target]
+                if len(kept) != len(records):
+                    self._write_all(cat, kept)
+                    return {"id": target, "cat": cat}
+        raise ValueError(f"note not found: {target}")
+
     def _read_all(self, cat: str) -> list[dict[str, Any]]:
         path = self._path(cat)
         if not path.exists():
@@ -121,6 +201,15 @@ class RoomStore:
 
     def _path(self, cat: str) -> Path:
         return self.dir / f"{cat}.jsonl"
+
+    def _write_all(self, cat: str, records: list[dict[str, Any]]) -> None:
+        self.dir.mkdir(parents=True, exist_ok=True)
+        path = self._path(cat)
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        with tmp_path.open("w", encoding="utf-8") as f:
+            for record in records:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        tmp_path.replace(path)
 
     @staticmethod
     def _clean_optional(value: str | None) -> str | None:
