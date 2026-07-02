@@ -4047,6 +4047,8 @@ async def api_catroom_read(request):
         topic = params.get("topic", "")
         if topic in ROOM_TOPIC_TO_CAT:
             records = _room_topic_records(topic, limit, author=params.get("author", ""))
+        elif topic == "Catroom":
+            records = _public_catroom_records(limit, author=params.get("author", ""))
         else:
             records = catroom_store.read(
                 limit=limit,
@@ -4082,11 +4084,6 @@ def _room_topic_records(topic: str, limit: int, author: str = "") -> list[dict]:
     catroom_records = catroom_store.read(limit=limit, topic=topic, author=author)
     if not cat:
         return catroom_records
-    if not author:
-        by_id = {record.get("id"): record for record in catroom_records}
-        for record in catroom_store.read(limit=limit, author=cat):
-            by_id[record.get("id")] = record
-        catroom_records = list(by_id.values())
     room_records = [_room_record_for_dashboard(r, topic) for r in room_store.read(cat=cat, limit=limit)]
     author_filter = str(author or "").strip().lower()
     if author_filter:
@@ -4112,6 +4109,13 @@ def _update_room_note_for_dashboard(note_id: str, body: dict) -> dict:
     record = room_store.update(note_id, **updates)
     room_topic = next((name for name, cat in ROOM_TOPIC_TO_CAT.items() if cat == record.get("cat")), "Catroom")
     return _room_record_for_dashboard(record, room_topic)
+
+
+def _public_catroom_records(limit: int, author: str = "") -> list[dict]:
+    records = catroom_store.read(limit=100, author=author)
+    room_topics = set(ROOM_TOPIC_TO_CAT)
+    records = [record for record in records if record.get("topic") not in room_topics]
+    return records[-max(1, min(int(limit or 15), 100)):]
 
 
 @mcp.custom_route("/api/catroom/hold", methods=["POST"])
@@ -4154,6 +4158,61 @@ async def api_room_read(request):
     try:
         records = [_room_record_for_dashboard(r, topic or f"{cat.title()}Room") for r in room_store.read(cat=cat, limit=limit)]
         return JSONResponse({"ok": True, "records": records, "count": len(records), "source": "room"})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@mcp.custom_route("/api/room/hold", methods=["POST"])
+async def api_room_hold(request):
+    """Append a private room-wall note from the Room dashboard."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    topic = body.get("topic", "")
+    cat = body.get("cat") or ROOM_TOPIC_TO_CAT.get(str(topic or ""))
+    room_topic = next((name for name, room_cat in ROOM_TOPIC_TO_CAT.items() if room_cat == cat), str(topic or ""))
+    try:
+        record = room_store.hold(
+            cat=cat,
+            content=body.get("content", ""),
+            kind=body.get("mood") or body.get("kind") or "note",
+            model=body.get("model"),
+        )
+        return JSONResponse({"ok": True, "record": _room_record_for_dashboard(record, room_topic)})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@mcp.custom_route("/api/room/plate", methods=["GET"])
+async def api_room_plate_read(request):
+    """Read editable room breath copy."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    cat = request.query_params.get("cat", "")
+    try:
+        return JSONResponse({"ok": True, "cat": cat, "content": room_store.plate(cat)})
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+
+
+@mcp.custom_route("/api/room/plate", methods=["POST"])
+async def api_room_plate_update(request):
+    """Update editable room breath copy."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err: return err
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400)
+    try:
+        updated = room_store.update_plate(cat=body.get("cat", ""), content=body.get("content", ""))
+        return JSONResponse({"ok": True, "plate": updated})
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 

@@ -2127,13 +2127,16 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
 }
 .catroom-actions button {
   min-height: auto;
-  padding: .24rem 0;
-  border: 0;
-  border-radius: 0;
-  color: var(--mute);
-  background: transparent;
+  padding: .28rem .62rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  color: var(--ink-soft);
+  background: var(--surface-soft);
+  font: 300 var(--fs-micro)/1 var(--font-mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
-.catroom-actions button:hover { color: var(--accent-deep); background: transparent; }
+.catroom-actions button:hover { color: var(--accent-deep); border-color: rgba(232,149,79,.32); background: var(--surface-soft); }
 .catroom-edit {
   display: grid;
   gap: .65rem;
@@ -2147,6 +2150,20 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
   display: flex;
   flex-wrap: wrap;
   gap: .65rem;
+}
+.catroom-plate-editor {
+  display: none;
+  gap: .7rem;
+  margin-bottom: 1rem;
+  padding: .85rem 0 1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+.catroom-plate-editor.active {
+  display: grid;
+}
+.catroom-plate-editor textarea {
+  min-height: 180px;
+  resize: vertical;
 }
 .catroom-compose {
   position: sticky;
@@ -2624,6 +2641,14 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
         <button onclick="loadCatroom()">Revisit</button>
       </div>
       <div class="catroom-rooms" id="catroom-rooms" aria-label="Rooms"></div>
+      <div class="catroom-plate-editor" id="catroom-plate-editor">
+        <label>Breath copy</label>
+        <textarea id="catroom-plate-content" placeholder="Room breath copy"></textarea>
+        <div class="catroom-edit-actions">
+          <button class="btn-primary" onclick="saveRoomPlate()">Save copy</button>
+          <button onclick="loadRoomPlate()">Revert</button>
+        </div>
+      </div>
       <div class="catroom-list" id="catroom-list">
         <div class="catroom-empty">Reading Room</div>
       </div>
@@ -5633,6 +5658,7 @@ function renderCatroomRooms() {
   if (title) title.textContent = room.label;
   if (sub) sub.textContent = room.sub;
   if (composeSub) composeSub.textContent = `hold / read / reply · ${room.label}`;
+  document.getElementById('catroom-plate-editor')?.classList.toggle('active', currentCatroomTopic !== 'Catroom');
 }
 
 function renderCatroom(records) {
@@ -5657,6 +5683,9 @@ function renderCatroom(records) {
       ? `<span class="catroom-reply">reply ${esc(parent ? catroomAuthorLabel(parent.author) : catroomShortId(record.reply_to))}</span>`
       : '';
     const isEditing = catroomEditingId === record.id;
+    const replyButton = !isRoomSource
+      ? `<button onclick="setCatroomReply('${esc(record.id)}','${esc(catroomAuthorLabel(record.author))}')">Reply</button>`
+      : '';
     const body = isEditing ? `
           <div class="catroom-edit">
             <label>Author</label>
@@ -5687,7 +5716,7 @@ function renderCatroom(records) {
     ` : `
           <div class="catroom-content">${esc(record.content)}</div>
           <div class="catroom-actions">
-            <button onclick="setCatroomReply('${esc(record.id)}','${esc(catroomAuthorLabel(record.author))}')">Reply</button>
+            ${replyButton}
             <button onclick="startCatroomEdit('${esc(record.id)}')">Edit</button>
             <button onclick="deleteCatroomNote('${esc(record.id)}')">Delete</button>
           </div>
@@ -5721,30 +5750,73 @@ async function loadCatroom() {
   if (status) status.textContent = 'Reading room';
   try {
     renderCatroomRooms();
-    const topicParam = currentCatroomTopic === 'Catroom' ? '' : `&topic=${encodeURIComponent(currentCatroomTopic)}`;
-    const res = await authFetch(BASE + `/api/catroom/read?limit=15${topicParam}`);
+    const cat = CATROOM_TOPIC_TO_CAT[currentCatroomTopic];
+    if (cat) {
+      await loadRoomPlate();
+      const wallRes = await authFetch(BASE + `/api/room/read?limit=15&cat=${encodeURIComponent(cat)}`);
+      if (!wallRes) return;
+      const wallData = await wallRes.json();
+      if (!wallRes.ok || !wallData.ok) throw new Error(wallData.error || `HTTP ${wallRes.status}`);
+      const records = wallData.records || [];
+      renderCatroom(records);
+      if (status) status.textContent = `${records.length} notes · ${wallData.count || 0} wall`;
+      return;
+    }
+    const res = await authFetch(BASE + '/api/catroom/read?limit=15&topic=Catroom');
     if (!res) return;
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    let records = data.records || [];
-    let wallCount = records.filter(record => record.source === 'room' || String(record.id || '').startsWith('room_')).length;
-    const cat = CATROOM_TOPIC_TO_CAT[currentCatroomTopic];
-    if (cat) {
-      const wallRes = await authFetch(BASE + `/api/room/read?limit=15&cat=${encodeURIComponent(cat)}`);
-      if (wallRes) {
-        const wallData = await wallRes.json();
-        if (wallRes.ok && wallData.ok) {
-          wallCount = wallData.count || 0;
-          records = mergeCatroomRecords(records, wallData.records || []);
-        }
-      }
-    }
+    const records = data.records || [];
     renderCatroom(records);
-    if (status) status.textContent = cat ? `${records.length} notes · ${wallCount} wall` : `${records.length} notes`;
+    if (status) status.textContent = `${records.length} notes`;
   } catch (e) {
     const list = document.getElementById('catroom-list');
     if (list) list.innerHTML = `<div class="catroom-empty">Catroom is out of reach · ${esc(e.message)}</div>`;
     if (status) status.textContent = 'Read failed';
+  }
+}
+
+async function loadRoomPlate() {
+  const cat = CATROOM_TOPIC_TO_CAT[currentCatroomTopic];
+  const editor = document.getElementById('catroom-plate-editor');
+  if (!cat) {
+    editor?.classList.remove('active');
+    return;
+  }
+  editor?.classList.add('active');
+  const textarea = document.getElementById('catroom-plate-content');
+  try {
+    const res = await authFetch(BASE + `/api/room/plate?cat=${encodeURIComponent(cat)}`);
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (textarea) textarea.value = data.content || '';
+  } catch (e) {
+    if (textarea) textarea.value = '';
+  }
+}
+
+async function saveRoomPlate() {
+  const cat = CATROOM_TOPIC_TO_CAT[currentCatroomTopic];
+  const status = document.getElementById('catroom-status');
+  const content = document.getElementById('catroom-plate-content')?.value.trim() || '';
+  if (!cat || !content) {
+    if (status) status.textContent = 'Breath copy is empty';
+    return;
+  }
+  if (status) status.textContent = 'Saving copy';
+  try {
+    const res = await authFetch(BASE + '/api/room/plate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ cat, content }),
+    });
+    if (!res) return;
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    if (status) status.textContent = 'Copy saved';
+  } catch (e) {
+    if (status) status.textContent = `Copy save failed · ${e.message}`;
   }
 }
 
@@ -5785,9 +5857,11 @@ async function submitCatroomNote() {
     return;
   }
   if (status) status.textContent = 'Holding note';
-  const endpoint = catroomReplyTo ? '/api/catroom/reply' : '/api/catroom/hold';
+  const isRoom = topic !== 'Catroom';
+  const endpoint = isRoom ? '/api/room/hold' : (catroomReplyTo ? '/api/catroom/reply' : '/api/catroom/hold');
   const payload = { author, content, topic, mood, model };
-  if (catroomReplyTo) payload.reply_to = catroomReplyTo;
+  if (isRoom) payload.cat = CATROOM_TOPIC_TO_CAT[topic] || author;
+  if (!isRoom && catroomReplyTo) payload.reply_to = catroomReplyTo;
   try {
     const res = await authFetch(BASE + endpoint, {
       method: 'POST',

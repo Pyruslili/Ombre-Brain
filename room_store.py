@@ -101,7 +101,7 @@ class RoomStore:
         cat = self._normalize_cat(cat)
         limit = max(1, min(int(limit or 6), 20))
         records = list(reversed(self._read_all(cat)[-limit:]))
-        lines = [ROOM_PLATES[cat], ""]
+        lines = [self.plate(cat), ""]
         if records:
             for record in records:
                 lines.extend(
@@ -114,6 +114,26 @@ class RoomStore:
         else:
             lines.extend(["（这面墙暂时还是空的。）", "---"])
         return "\n".join(lines), records
+
+    def plate(self, cat: str) -> str:
+        cat = self._normalize_cat(cat)
+        overrides = self._read_plates()
+        return str(overrides.get(cat) or ROOM_PLATES[cat])
+
+    def update_plate(self, *, cat: str, content: str) -> dict[str, Any]:
+        cat = self._normalize_cat(cat)
+        content = str(content or "").strip()
+        if not content:
+            raise ValueError("content is required")
+        with self._lock:
+            overrides = self._read_plates()
+            overrides[cat] = content
+            self.dir.mkdir(parents=True, exist_ok=True)
+            path = self._plates_path()
+            tmp_path = path.with_suffix(path.suffix + ".tmp")
+            tmp_path.write_text(json.dumps(overrides, ensure_ascii=False, indent=2), encoding="utf-8")
+            tmp_path.replace(path)
+        return {"cat": cat, "content": content}
 
     def read(self, *, cat: str, limit: int = 15) -> list[dict[str, Any]]:
         cat = self._normalize_cat(cat)
@@ -201,6 +221,21 @@ class RoomStore:
 
     def _path(self, cat: str) -> Path:
         return self.dir / f"{cat}.jsonl"
+
+    def _plates_path(self) -> Path:
+        return self.dir / "plates.json"
+
+    def _read_plates(self) -> dict[str, str]:
+        path = self._plates_path()
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): str(v) for k, v in data.items() if str(k) in ROOM_CATS and str(v).strip()}
 
     def _write_all(self, cat: str, records: list[dict[str, Any]]) -> None:
         self.dir.mkdir(parents=True, exist_ok=True)

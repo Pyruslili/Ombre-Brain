@@ -30,6 +30,19 @@ def test_room_breath_includes_empty_wall_plate(tmp_path):
     assert "（这面墙暂时还是空的。）" in text
 
 
+def test_room_plate_can_be_overridden(tmp_path):
+    store = RoomStore(tmp_path)
+
+    updated = store.update_plate(cat="moss", content="=== Moss Room ===\nnew copy")
+    text, records = store.breath(cat="moss")
+
+    assert updated["cat"] == "moss"
+    assert updated["content"] == "=== Moss Room ===\nnew copy"
+    assert records == []
+    assert text.startswith("=== Moss Room ===\nnew copy")
+    assert "承重处的铅笔线" not in text
+
+
 def test_room_hold_normalizes_metadata(tmp_path):
     store = RoomStore(tmp_path)
 
