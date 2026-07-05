@@ -2740,29 +2740,6 @@ async def breath(
     return final_text
 
 
-@mcp.tool(name="breath_lite")
-async def breath_lite(
-    query: str = "",
-    max_tokens: int = 10000,
-    domain: str = "",
-    valence: float = -1,
-    arousal: float = -1,
-    max_results: int = 20,
-    importance_min: int = -1,
-) -> str:
-    """breath_lite — API-line wake breath with the same core skeleton as breath, but shorter wake traces. Keeps Shape Trace intact; wake mode trims Memory Drift to 4 entries and Feel Trace to 5 entries."""
-    packet = await breath(
-        query=query,
-        max_tokens=max_tokens,
-        domain=domain,
-        valence=valence,
-        arousal=arousal,
-        max_results=max_results,
-        importance_min=importance_min,
-    )
-    if query.strip() or domain.strip() or importance_min >= 1:
-        return packet
-    return _breath_lite_packet(packet, memory_limit=4, feel_limit=5)
 @mcp.tool(name="undercurrent")
 def undercurrent_tool() -> dict:
     """
@@ -2884,66 +2861,6 @@ def catroom_reply(
             model=model,
         )
         return {"ok": True, "record": record}
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-
-
-@mcp.tool(name="catroom_update")
-def catroom_update(
-    note_id: str,
-    author: str | None = None,
-    content: str | None = None,
-    topic: str | None = None,
-    mood: str | None = None,
-    model: str | None = None,
-) -> dict:
-    """
-    编辑猫屋公共房间里的一张便签。
-    允许修正作者、内容、房间/topic、mood和模型名。
-    """
-    updates = {}
-    if author is not None:
-        updates["author"] = author
-    if content is not None:
-        updates["content"] = content
-    if topic is not None:
-        updates["topic"] = topic
-    if mood is not None:
-        updates["mood"] = mood
-    if model is not None:
-        updates["model"] = model
-    try:
-        if str(note_id or "").startswith("room_"):
-            room_body = {}
-            if author is not None:
-                room_body["author"] = author
-            if content is not None:
-                room_body["content"] = content
-            if topic is not None:
-                room_body["topic"] = topic
-            if mood is not None:
-                room_body["mood"] = mood
-            if model is not None:
-                room_body["model"] = model
-            record = _update_room_note_for_dashboard(note_id, room_body)
-        else:
-            record = catroom_store.update(note_id, **updates)
-        return {"ok": True, "record": record}
-    except ValueError as e:
-        return {"ok": False, "error": str(e)}
-
-
-@mcp.tool(name="catroom_delete")
-def catroom_delete(note_id: str) -> dict:
-    """
-    删除猫屋公共房间里的一张便签。
-    """
-    try:
-        if str(note_id or "").startswith("room_"):
-            deleted = room_store.delete(note_id)
-        else:
-            deleted = catroom_store.delete(note_id)
-        return {"ok": True, "deleted": deleted}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
 
@@ -3987,6 +3904,11 @@ async def api_bucket_update(request):
         kwargs["pinned"] = bool(body["pinned"])
     if "name" in body:
         kwargs["name"] = body["name"]
+    if "type" in body:
+        bucket_type = body["type"]
+        if bucket_type not in {"dynamic", "permanent", "feel"}:
+            return JSONResponse({"error": "type must be dynamic, permanent, or feel"}, status_code=400)
+        kwargs["type"] = bucket_type
     if "tags" in body:
         tags = body["tags"]
         if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):

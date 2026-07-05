@@ -231,7 +231,10 @@ class BucketManager:
         Move a bucket file to a new type directory, preserving domain subfolder.
         Returns new file path.
         """
-        primary_domain = sanitize_name(domain[0]) if domain else "未分类"
+        if os.path.normpath(target_type_dir) == os.path.normpath(self.feel_dir):
+            primary_domain = "沉淀物"
+        else:
+            primary_domain = sanitize_name(domain[0]) if domain else "未分类"
         target_dir = os.path.join(target_type_dir, primary_domain)
         os.makedirs(target_dir, exist_ok=True)
         filename = os.path.basename(file_path)
@@ -300,9 +303,35 @@ class BucketManager:
             post["chord"] = str(kwargs["chord"]).strip()
         if "created" in kwargs:
             post["created"] = kwargs["created"]
+        if "type" in kwargs:
+            bucket_type = str(kwargs["type"]).strip()
+            if bucket_type not in {"dynamic", "permanent", "feel"}:
+                logger.warning(f"Invalid bucket type / 非法记忆类型: {bucket_type}")
+                return False
+            post["type"] = bucket_type
+            if bucket_type == "feel":
+                post["domain"] = []
+            elif not post.get("domain"):
+                post["domain"] = ["未分类"]
 
         # --- Auto-refresh activation time / 自动刷新激活时间 ---
         post["last_active"] = now_iso()
+
+        # --- Auto-move when type changes or pinned → permanent/ ---
+        # --- 类型变化时同步移动文件；钉选仍进入 permanent/ ---
+        domain = post.get("domain", ["未分类"])
+        target_dir = None
+        if kwargs.get("pinned") and post.get("type") != "permanent":
+            post["type"] = "permanent"
+            target_dir = self.permanent_dir
+        elif "type" in kwargs:
+            bucket_type = post.get("type", "dynamic")
+            if bucket_type == "permanent":
+                target_dir = self.permanent_dir
+            elif bucket_type == "feel":
+                target_dir = self.feel_dir
+            else:
+                target_dir = self.dynamic_dir
 
         try:
             with open(file_path, "w", encoding="utf-8") as f:
@@ -311,17 +340,8 @@ class BucketManager:
             logger.error(f"Failed to write bucket update / 写入桶更新失败: {file_path}: {e}")
             return False
 
-        # --- Auto-move: pinned → permanent/ ---
-        # --- 自动移动：钉选 → permanent/ ---
-        # NOTE: resolved buckets are NOT auto-archived here.
-        # They stay in dynamic/ and decay naturally until score < threshold.
-        # 注意：resolved 桶不在此自动归档，留在 dynamic/ 随衰减引擎自然归档。
-        domain = post.get("domain", ["未分类"])
-        if kwargs.get("pinned") and post.get("type") != "permanent":
-            post["type"] = "permanent"
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(frontmatter.dumps(post))
-            self._move_bucket(file_path, self.permanent_dir, domain)
+        if target_dir:
+            self._move_bucket(file_path, target_dir, domain)
 
         logger.info(f"Updated bucket / 更新记忆桶: {bucket_id}")
         return True

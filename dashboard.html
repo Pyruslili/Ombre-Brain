@@ -4467,7 +4467,7 @@ async function showDetail(id) {
     const valence = finiteNumber(meta.valence, .5);
     const arousal = finiteNumber(meta.arousal, .3);
     const modelValence = meta.model_valence == null ? null : finiteNumber(meta.model_valence, null);
-    activeDetail = { id, name: String(meta.name || id), content: String(b.content || ''), tags: [...detailTags], signal: detailSignal, chord: detailChord };
+    activeDetail = { id, name: String(meta.name || id), type: String(meta.type || 'dynamic'), content: String(b.content || ''), tags: [...detailTags], signal: detailSignal, chord: detailChord };
     content.innerHTML =
       `<h2>${esc(meta.name || id)}</h2>
        <label class="detail-body-label">正文</label>
@@ -4508,6 +4508,7 @@ function startEdit() {
   const currentContent = activeDetail?.id === id ? activeDetail.content : body.textContent;
   const currentName = activeDetail?.id === id ? activeDetail.name : (document.querySelector('#detail-content > h2')?.textContent || id);
   const currentTags = activeDetail?.id === id ? [...activeDetail.tags] : [];
+  const currentType = activeDetail?.id === id ? activeDetail.type : 'dynamic';
   const currentSignal = activeDetail?.id === id ? activeDetail.signal : '';
   const currentChord = activeDetail?.id === id ? activeDetail.chord : '';
   const actions = document.querySelector('#detail-content > .detail-actions');
@@ -4518,6 +4519,14 @@ function startEdit() {
       <input id="edit-title" type="text" aria-label="标题">
     </div>
     <textarea id="edit-ta" aria-label="正文"></textarea>
+    <div class="title-editor">
+      <label for="edit-type">类型</label>
+      <select id="edit-type" aria-label="类型">
+        <option value="dynamic">普通记忆(dynamic)</option>
+        <option value="feel">感受(feel)</option>
+        <option value="permanent">固化(permanent)</option>
+      </select>
+    </div>
     <div class="chord-editor">
       <label for="edit-chord">Chord</label>
       <input id="edit-chord" type="text" placeholder="例如 Em7 → Fmaj7">
@@ -4535,9 +4544,11 @@ function startEdit() {
   const contentField = document.getElementById('edit-ta');
   const titleField = document.getElementById('edit-title');
   const tagField = document.getElementById('edit-tags');
+  const typeField = document.getElementById('edit-type');
   const chordField = document.getElementById('edit-chord');
   titleField.value = currentName;
   contentField.value = currentContent;
+  typeField.value = ['dynamic', 'feel', 'permanent'].includes(currentType) ? currentType : 'dynamic';
   tagField.value = currentTags.join(', ');
   chordField.value = currentChord;
   autoSizeEditField(contentField, 180, 360);
@@ -4557,12 +4568,13 @@ async function saveBucket(id) {
   const text = document.getElementById('edit-ta').value;
   const name = (document.getElementById('edit-title')?.value || '').trim() || id;
   const tags = parseTags(document.getElementById('edit-tags').value);
+  const type = document.getElementById('edit-type')?.value || 'dynamic';
   const chord = (document.getElementById('edit-chord')?.value || '').trim();
   const signal = readSignalControls('edit');
   const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({content: text, name, tags, chord, signal})
+    body: JSON.stringify({content: text, name, type, tags, chord, signal})
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
