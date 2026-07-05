@@ -5250,7 +5250,7 @@ async def api_latent_notes(request):
     if status:
         notes = [n for n in notes if n.get("status") == status]
     notes = sorted(notes, key=lambda n: str(n.get("created_at", "")), reverse=True)
-    notes = sorted(notes, key=lambda n: bool(n.get("pinned")))[:max(1, min(limit, 200))]
+    notes = sorted(notes, key=lambda n: not bool(n.get("pinned")))[:max(1, min(limit, 200))]
     return JSONResponse(
         {"version": data.get("version", LATENT_NOTE_POOL_VERSION), "count": len(notes), "notes": notes},
         headers={"Access-Control-Allow-Origin": "*"},

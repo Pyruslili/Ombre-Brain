@@ -6349,7 +6349,7 @@ function latentStatusLabel(status) {
 }
 
 function latentPinnedLabel(note) {
-  return note?.pinned ? '常驻' : '';
+  return note?.pinned ? '已常驻' : '';
 }
 
 function latentDriveLabel(drive) {
@@ -6391,7 +6391,7 @@ function latentMarksLabel(marks) {
 
 function latentNoteChips(note) {
   const chips = [
-    { cls: 'pin', text: note.pinned ? '◆ 常驻' : '' },
+    { cls: 'pin', text: note.pinned ? '◆ 已常驻' : '' },
     { cls: 'kind', text: latentSourceKindLabel(note.source_kind) },
     { cls: 'weight', text: latentWeightLabel(note.source_score) },
     { cls: '', text: note.source_wander_mode || note.wander_mode || '' },
@@ -6486,7 +6486,7 @@ function renderLatentNoteRow(note) {
     ? `<button class="btn-primary" onclick="restoreLatentNote('${esc(id)}')">回池</button>`
     : '';
   const pinButton = note.pinned
-    ? `<button class="btn-primary latent-note-pin" onclick="toggleLatentNotePinned('${esc(id)}', false)">取消常驻</button>`
+    ? `<button class="btn-primary latent-note-pin" onclick="toggleLatentNotePinned('${esc(id)}', false)" title="点击取消常驻">已常驻</button>`
     : `<button class="btn-primary" onclick="toggleLatentNotePinned('${esc(id)}', true)">常驻</button>`;
   return `<div class="latent-note-row${note.pinned ? ' pinned' : ''}" data-latent-id="${esc(id)}">
     <div>
