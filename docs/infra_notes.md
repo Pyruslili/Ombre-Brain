@@ -15,3 +15,9 @@
   - Mixed event route scores into Chord Chemistry and preserved strong non-hover `dp` direction.
   - Narrowed `Low Tide` / `Clear`; raised `Spark` and `Overcast` specificity.
   - Added PA / NA weather delta -> Atmosphere tint bridge.
+
+Follow-up:
+
+- Symptom: `effective_NA` / Shadow could climb above `0.60` while persisted Atmosphere still displayed plain `Clear`.
+- Cause: `_weather_readout` only seeds Atmosphere from current chemistry when no `last_delta` exists; an old `Clear` current can survive after shadow residue rises.
+- Fix: raised shadow contribution to chemistry `strain`, and added display guard: when `effective_NA >= 0.55`, plain `Clear` is shown as `Clear → Overcast/Static/Watchful/Pressure` based on current chemistry.

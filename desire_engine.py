@@ -390,6 +390,7 @@ ATMOSPHERE_BLEND_SWITCH = 0.38
 ATMOSPHERE_STRONG_DP_INFLUENCE = 0.56
 ATMOSPHERE_STRONG_DP_MARGIN = 0.035
 ATMOSPHERE_STRONG_DP_BLEND = 0.22
+ATMOSPHERE_SHADOW_CLEAR_GUARD = 0.55
 CLIMATE_LEAN_BLEND = 0.06
 CLIMATE_ARROW_BLEND = 0.32
 CLIMATE_VISIBLE_STEPS = 1
@@ -1357,7 +1358,7 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
         + 0.20 * reflection
         + 0.25 * unresolved_pair
         + 0.18 * compressed_charge
-        + 0.08 * shadow
+        + 0.22 * shadow
     )
 
     route_scores = {
@@ -3905,13 +3906,25 @@ class DesireEngine:
                 line for line in recent_gravity if line and line != gravity_line
             ][:2]
             self.weather._write_raw(residue)
+        climate_current = climate.get("current", "Drift")
+        climate_display = climate_transition_display(atmosphere)
+        if effective_na >= ATMOSPHERE_SHADOW_CLEAR_GUARD and climate_display == "Clear":
+            scores = climate_scores(
+                chemistry.get("core"),
+                chemistry.get("route"),
+                chemistry.get("derived_texture"),
+            )
+            shadow_candidates = ("Overcast", "Static", "Watchful", "Pressure")
+            candidate = max(shadow_candidates, key=lambda label: scores.get(label, 0.0))
+            if scores.get(candidate, 0.0) >= 0.34:
+                climate_display = f"Clear → {candidate}"
         return {
             "base_PA": round(base["PA"], 3),
             "base_NA": round(base["NA"], 3),
             "effective_PA": round(effective_pa, 3),
             "effective_NA": round(effective_na, 3),
-            "climate": climate.get("current", "Drift"),
-            "climate_display": climate_transition_display(atmosphere),
+            "climate": climate_current,
+            "climate_display": climate_display,
             "atmosphere": atmosphere,
             "current_chord": current_weather_chord(effective_pa, effective_na),
             "chord_chemistry": chemistry,

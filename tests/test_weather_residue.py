@@ -1,3 +1,5 @@
+import time
+
 from desire_engine import (
     ATMOSPHERE_SOURCE_WEIGHTS,
     CLIMATE_LABELS,
@@ -438,6 +440,43 @@ def test_legacy_gravity_atmosphere_normalizes_to_current_label():
     assert atmosphere["climate"]["candidate"] in CLIMATE_LABELS
     assert atmosphere["climate"]["current"] != "Gravity"
     assert climate_transition_display(atmosphere) != "Gravity"
+
+
+def test_high_shadow_does_not_display_as_plain_clear(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    now = time.time()
+    state = engine.weather.load(now, decay=False)
+    state["components"]["feel"] = {"warmth": 0.30, "shadow": 0.35, "updated_at": now}
+    state["components"]["dialogue"] = {"warmth": 0.12, "shadow": 0.18, "updated_at": now}
+    state["atmosphere"] = {
+        "core": {"charge": 0.46, "clutch": 0.44, "strain": 0.24},
+        "route": {
+            "vector": "toward_jiajia",
+            "scores": {
+                "toward_jiajia": 0.72,
+                "toward_house": 0.25,
+                "outward": 0.22,
+                "inward": 0.18,
+                "guard": 0.20,
+                "hover": 0.24,
+            },
+        },
+        "climate": {
+            "current": "Clear",
+            "candidate": "Clear",
+            "candidate_steps": 0,
+            "blend": 0.0,
+        },
+        "last_delta": {"source": "dp", "influence": 0.65, "candidate": "Clear"},
+    }
+    engine.weather._write_raw(state)
+
+    weather = engine.weather_state()
+
+    assert weather["effective_NA"] >= 0.55
+    assert weather["climate"] == "Clear"
+    assert weather["climate_display"] != "Clear"
+    assert "→" in weather["climate_display"]
 
 
 def test_climate_transition_display_respects_blend_and_steps():
