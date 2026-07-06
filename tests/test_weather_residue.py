@@ -10,6 +10,7 @@ from desire_engine import (
     classify_chord_situation,
     climate_transition_display,
     current_weather_chord,
+    normalize_atmosphere_state,
     pa_na_snapshot,
     select_climate,
 )
@@ -410,6 +411,34 @@ def test_uninitialized_atmosphere_seeds_from_current_chemistry(tmp_path):
 
     assert weather["atmosphere"]["last_delta"]["source"] == "seed"
     assert weather["climate"] == selected["label"]
+
+
+def test_legacy_gravity_atmosphere_normalizes_to_current_label():
+    atmosphere = normalize_atmosphere_state({
+        "core": {"charge": 0.45, "clutch": 0.47, "strain": 0.35},
+        "route": {
+            "vector": "hover",
+            "scores": {
+                "toward_jiajia": 0.40,
+                "toward_house": 0.42,
+                "outward": 0.29,
+                "inward": 0.35,
+                "guard": 0.32,
+                "hover": 0.50,
+            },
+        },
+        "climate": {
+            "current": "Gravity",
+            "candidate": "Gravity",
+            "candidate_steps": 0,
+            "blend": 0.0,
+        },
+    })
+
+    assert atmosphere["climate"]["current"] in CLIMATE_LABELS
+    assert atmosphere["climate"]["candidate"] in CLIMATE_LABELS
+    assert atmosphere["climate"]["current"] != "Gravity"
+    assert climate_transition_display(atmosphere) != "Gravity"
 
 
 def test_climate_transition_display_respects_blend_and_steps():

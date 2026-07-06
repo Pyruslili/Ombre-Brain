@@ -369,7 +369,6 @@ CLIMATE_LABELS = (
     "Shelter",
     "Watchful",
     "Spark",
-    "Gravity",
 )
 ATMOSPHERE_SOURCE_WEIGHTS = {
     # DP/dialogue is the live weather vane: it should be able to turn the sky.
@@ -1523,7 +1522,6 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
         "Shelter": round(_clamp(0.38 * guard + 0.28 * clutch + 0.20 * scores["toward_house"] + 0.14 * (1.0 - charge)), 3),
         "Watchful": round(_clamp(0.36 * guard_route + 0.28 * clutch + 0.24 * strain + 0.12 * (1.0 - charge)), 3),
         "Spark": round(_clamp(0.48 * spark + 0.30 * charge + 0.22 * outward - 0.18 * strain), 3),
-        "Gravity": round(_clamp(0.42 * pull + 0.34 * clutch + 0.24 * toward), 3),
     }
 
 
