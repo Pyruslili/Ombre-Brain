@@ -448,10 +448,10 @@ Atmosphere 切换必须经过 hysteresis。
 前端显示规则：
 
 - `candidate == current`: 只显示 current
-- `candidate_steps < 2`: 只显示 current
-- `blend < 0.25`: 只显示 current
-- `0.25 <= blend < 0.60`: `Current · leaning Candidate`
-- `blend >= 0.60`: `Current → Candidate`
+- `candidate_steps < 1`: 只显示 current
+- `blend < 0.12`: 只显示 current
+- `0.12 <= blend < 0.48`: `Current · leaning Candidate`
+- `blend >= 0.48`: `Current → Candidate`
 
 Chord 的箭头表示和弦 / 化学结构进行。Atmosphere 的箭头表示天气迁移趋势。
 

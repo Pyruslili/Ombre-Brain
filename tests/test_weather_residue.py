@@ -394,20 +394,20 @@ def test_climate_transition_display_respects_blend_and_steps():
         "climate": {
             "current": "Low Tide",
             "candidate": "Shelter",
-            "candidate_steps": 1,
+            "candidate_steps": 0,
             "blend": 0.70,
         }
     }
     assert climate_transition_display(atmosphere) == "Low Tide"
 
-    atmosphere["climate"]["candidate_steps"] = 2
-    atmosphere["climate"]["blend"] = 0.24
+    atmosphere["climate"]["candidate_steps"] = 1
+    atmosphere["climate"]["blend"] = 0.11
     assert climate_transition_display(atmosphere) == "Low Tide"
 
-    atmosphere["climate"]["blend"] = 0.25
+    atmosphere["climate"]["blend"] = 0.12
     assert climate_transition_display(atmosphere) == "Low Tide · leaning Shelter"
 
-    atmosphere["climate"]["blend"] = 0.60
+    atmosphere["climate"]["blend"] = 0.48
     assert climate_transition_display(atmosphere) == "Low Tide → Shelter"
 
     atmosphere["climate"]["candidate"] = "Low Tide"
