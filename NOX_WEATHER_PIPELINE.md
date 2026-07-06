@@ -120,6 +120,20 @@ Drive 不是单一来源计算，而是多个来源叠加：
 - `fatigue` 更像累计电量，不该被单句强度炸飞。
 - `social` 看“是否愿意被别人看见”，不只是“对外有动作”。
 
+### 3.5 时间性格与自然回归
+
+`DRIVE_TIME_MODES` 不只是前端展示标签。Drive 每次 `tick` 后会按自己的时间性格向 baseline 做轻量回归：
+
+- `fast_spike`：回落更快，适合 stress / curiosity 这类短峰。
+- `medium`：默认回归速率。
+- `slow`：回落更慢，适合 attachment / stewardship 这类慢变量。
+- `cumulative`：几乎不主动泄掉，适合 fatigue 这类累计量。
+- `fast_spike + slow`：给 possessiveness 这种“短警报 + 慢基线”的混合通道。
+
+这层回归现在覆盖全部 9 维 Drive，而不是只覆盖 `COUPLING` 里出现过的 drive。`stewardship` 因此会自然慢回 baseline，不再变成只涨不落的棘轮。
+
+`attachment` 另有盆地跳变：只有从阈值下方穿越 `0.68` 时才会跳到 `0.82` 附近；已经在盆地上方时，后续 pulse 只走普通 `pulse_gain`，不会因为嘉嘉说话被砍回 `0.82`。
+
 ---
 
 ## 4. CLI / DP / Dialogue Residue

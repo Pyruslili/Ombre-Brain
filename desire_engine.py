@@ -258,6 +258,18 @@ RUMINATION_FADE_THRESHOLD = 0.06   # 低于这个才真正消失
 LEGACY_RETURN_RUMINATION_PREFIX = "她回来了。之前那段没有她的时间"
 
 DAMPING = 0.02
+DRIVE_TIME_MODE_DAMPING = {
+    "fast_spike": 1.75,
+    "fast_spike + slow": 0.60,
+    "medium": 1.00,
+    "slow": 0.35,
+    "cumulative": 0.10,
+}
+
+
+def drive_damping_rate(drive_key: str) -> float:
+    mode = DRIVE_TIME_MODES.get(drive_key, "medium")
+    return DAMPING * DRIVE_TIME_MODE_DAMPING.get(mode, DRIVE_TIME_MODE_DAMPING["medium"])
 
 # ─── ESM软互抑 + 逃逸阀（P3，作用在已有9维drive上，不另起PA/NA持久层）──────────
 # 正向组/负向组：不是新状态，只是把现有9维drive按情绪极性分组
@@ -2279,9 +2291,9 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
             delta = coeff if new_drives[src] > prev[src] else 0.0
         new_drives[tgt] = _clamp(new_drives[tgt] + delta)
 
-    coupled = set(k for src, tgt, _, _ in COUPLING for k in (src, tgt))
-    for k in coupled:
-        new_drives[k] = _clamp(new_drives[k] + DAMPING * (DRIVE_BASELINES[k] - new_drives[k]))
+    for k in DRIVE_KEYS:
+        rate = drive_damping_rate(k)
+        new_drives[k] = _clamp(new_drives[k] + rate * (DRIVE_BASELINES[k] - new_drives[k]))
 
     # ESM软互抑 + 逃逸阀（P3，红线条款，不许省）
     new_drives["possessiveness"] = combined_possessiveness(channels)
@@ -2580,9 +2592,9 @@ def pulse_attachment_nonlinear(state: DriveState, delta: float = 0.18) -> DriveS
     current = new_drives["attachment"]
     gain = pulse_gain(current, delta)
     new_val = current + gain
-    if new_val >= ATTACHMENT_BASIN_THRESHOLD:
-        # 跳变，不是渐变
-        new_val = ATTACHMENT_BASIN_JUMP
+    if current < ATTACHMENT_BASIN_THRESHOLD and new_val >= ATTACHMENT_BASIN_THRESHOLD:
+        # 只在从下方穿越阈值时跳变；已经在盆地上方时继续走普通pulse_gain。
+        new_val = max(new_val, ATTACHMENT_BASIN_JUMP)
     new_drives["attachment"] = _clamp(new_val)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,

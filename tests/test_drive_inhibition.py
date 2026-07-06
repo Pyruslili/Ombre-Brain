@@ -23,6 +23,7 @@ from desire_engine import (
     reunion_boost_for_return,
     refuse_intent,
     satisfy,
+    pulse_attachment_nonlinear,
     GriefState,
     LEGACY_RETURN_RUMINATION_PREFIX,
 )
@@ -259,6 +260,24 @@ def test_reunion_boost_is_one_shot_on_next_state(tmp_path):
 
     second_read = engine.state()
     assert second_read["pa_na"]["PA"] <= first_read["pa_na"]["PA"]
+
+
+def test_attachment_basin_jump_only_on_upward_crossing():
+    crossing = DriveState(drives={**DRIVE_BASELINES, "attachment": 0.67})
+    crossed = pulse_attachment_nonlinear(crossing, 0.18)
+    assert crossed.drives["attachment"] == 0.82
+
+    already_above = DriveState(drives={**DRIVE_BASELINES, "attachment": 0.90})
+    pulsed = pulse_attachment_nonlinear(already_above, 0.01)
+    assert pulsed.drives["attachment"] > 0.90
+    assert pulsed.drives["attachment"] != 0.82
+
+
+def test_stewardship_slowly_regresses_without_coupling():
+    state = DriveState(drives={**DRIVE_BASELINES, "stewardship": 0.80})
+    ticked = tick_drives(state, now_ts=0, idle_seconds=0)
+
+    assert DRIVE_BASELINES["stewardship"] < ticked.drives["stewardship"] < 0.80
 
 
 def test_attachment_rebound_after_absence(tmp_path):
