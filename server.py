@@ -937,8 +937,9 @@ def _is_private_bucket(bucket: dict, mark_rows: list[dict]) -> bool:
 _WANDER_ONLY_DOMAINS = {"letter", "letter_jiajia", "writing", "window", "private"}
 
 def _is_wander_only_bucket(bucket: dict) -> bool:
-    domains = set(str(d).lower() for d in bucket.get("metadata", {}).get("domain", []))
-    return bool(domains & _WANDER_ONLY_DOMAINS)
+    meta = bucket.get("metadata", {})
+    labels = _bucket_domains(meta) | _bucket_tags(meta)
+    return bool(labels & _WANDER_ONLY_DOMAINS)
 
 
 def _format_wander_entry(bucket: dict, mark_rows: list[dict], include_full_content: bool = True, show_bucket_id: bool = False) -> str:
@@ -4349,6 +4350,8 @@ async def api_breath_debug(request):
         w_sum = sum(w.values())
 
         for bucket in all_buckets:
+            if _is_wander_only_bucket(bucket):
+                continue
             meta = bucket.get("metadata", {})
             bid = bucket["id"]
             try:
