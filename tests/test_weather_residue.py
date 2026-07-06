@@ -561,7 +561,7 @@ def test_pressure_to_rain_transition_is_visible():
             "current": "Pressure",
             "candidate": "Rain",
             "candidate_steps": 1,
-            "blend": 0.35,
+            "blend": 0.40,
         },
     }
 
@@ -691,9 +691,9 @@ def test_climate_transition_display_respects_blend_and_steps():
     assert climate_transition_display(atmosphere) == "Low Tide · leaning Soft Shelter"
 
     atmosphere["climate"]["blend"] = 0.06
-    assert climate_transition_display(atmosphere) == "Low Tide · leaning Soft Shelter"
+    assert climate_transition_display(atmosphere) == "Low Tide"
 
-    atmosphere["climate"]["blend"] = 0.32
+    atmosphere["climate"]["blend"] = 0.38
     assert climate_transition_display(atmosphere) == "Low Tide → Soft Shelter"
 
     atmosphere["climate"]["candidate"] = "Low Tide"
