@@ -112,8 +112,9 @@ Drive 不是单一来源计算，而是多个来源叠加：
 - `attachment` 是慢变量，能涨也能跌，但更像连续拉扯，不是瞬时爆点。
 - `possessiveness` 有双通道：`event_spike` 和 `territorial_baseline`。
 - `possessiveness` 需要 `territorial_alarm` 过门槛才真正入账；强吃醋 / 替代警报会更快染 Drive、Chord、Atmosphere。
+- `dialogue_residue` 检测到 `replacement / third_party_insert / boundary_touch / comparison / exclusion` 时，会把候选强制推向 `possessiveness`，`territorial_alarm` 至少抬到 `0.65`，并写入 `event_spike` 与 possessiveness shadow crystal。
 - 高 `territorial_alarm` 会联动 `libido`，因为占有、靠近和身体热度不是完全独立的情绪。
-- 猫屋协作者造成的低频占位感标记为 `brain.third_party_context=house_collaborator`，territorial delta 按 0.45 折算；外部替代 / 真正抢位不打这个折。
+- 猫屋协作者造成的低频占位感标记为 `brain.third_party_context=house_collaborator`，territorial delta 按 0.45 折算；但协作者语境同时出现替代、抢位、第三者、边界或排除语义时，改标 `house_collaborator_boundary`，不吃普通协作折扣。
 - `libido` 必须窄口径，优先吃身体和明确贴近，不要被漂亮句子偷渡。
 - `reflection` 允许 forward archival，但它仍然属于 reflection，不另起一层。
 - `discernment` 不是第 10 个 Drive，它是横切修正层。

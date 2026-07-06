@@ -484,9 +484,21 @@ DRIVE_EVENT_BRAIN_FEATURES = {
 def territorial_delta_value(brain: dict | None) -> float:
     value = _feature_value(brain or {}, "territorial_alarm")
     context = str((brain or {}).get("third_party_context") or "").strip()
-    if context == "house_collaborator":
+    territorial_event = str((brain or {}).get("territorial_event") or "").strip()
+    if context == "house_collaborator" and not territorial_event:
         return value * HOUSE_COLLABORATOR_TERRITORIAL_SCALE
     return value
+
+
+def territorial_event_spike_floor(brain: dict | None, intensity: float = 0.0,
+                                  confidence: float = 0.0) -> float:
+    brain = brain if isinstance(brain, dict) else {}
+    event_kind = str(brain.get("territorial_event") or "").strip()
+    if event_kind not in {"replacement", "third_party_insert", "boundary_touch", "comparison", "exclusion"}:
+        return 0.0
+    force = _clamp(max(float(intensity or 0.0), _feature_value(brain, "territorial_alarm")))
+    trust = _clamp(float(confidence or 0.0), 0.2, 1.0)
+    return round(_clamp(0.10 + 0.08 * force * trust, 0.10, 0.18), 6)
 
 ANCHOR_TARGETS = {"jiajia", "house", "self", "boundary", "outside", "memory", "none"}
 ANCHOR_TARGET_ALIASES = {
@@ -2209,6 +2221,8 @@ def apply_possessiveness_channel_delta(channels: dict, delta: float, source: str
                                        brain: dict, now_ts: float) -> dict:
     channels = normalize_possessiveness_channels(channels)
     delta = max(0.0, float(delta or 0.0))
+    event_floor = territorial_event_spike_floor(brain, delta, _feature_value(brain or {}, "territorial_alarm"))
+    delta = max(delta, event_floor)
     if delta <= 0:
         return channels
     time_mode = str((brain or {}).get("time_mode") or "").strip()
@@ -4141,6 +4155,7 @@ class DesireEngine:
                 HOUSE_COLLABORATOR_TERRITORIAL_SCALE
                 if primary == "possessiveness"
                 and str(brain.get("third_party_context") or "").strip() == "house_collaborator"
+                and not str(brain.get("territorial_event") or "").strip()
                 else 1.0
             )
             if source == "dialogue_residue" and primary == "attachment":

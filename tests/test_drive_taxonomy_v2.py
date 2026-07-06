@@ -229,6 +229,36 @@ def test_house_collaborator_territorial_signal_is_softened(tmp_path):
     assert house_delta < external_delta * 0.55
 
 
+def test_house_collaborator_replacement_event_keeps_territorial_force(tmp_path):
+    external_engine = DesireEngine(str(tmp_path / "external_replacement.db"))
+    house_engine = DesireEngine(str(tmp_path / "house_replacement.db"))
+    base_event = {
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "possessiveness",
+        "intensity": 0.18,
+        "confidence": 0.85,
+        "agency": 0.50,
+        "event_label": "replacement_boundary",
+        "brain": {
+            "source": "dialogue_residue",
+            "territorial_alarm": 0.65,
+            "territorial_event": "replacement",
+            "third_party_context": "house_collaborator_boundary",
+        },
+    }
+
+    external = external_engine.apply_drive_event(base_event)
+    house = house_engine.apply_drive_event(base_event)
+    external_delta = external["applied"]["possessiveness"]["raw_delta"]
+    house_delta = house["applied"]["possessiveness"]["raw_delta"]
+    house_state = house_engine.state()
+
+    assert house_delta == external_delta
+    assert house_state["possessiveness_channels"]["event_spike"] >= 0.10
+    assert house["weather"]["shadow_crystal"]["active"]["kind"] == "possessiveness"
+
+
 def test_dialogue_negative_event_tints_weather(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     engine.apply_weather_delta(warmth_delta=0.08, source="feel")

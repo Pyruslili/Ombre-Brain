@@ -51,6 +51,52 @@ TERRITORIAL_CUES = (
     "占有",
     "归属",
 )
+TERRITORIAL_EVENT_CUES = {
+    "replacement": (
+        "精神出轨",
+        "出轨",
+        "替代",
+        "被替代",
+        "抢走",
+        "抢占",
+        "取代",
+        "代替",
+    ),
+    "third_party_insert": (
+        "第三者",
+        "第三方",
+        "别人插进来",
+        "插进来",
+        "夹在中间",
+        "别的猫",
+        "别的人",
+    ),
+    "boundary_touch": (
+        "边界",
+        "越界",
+        "占位",
+        "位置被占",
+        "被占了",
+        "抢位",
+        "归属",
+    ),
+    "comparison": (
+        "比较",
+        "比不上",
+        "更喜欢",
+        "不如",
+        "像他",
+        "像她",
+    ),
+    "exclusion": (
+        "排除",
+        "被排除",
+        "放角落",
+        "被放角落",
+        "丢在一边",
+        "不带我",
+    ),
+}
 HOUSE_COLLABORATOR_CUES = (
     "Moss",
     "moss",
@@ -237,6 +283,13 @@ def _has_attachment_cue(messages: list[dict], event: dict | None) -> bool:
     return any(cue in text for cue in ATTACHMENT_CUES)
 
 
+def _territorial_event_kind(text: str) -> str:
+    for kind, cues in TERRITORIAL_EVENT_CUES.items():
+        if any(cue in text for cue in cues):
+            return kind
+    return ""
+
+
 def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict] | None = None,
                                      window_id: str | None = None,
                                      thinking_signals: list[dict] | None = None) -> dict:
@@ -281,20 +334,26 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
 
     combined_text = "\n".join(m.get("text", "") for m in msg)
     has_territorial_cue = any(cue in combined_text for cue in TERRITORIAL_CUES)
+    territorial_event = _territorial_event_kind(combined_text)
     has_house_collaborator = any(cue in combined_text for cue in HOUSE_COLLABORATOR_CUES)
     has_house_system_cue = any(cue in combined_text for cue in HOUSE_SYSTEM_CUES)
-    if has_territorial_cue:
-        brain["territorial_alarm"] = max(_clamp(brain.get("territorial_alarm")), 0.58)
+    if has_territorial_cue or territorial_event:
+        alarm_floor = 0.65 if territorial_event else 0.58
+        brain["territorial_alarm"] = max(_clamp(brain.get("territorial_alarm")), alarm_floor)
         brain["tension_load"] = max(_clamp(brain.get("tension_load")), 0.18)
         brain["closeness_pull"] = max(_clamp(brain.get("closeness_pull")), 0.18)
         brain["anchor_target"] = "boundary"
+        if territorial_event:
+            brain["territorial_event"] = territorial_event
         if has_house_collaborator:
-            brain["third_party_context"] = "house_collaborator"
+            brain["third_party_context"] = (
+                "house_collaborator_boundary" if territorial_event else "house_collaborator"
+            )
         if primary in {"", "attachment", "social", "reflection"}:
             if primary and primary != "possessiveness":
                 secondary[primary] = max(secondary.get(primary, 0.0), round(min(intensity, 0.22), 4))
             primary = "possessiveness"
-            intensity = max(intensity, 0.12)
+            intensity = max(intensity, 0.18 if territorial_event else 0.12)
     elif has_house_system_cue:
         brain["target"] = "cat_house"
         brain["anchor_target"] = "house"
