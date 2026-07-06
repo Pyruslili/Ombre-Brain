@@ -373,22 +373,25 @@ CLIMATE_LABELS = (
 ATMOSPHERE_SOURCE_WEIGHTS = {
     # DP/dialogue is the live weather vane: it should be able to turn the sky.
     # CLI/analyzer remains the stable underpaint, not the dominant brush stroke.
-    "dp": 0.62,
-    "cli": 0.20,
-    "subcurrent": 0.14,
+    "dp": 0.78,
+    "cli": 0.24,
+    "subcurrent": 0.18,
     # Thought Chord Echo may tint Atmosphere only through chemistry/chord delta.
     # Keep it well below subcurrent: repeated short thoughts can accumulate, so
     # hysteresis/decay must keep bursts from outvoting the slower undertow.
-    "feel_chord": 0.065,
-    "thought_chord": 0.06,
-    "soma_chord": 0.045,
+    "feel_chord": 0.10,
+    "thought_chord": 0.08,
+    "soma_chord": 0.07,
 }
 ATMOSPHERE_SWITCH_STEPS = 2
-ATMOSPHERE_SWITCH_MARGIN = 0.11
-ATMOSPHERE_WEAK_CURRENT_SCORE = 0.42
-ATMOSPHERE_BLEND_SWITCH = 0.52
-CLIMATE_LEAN_BLEND = 0.12
-CLIMATE_ARROW_BLEND = 0.48
+ATMOSPHERE_SWITCH_MARGIN = 0.07
+ATMOSPHERE_WEAK_CURRENT_SCORE = 0.48
+ATMOSPHERE_BLEND_SWITCH = 0.38
+ATMOSPHERE_STRONG_DP_INFLUENCE = 0.56
+ATMOSPHERE_STRONG_DP_MARGIN = 0.035
+ATMOSPHERE_STRONG_DP_BLEND = 0.22
+CLIMATE_LEAN_BLEND = 0.06
+CLIMATE_ARROW_BLEND = 0.32
 CLIMATE_VISIBLE_STEPS = 1
 ATMOSPHERE_ROUTE_KEYS = (
     "toward_jiajia",
@@ -1418,7 +1421,19 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
     if event_route:
         event_vector = str(event_route.get("vector") or "").strip()
         event_scores = event_route.get("scores") if isinstance(event_route.get("scores"), dict) else {}
-        if event_vector and event_vector != "hover" and max([float(v or 0.0) for v in event_scores.values()] or [0.0]) >= 0.52:
+        score_values = [float(v or 0.0) for v in event_scores.values()] if event_scores else []
+        if score_values:
+            route_weight = 0.55
+            merged_scores = {}
+            for key in ATMOSPHERE_ROUTE_KEYS:
+                baseline_value = float(baseline_route["scores"].get(key, 0.0) or 0.0)
+                event_value = float(event_scores.get(key, 0.0) or 0.0)
+                merged_scores[key] = round(_clamp(
+                    baseline_value * (1.0 - route_weight) + event_value * route_weight
+                ), 3)
+            route["scores"] = merged_scores
+            route["vector"] = max(merged_scores, key=merged_scores.get)
+        if event_vector and event_vector != "hover" and max(score_values or [0.0]) >= 0.52:
             route["vector"] = event_vector
         route["event_vector"] = event_vector
         route["baseline_vector"] = baseline_route["vector"]
@@ -1509,19 +1524,34 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
     inward = scores["inward"]
     outward = scores["outward"]
     guard_route = scores["guard"]
+    active_route = max(toward, outward, guard_route, inward)
     low_force = (1.0 - charge) * (1.0 - clutch) * (1.0 - strain)
     return {
-        "Clear": round(_clamp(0.38 * charge + 0.30 * toward + 0.22 * (1.0 - strain) + 0.10 * (1.0 - clutch)), 3),
+        "Clear": round(_clamp(
+            0.38 * charge
+            + 0.30 * toward
+            + 0.22 * (1.0 - strain)
+            + 0.10 * (1.0 - clutch)
+            - 0.16 * max(inward, guard_route)
+            - 0.08 * hover
+        ), 3),
         "Drift": round(_clamp(0.50 * drift + 0.30 * hover + 0.20 * low_force), 3),
-        "Low Tide": round(_clamp(0.42 * (1.0 - charge) + 0.32 * (1.0 - clutch) + 0.26 * hover - 0.18 * strain), 3),
-        "Overcast": round(_clamp(0.44 * strain + 0.24 * inward + 0.18 * hover + 0.14 * clutch), 3),
+        "Low Tide": round(_clamp(
+            0.30 * (1.0 - charge)
+            + 0.25 * (1.0 - clutch)
+            + 0.30 * hover
+            + 0.15 * drift
+            - 0.18 * strain
+            - 0.10 * active_route
+        ), 3),
+        "Overcast": round(_clamp(0.42 * strain + 0.38 * inward + 0.12 * clutch + 0.08 * hover), 3),
         "Static": round(_clamp(0.40 * charge + 0.34 * strain + 0.18 * hover + 0.08 * clutch - 0.22 * spark), 3),
         "Pressure": round(_clamp(0.42 * strain + 0.32 * clutch + 0.26 * guard_route), 3),
         "Banked Heat": round(_clamp(0.44 * charge + 0.30 * clutch + 0.20 * inward + 0.06 * pull - 0.22 * strain), 3),
         "Afterglow": round(_clamp(0.34 * charge + 0.30 * toward + 0.22 * spark + 0.14 * pull - 0.18 * strain), 3),
         "Shelter": round(_clamp(0.38 * guard + 0.28 * clutch + 0.20 * scores["toward_house"] + 0.14 * (1.0 - charge)), 3),
         "Watchful": round(_clamp(0.36 * guard_route + 0.28 * clutch + 0.24 * strain + 0.12 * (1.0 - charge)), 3),
-        "Spark": round(_clamp(0.48 * spark + 0.30 * charge + 0.22 * outward - 0.18 * strain), 3),
+        "Spark": round(_clamp(0.40 * spark + 0.25 * charge + 0.38 * outward - 0.15 * strain), 3),
     }
 
 
@@ -1671,7 +1701,7 @@ def atmosphere_delta_from_chemistry(source: str, chemistry: dict,
         * _clamp(float(intensity or 0.0))
         * _clamp(float(confidence or 0.0)),
         0.0,
-        0.45,
+        0.65,
     )
     return {
         "source": source,
@@ -2007,7 +2037,7 @@ class WeatherResidueStore:
 
         state = self.load(now, decay=True)
         atmosphere = normalize_atmosphere_state(state.get("atmosphere"), now)
-        influence = _clamp(float(delta.get("influence", 0.0) or 0.0), 0.0, 0.45)
+        influence = _clamp(float(delta.get("influence", 0.0) or 0.0), 0.0, 0.65)
         old_core = atmosphere["core"]
         incoming_core = delta.get("core") if isinstance(delta.get("core"), dict) else {}
         atmosphere["core"] = {
@@ -2022,8 +2052,18 @@ class WeatherResidueStore:
             key: round(_clamp(old_scores[key] * (1.0 - influence) + incoming_scores[key] * influence), 3)
             for key in ATMOSPHERE_ROUTE_KEYS
         }
+        incoming_vector = str(incoming_route.get("vector") or "").strip()
+        route_vector = max(merged_scores, key=merged_scores.get)
+        if (
+            delta.get("source") == "dp"
+            and influence >= ATMOSPHERE_STRONG_DP_INFLUENCE
+            and incoming_vector in ATMOSPHERE_ROUTE_KEYS
+            and incoming_vector != "hover"
+            and incoming_scores.get(incoming_vector, 0.0) >= 0.52
+        ):
+            route_vector = incoming_vector
         atmosphere["route"] = {
-            "vector": max(merged_scores, key=merged_scores.get),
+            "vector": route_vector,
             "scores": merged_scores,
         }
         atmosphere["texture"] = atmosphere_texture(atmosphere["core"], atmosphere["route"])
@@ -2038,13 +2078,23 @@ class WeatherResidueStore:
             candidate_steps = 1
         margin = selected["score"] - current_score
         blend = _clamp(float(climate.get("blend", 0.0) or 0.0) * 0.60 + max(0.0, margin) * 0.85 + candidate_steps * 0.045)
+        strong_dp_turn = (
+            delta.get("source") == "dp"
+            and influence >= ATMOSPHERE_STRONG_DP_INFLUENCE
+            and (
+                margin >= ATMOSPHERE_STRONG_DP_MARGIN
+                or current_score <= ATMOSPHERE_WEAK_CURRENT_SCORE
+                or blend >= ATMOSPHERE_STRONG_DP_BLEND
+            )
+        )
         should_switch = (
             candidate != current
-            and candidate_steps >= ATMOSPHERE_SWITCH_STEPS
+            and (candidate_steps >= ATMOSPHERE_SWITCH_STEPS or strong_dp_turn)
             and (
                 margin >= ATMOSPHERE_SWITCH_MARGIN
                 or current_score <= ATMOSPHERE_WEAK_CURRENT_SCORE
                 or blend >= ATMOSPHERE_BLEND_SWITCH
+                or strong_dp_turn
             )
         )
         if should_switch:
@@ -3893,6 +3943,32 @@ class DesireEngine:
             source=source,
             soothe=soothe,
         )
+        weather_source = str(source or "").strip()
+        atmosphere_source = "dp" if weather_source in {"keyword", "speech_event", "user_message"} else "cli"
+        try:
+            weather_delta_size = max(abs(float(warmth_delta or 0.0)), abs(float(shadow_delta or 0.0)))
+        except (TypeError, ValueError):
+            weather_delta_size = 0.0
+        atmosphere_intensity = _clamp(weather_delta_size * 3.0)
+        if atmosphere_intensity > 0:
+            drive_state = self.store.load_state()
+            base = pa_na_snapshot(drive_state.drives)
+            chemistry = chord_chemistry_snapshot(
+                drive_state.drives,
+                _clamp(base["PA"] + float(state.get("warmth_residue", 0.0) or 0.0)),
+                _clamp(base["NA"] + float(state.get("shadow_residue", 0.0) or 0.0)),
+                [],
+                time.time(),
+            )
+            self.weather.apply_atmosphere_delta(
+                atmosphere_delta_from_chemistry(
+                    atmosphere_source,
+                    chemistry,
+                    intensity=atmosphere_intensity,
+                    confidence=0.82,
+                )
+            )
+            state = self.weather.load(decay=False)
         return {
             "warmth_residue": round(float(state.get("warmth_residue", 0.0)), 3),
             "shadow_residue": round(float(state.get("shadow_residue", 0.0)), 3),

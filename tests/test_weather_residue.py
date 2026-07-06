@@ -92,7 +92,7 @@ def test_thought_chord_gently_tints_atmosphere(tmp_path):
     atmosphere = weather["atmosphere"]
 
     assert atmosphere["last_delta"]["source"] == "thought_chord"
-    assert atmosphere["last_delta"]["influence"] == 0.06
+    assert atmosphere["last_delta"]["influence"] == 0.08
     assert atmosphere["route"]["scores"]["inward"] > atmosphere["route"]["scores"]["outward"]
     assert atmosphere["climate"]["candidate"] in CLIMATE_LABELS
     assert atmosphere["climate"]["candidate_steps"] == 1
@@ -366,7 +366,7 @@ def test_chord_chemistry_keeps_vector_as_route():
     assert chemistry["gravity"]
 
 
-def test_atmosphere_climate_uses_fixed_labels_and_hysteresis(tmp_path):
+def test_strong_dialogue_can_turn_atmosphere_without_waiting_three_ticks(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
     before = engine.weather_state()["climate"]
 
@@ -386,15 +386,14 @@ def test_atmosphere_climate_uses_fixed_labels_and_hysteresis(tmp_path):
         },
     }
     first = engine.apply_drive_event(payload)
-    second = engine.apply_drive_event(payload)
-    third = engine.apply_drive_event(payload)
     weather = engine.weather_state()
 
     assert before in CLIMATE_LABELS
-    assert first["atmosphere"]["climate"] == before
-    assert second["atmosphere"]["climate"] == before
-    assert third["atmosphere"]["climate"] in CLIMATE_LABELS
-    assert weather["climate"] == third["atmosphere"]["climate"]
+    assert first["atmosphere"]["source"] == "dp"
+    assert first["atmosphere"]["influence"] >= 0.56
+    assert first["atmosphere"]["climate"] in CLIMATE_LABELS
+    assert first["atmosphere"]["climate"] != before
+    assert weather["climate"] == first["atmosphere"]["climate"]
     assert weather["atmosphere"]["climate"]["candidate_steps"] >= 0
 
 
@@ -409,7 +408,7 @@ def test_uninitialized_atmosphere_seeds_from_current_chemistry(tmp_path):
         weather["chord_chemistry"]["derived_texture"],
     )
 
-    assert weather["atmosphere"]["last_delta"]["source"] == "seed"
+    assert weather["atmosphere"]["last_delta"]["source"] == "cli"
     assert weather["climate"] == selected["label"]
 
 
@@ -454,12 +453,12 @@ def test_climate_transition_display_respects_blend_and_steps():
 
     atmosphere["climate"]["candidate_steps"] = 1
     atmosphere["climate"]["blend"] = 0.11
-    assert climate_transition_display(atmosphere) == "Low Tide"
-
-    atmosphere["climate"]["blend"] = 0.12
     assert climate_transition_display(atmosphere) == "Low Tide · leaning Shelter"
 
-    atmosphere["climate"]["blend"] = 0.48
+    atmosphere["climate"]["blend"] = 0.06
+    assert climate_transition_display(atmosphere) == "Low Tide · leaning Shelter"
+
+    atmosphere["climate"]["blend"] = 0.32
     assert climate_transition_display(atmosphere) == "Low Tide → Shelter"
 
     atmosphere["climate"]["candidate"] = "Low Tide"
@@ -474,7 +473,7 @@ def test_subcurrent_bias_does_not_directly_switch_climate(tmp_path):
     weather = engine.weather_state()
 
     assert result["source"] == "subcurrent"
-    assert result["influence"] <= 0.16
+    assert result["influence"] <= 0.18
     assert weather["climate"] == before
     assert weather["atmosphere"]["last_delta"]["source"] == "subcurrent"
 

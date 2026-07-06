@@ -396,14 +396,14 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 
 来源权重：
 
-- `dp`: 0.62
-- `cli`: 0.20
-- `subcurrent`: 0.14
-- `feel_chord`: 0.065
-- `thought_chord`: 0.06
-- `soma_chord`: 0.045
+- `dp`: 0.78
+- `cli`: 0.24
+- `subcurrent`: 0.18
+- `feel_chord`: 0.10
+- `thought_chord`: 0.08
+- `soma_chord`: 0.07
 
-`influence = source_weight * intensity * confidence`
+`influence = source_weight * intensity * confidence`，上限 `0.65`。
 
 解释：
 
@@ -411,6 +411,7 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 - `cli` / analyzer 是 stable underpaint，负责慢变量和记忆底色。
 - `subcurrent` 只轻轻倾斜 Atmosphere，不直接盖过当前对话。
 - `thought_chord` 必须低于 `subcurrent`，避免短念头高频叠加后反超潜流。
+- `keyword / speech_event / user_message` 带来的 Warmth / Shadow delta 会轻推 Atmosphere；否则 PA / NA 数字动了，天气可能看起来不动。
 
 来源映射：
 
@@ -421,10 +422,12 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 
 更新方式：
 
-- 单条输入不能直接覆盖 Atmosphere。
+- 普通单条输入不能直接覆盖 Atmosphere。
+- 强 `dp` 输入可以保留事件方向，并在一轮内切换 Atmosphere；开心、压力、内收、守边不该全部被 `Low Tide / Clear` 吃掉。
 - `core` 和 `route.scores` 用 lerp 慢慢更新。
+- 强 `dp` 的非 `hover` 方向会覆盖回弹，避免 baseline hover 把天气吸回低潮。
 - `texture` 由 `core + route` 确定性派生。
-- selector 用固定 scoring 函数给 12 个 Atmosphere label 打分。
+- selector 用固定 scoring 函数给 Atmosphere label 打分。
 - 最高分只成为 `candidate`，不一定马上切换。
 
 #### 5.1.3 Texture 派生
@@ -437,13 +440,18 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 
 #### 5.1.4 切换规则
 
-Atmosphere 切换必须经过 hysteresis。
+Atmosphere 默认经过 hysteresis；强 `dp` 是例外，它代表当前对话真的把天色拨动。
 
 当 candidate 连续出现至少 2 步，并且满足下列任一条件，才切换：
 
-- `candidate_score - current_score >= 0.11`
-- `current_score <= 0.42`
-- `blend >= 0.52`
+- `candidate_score - current_score >= 0.07`
+- `current_score <= 0.48`
+- `blend >= 0.38`
+
+强 `dp` 满足以下条件时可一轮切换：
+
+- `influence >= 0.56`
+- 且 `candidate_score - current_score >= 0.035` / `current_score <= 0.48` / `blend >= 0.22` 任一成立
 
 切换完成后：
 
