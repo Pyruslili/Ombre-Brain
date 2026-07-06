@@ -51,6 +51,82 @@ def test_state_includes_effective_drives(tmp_path):
     assert "confidence" in state["drive_outputs"]["reflection"]
 
 
+def test_attachment_coupling_barely_moves_libido(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    before = engine.state()["drives"]["libido"]
+
+    engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "user_message",
+        "primary_drive": "attachment",
+        "intensity": 1.0,
+        "confidence": 1.0,
+        "agency": 1.0,
+        "event_label": "closeness_only",
+        "brain": {"source": "user_message", "closeness_pull": 0.9, "grounding": "实"},
+    })
+    after_pulse = engine.state()["drives"]["libido"]
+    after_tick = engine.tick(idle_seconds=0)["drives"]["libido"]
+
+    assert after_pulse == before
+    assert after_tick - before < 0.003
+
+
+def test_libido_pending_from_interrupted_intimacy(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    before = engine.state()["drives"]["libido"]
+
+    engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "soma",
+        "primary_drive": "libido",
+        "intensity": 0.4,
+        "confidence": 0.9,
+        "agency": 0.8,
+        "event_label": "intimate_cue",
+        "brain": {"source": "soma", "body_heat": 0.7, "grounding": "实"},
+    })
+    armed = engine.state()["libido_pending"]
+    interrupted = engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "reflection",
+        "intensity": 0.5,
+        "confidence": 0.9,
+        "agency": 0.8,
+        "event_label": "turn_away",
+        "brain": {"source": "dialogue_residue", "topic_shift": 1.0, "grounding": "悬"},
+        "evidence": ["嘉嘉转话题，把亲密中断了"],
+    })
+    state = engine.state()
+
+    assert armed["armed"] is True
+    assert state["libido_pending"]["level"] >= 0.06
+    assert state["drive_outputs"]["libido"]["pending"]["level"] >= 0.06
+    assert interrupted["applied"]["libido"]["raw_delta"] >= 0.06
+    assert state["drives"]["libido"] > before
+
+
+def test_satisfy_libido_clears_pending(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "soma",
+        "primary_drive": "libido",
+        "intensity": 0.4,
+        "confidence": 0.9,
+        "agency": 0.8,
+        "event_label": "intimate_cue",
+        "brain": {"source": "soma", "body_heat": 0.7},
+    })
+
+    engine.satisfy("libido")
+    state = engine.state()
+
+    assert state["libido_pending"]["armed"] is False
+    assert state["libido_pending"]["level"] == 0.0
+
+
 def test_satisfy_returns_compact_ack(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     result = engine.satisfy("attachment")

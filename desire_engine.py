@@ -114,6 +114,16 @@ ATTACHMENT_REBOUND_DEFAULT = {
 ATTACHMENT_REBOUND_MIN_ABSENCE_HOURS = 2.0
 ATTACHMENT_REBOUND_MAX_OVERSHOOT = 0.10
 ATTACHMENT_REBOUND_SETTLE_HOURS = 6.0
+LIBIDO_PENDING_DEFAULT = {
+    "level": 0.0,
+    "armed": False,
+    "last_cue_ts": 0.0,
+    "updated_at": 0.0,
+}
+LIBIDO_PENDING_HALFLIFE_HOURS = 1.25
+LIBIDO_PENDING_ARM_WINDOW_SEC = 45 * 60
+LIBIDO_PENDING_MIN = 0.06
+LIBIDO_PENDING_MAX = 0.12
 POSSESSIVENESS_EVENT_HALFLIFE_HOURS = 0.5
 POSSESSIVENESS_BASELINE_HALFLIFE_HOURS = 24.0
 
@@ -195,6 +205,17 @@ def normalize_attachment_rebound(value: dict | None) -> dict:
     data["started_at"] = float(data.get("started_at", 0.0) or 0.0)
     return data
 
+
+def normalize_libido_pending(value: dict | None) -> dict:
+    data = dict(LIBIDO_PENDING_DEFAULT)
+    if isinstance(value, dict):
+        data.update(value)
+    data["level"] = _clamp(data.get("level", 0.0), 0.0, LIBIDO_PENDING_MAX)
+    data["armed"] = bool(data.get("armed", False))
+    data["last_cue_ts"] = float(data.get("last_cue_ts", 0.0) or 0.0)
+    data["updated_at"] = float(data.get("updated_at", 0.0) or 0.0)
+    return data
+
 INTENT_THRESHOLD = 0.55
 # 全局fatigue只在极高时强制rest（软压制已经接管大部分情况）
 FATIGUE_HARD_GATE = 0.90
@@ -216,7 +237,7 @@ FATIGUE_SENSITIVITY = {
 COUPLING = [
     ("stress",     "attachment",  0.04, "level"),
     ("stress",     "curiosity",  -0.03, "level"),
-    ("attachment", "libido",      0.02, "level"),
+    ("attachment", "libido",      0.005, "level"),
     ("curiosity",  "reflection",  0.04, "delta"),
     ("reflection", "social",      0.03, "delta"),
     ("fatigue",    "stress",      0.03, "level"),
@@ -500,6 +521,91 @@ def territorial_event_spike_floor(brain: dict | None, intensity: float = 0.0,
     trust = _clamp(float(confidence or 0.0), 0.2, 1.0)
     return round(_clamp(0.10 + 0.08 * force * trust, 0.10, 0.18), 6)
 
+
+INTIMACY_INTERRUPT_CUES = (
+    "转话题",
+    "换话题",
+    "逃开",
+    "躲开",
+    "断掉",
+    "中断",
+    "停住",
+    "打断",
+    "先不",
+    "不要了",
+    "算了",
+    "收回",
+    "避开",
+)
+
+
+def _event_text(event_label: str = "", evidence: list | None = None, brain: dict | None = None) -> str:
+    brain = brain if isinstance(brain, dict) else {}
+    parts = [str(event_label or "")]
+    parts.extend(_as_text_list(evidence))
+    for key in ("event_label", "intimacy_state", "transition", "reason", "dialogue_motion"):
+        parts.append(str(brain.get(key) or ""))
+    return "\n".join(part for part in parts if part)
+
+
+def has_intimate_cue(source: str, primary: str, brain: dict | None) -> bool:
+    brain = brain if isinstance(brain, dict) else {}
+    return (
+        primary == "libido"
+        or source == "soma"
+        or _feature_value(brain, "body_heat") >= 0.42
+        or _feature_value(brain, "intimate_cue") >= 0.5
+    )
+
+
+def has_intimacy_interruption(event_label: str, evidence: list | None, brain: dict | None) -> bool:
+    brain = brain if isinstance(brain, dict) else {}
+    if max(
+        _feature_value(brain, "intimacy_interrupted"),
+        _feature_value(brain, "topic_shift"),
+        _feature_value(brain, "turn_away"),
+        _feature_value(brain, "escape"),
+        _feature_value(brain, "avoidance"),
+    ) >= 0.5:
+        return True
+    text = _event_text(event_label, evidence, brain)
+    return any(cue in text for cue in INTIMACY_INTERRUPT_CUES)
+
+
+def tick_libido_pending(pending: dict, now_ts: float) -> dict:
+    pending = normalize_libido_pending(pending)
+    last = pending["updated_at"] or now_ts
+    elapsed = max(0.0, now_ts - last)
+    if pending["level"] > 0:
+        pending["level"] = round(
+            _clamp(pending["level"] * _drive_decay_factor(elapsed, LIBIDO_PENDING_HALFLIFE_HOURS), 0.0, LIBIDO_PENDING_MAX),
+            6,
+        )
+    if pending["armed"] and pending["last_cue_ts"] and now_ts - pending["last_cue_ts"] > LIBIDO_PENDING_ARM_WINDOW_SEC:
+        pending["armed"] = False
+    pending["updated_at"] = now_ts
+    return pending
+
+
+def arm_libido_pending(pending: dict, now_ts: float) -> dict:
+    pending = tick_libido_pending(pending, now_ts)
+    pending["armed"] = True
+    pending["last_cue_ts"] = now_ts
+    pending["updated_at"] = now_ts
+    return pending
+
+
+def apply_libido_interruption_pending(pending: dict, intensity: float,
+                                      confidence: float, now_ts: float) -> tuple[dict, float]:
+    pending = tick_libido_pending(pending, now_ts)
+    if not pending["armed"]:
+        return pending, 0.0
+    lift = _clamp(0.06 + 0.06 * _clamp(intensity) * _clamp(confidence), LIBIDO_PENDING_MIN, LIBIDO_PENDING_MAX)
+    pending["level"] = round(_clamp(pending["level"] + lift, 0.0, LIBIDO_PENDING_MAX), 6)
+    pending["armed"] = False
+    pending["updated_at"] = now_ts
+    return pending, lift
+
 ANCHOR_TARGETS = {"jiajia", "house", "self", "boundary", "outside", "memory", "none"}
 ANCHOR_TARGET_ALIASES = {
     "jiaja": "jiajia",
@@ -583,6 +689,7 @@ class DriveState:
     reunion_pa_boost: float = 0.0
     possessiveness_channels: dict = field(default_factory=lambda: dict(POSSESSIVENESS_CHANNEL_DEFAULT))
     attachment_rebound: dict = field(default_factory=lambda: dict(ATTACHMENT_REBOUND_DEFAULT))
+    libido_pending: dict = field(default_factory=lambda: dict(LIBIDO_PENDING_DEFAULT))
 
 
 @dataclass
@@ -2310,6 +2417,7 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
     prev = copy.copy(current_drives)
     channels = tick_possessiveness_channels(state.possessiveness_channels, now_ts)
     rebound = tick_attachment_rebound(state.attachment_rebound, now_ts)
+    libido_pending = tick_libido_pending(state.libido_pending, now_ts)
 
     idle_h = idle_seconds / 3600.0
     drift = {
@@ -2334,6 +2442,11 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
     for k in DRIVE_KEYS:
         rate = drive_damping_rate(k)
         new_drives[k] = _clamp(new_drives[k] + rate * (DRIVE_BASELINES[k] - new_drives[k]))
+    if libido_pending.get("level", 0.0) > 0:
+        new_drives["libido"] = _clamp(max(
+            new_drives["libido"],
+            DRIVE_BASELINES["libido"] + libido_pending["level"],
+        ))
 
     # ESM软互抑 + 逃逸阀（P3，红线条款，不许省）
     new_drives["possessiveness"] = combined_possessiveness(channels)
@@ -2358,6 +2471,7 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
         reunion_pa_boost=state.reunion_pa_boost,
         possessiveness_channels=channels,
         attachment_rebound=rebound,
+        libido_pending=libido_pending,
     )
 
 
@@ -2562,6 +2676,9 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
     attachment_rebound = normalize_attachment_rebound(state.attachment_rebound)
     if drive_key == "attachment":
         attachment_rebound.update({"active": False, "phase": "settled", "overshoot": 0.0})
+    libido_pending = normalize_libido_pending(state.libido_pending)
+    if drive_key == "libido":
+        libido_pending.update({"level": 0.0, "armed": False, "updated_at": time.time()})
     possessiveness_channels = state.possessiveness_channels
     if drive_key == "possessiveness":
         possessiveness_channels = decay_possessiveness_channels(
@@ -2577,7 +2694,8 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
                       last_user_message_at=state.last_user_message_at,
                       reunion_pa_boost=state.reunion_pa_boost,
                       possessiveness_channels=possessiveness_channels,
-                      attachment_rebound=attachment_rebound)
+                      attachment_rebound=attachment_rebound,
+                      libido_pending=libido_pending)
 
 
 def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
@@ -2605,7 +2723,8 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
                       last_user_message_at=state.last_user_message_at,
                       reunion_pa_boost=state.reunion_pa_boost,
                       possessiveness_channels=possessiveness_channels,
-                      attachment_rebound=state.attachment_rebound)
+                      attachment_rebound=state.attachment_rebound,
+                      libido_pending=state.libido_pending)
 
 
 def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> DriveState:
@@ -2624,7 +2743,8 @@ def pulse_drive(state: DriveState, drive_key: str, delta: float = 0.18) -> Drive
                       last_user_message_at=state.last_user_message_at,
                       reunion_pa_boost=state.reunion_pa_boost,
                       possessiveness_channels=state.possessiveness_channels,
-                      attachment_rebound=state.attachment_rebound)
+                      attachment_rebound=state.attachment_rebound,
+                      libido_pending=state.libido_pending)
 
 
 # ─── attachment非线性跳变 ─────────────────────────────────────────────────────
@@ -2655,7 +2775,8 @@ def pulse_attachment_nonlinear(state: DriveState, delta: float = 0.18) -> DriveS
                       last_user_message_at=state.last_user_message_at,
                       reunion_pa_boost=state.reunion_pa_boost,
                       possessiveness_channels=state.possessiveness_channels,
-                      attachment_rebound=state.attachment_rebound)
+                      attachment_rebound=state.attachment_rebound,
+                      libido_pending=state.libido_pending)
 
 
 # ─── 悲恸引擎 ────────────────────────────────────────────────────────────────
@@ -2960,6 +3081,13 @@ def drive_outputs_snapshot(state: DriveState, events: list[dict] | None = None) 
             "baseline": round(rebound["baseline"], 3),
             "overshoot": round(rebound["overshoot"], 3),
         }
+    pending = normalize_libido_pending(state.libido_pending)
+    if pending["armed"] or pending["level"] > 0:
+        outputs["libido"]["pending"] = {
+            "armed": pending["armed"],
+            "level": round(pending["level"], 3),
+            "last_cue_ts": pending["last_cue_ts"],
+        }
     forward = _latest_forward_archival_from_events(events)
     if forward:
         outputs["reflection"]["reflection_mode"] = "forward_archival"
@@ -3085,6 +3213,10 @@ class DesireStore:
                 pass
             try:
                 conn.execute("ALTER TABLE drive_state ADD COLUMN attachment_rebound_json TEXT")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE drive_state ADD COLUMN libido_pending_json TEXT")
             except Exception:
                 pass
             conn.execute(
@@ -3219,13 +3351,15 @@ class DesireStore:
                     INSERT INTO drive_state (
                         drives_json, tick_count, last_ts, prev_drives_json,
                         local_fatigue_json, last_user_message_at, reunion_pa_boost,
-                        possessiveness_channels_json, attachment_rebound_json
-                    ) VALUES (?,?,?,?,?,?,?,?,?)
+                        possessiveness_channels_json, attachment_rebound_json,
+                        libido_pending_json
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?)
                     """,
                     (json.dumps(dict(DRIVE_BASELINES)), 0, time.time(),
                      json.dumps(dict(DRIVE_BASELINES)), json.dumps(init_local), time.time(), 0.0,
                      json.dumps(dict(POSSESSIVENESS_CHANNEL_DEFAULT)),
-                     json.dumps(dict(ATTACHMENT_REBOUND_DEFAULT)))
+                     json.dumps(dict(ATTACHMENT_REBOUND_DEFAULT)),
+                     json.dumps(dict(LIBIDO_PENDING_DEFAULT)))
                 )
 
     def load_state(self) -> DriveState:
@@ -3235,7 +3369,7 @@ class DesireStore:
                 SELECT drives_json, tick_count, last_ts, prev_drives_json,
                        local_fatigue_json, escape_streak, last_user_message_at,
                        reunion_pa_boost, possessiveness_channels_json,
-                       attachment_rebound_json
+                       attachment_rebound_json, libido_pending_json
                 FROM drive_state LIMIT 1
                 """
             ).fetchone()
@@ -3254,12 +3388,17 @@ class DesireStore:
             attachment_rebound = json.loads(row[9]) if row[9] else {}
         except Exception:
             attachment_rebound = {}
+        try:
+            libido_pending = json.loads(row[10]) if row[10] else {}
+        except Exception:
+            libido_pending = {}
         return DriveState(drives=drives, tick_count=row[1], last_ts=row[2],
                           prev_drives=prev, local_fatigue=local_fat, escape_streak=escape_streak,
                           last_user_message_at=last_user_message_at,
                           reunion_pa_boost=reunion_pa_boost,
                           possessiveness_channels=normalize_possessiveness_channels(possessiveness_channels),
-                          attachment_rebound=normalize_attachment_rebound(attachment_rebound))
+                          attachment_rebound=normalize_attachment_rebound(attachment_rebound),
+                          libido_pending=normalize_libido_pending(libido_pending))
 
     def save_state(self, state: DriveState):
         state.drives = normalize_drive_values(state.drives)
@@ -3267,6 +3406,7 @@ class DesireStore:
         state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
         state.possessiveness_channels = normalize_possessiveness_channels(state.possessiveness_channels)
         state.attachment_rebound = normalize_attachment_rebound(state.attachment_rebound)
+        state.libido_pending = normalize_libido_pending(state.libido_pending)
         with self._conn() as conn:
             conn.execute(
                 """
@@ -3274,13 +3414,14 @@ class DesireStore:
                 SET drives_json=?, tick_count=?, last_ts=?, prev_drives_json=?,
                     local_fatigue_json=?, escape_streak=?, last_user_message_at=?,
                     reunion_pa_boost=?, possessiveness_channels_json=?,
-                    attachment_rebound_json=?
+                    attachment_rebound_json=?, libido_pending_json=?
                 """,
                 (json.dumps(state.drives), state.tick_count, state.last_ts,
                  json.dumps(state.prev_drives), json.dumps(state.local_fatigue), state.escape_streak,
                  state.last_user_message_at, state.reunion_pa_boost,
                  json.dumps(state.possessiveness_channels, ensure_ascii=False),
-                 json.dumps(state.attachment_rebound, ensure_ascii=False))
+                 json.dumps(state.attachment_rebound, ensure_ascii=False),
+                 json.dumps(state.libido_pending, ensure_ascii=False))
             )
 
     def load_thoughts(self) -> list:
@@ -4251,8 +4392,23 @@ class DesireEngine:
 
         state = self.store.load_state()
         state.drives = normalize_drive_values(state.drives)
+        state.libido_pending = tick_libido_pending(state.libido_pending, now)
         applied: dict[str, dict] = {}
+        pending_changed = False
         if not suppressed:
+            if has_intimacy_interruption(event_label, evidence, brain):
+                state.libido_pending, pending_lift = apply_libido_interruption_pending(
+                    state.libido_pending,
+                    intensity,
+                    confidence,
+                    now,
+                )
+                if pending_lift > 0:
+                    proposed["libido"] = proposed.get("libido", 0.0) + pending_lift
+                    pending_changed = True
+            elif has_intimate_cue(source, primary, brain):
+                state.libido_pending = arm_libido_pending(state.libido_pending, now)
+                pending_changed = True
             for drive_key, delta in proposed.items():
                 if delta <= 0:
                     continue
@@ -4274,7 +4430,7 @@ class DesireEngine:
             self.store.save_state(state)
             if not applied:
                 suppressed = not (discernment["state"] != "clear" or forward_archival)
-                reason = "modifier/readout only" if not suppressed else "all deltas zero"
+                reason = "modifier/readout only" if (not suppressed or pending_changed) else "all deltas zero"
 
         weather_result = self._apply_drive_event_weather(
             source, primary, brain, intensity, confidence, agency, suppressed
@@ -4419,6 +4575,7 @@ class DesireEngine:
                 for k, v in normalize_possessiveness_channels(state.possessiveness_channels).items()
             },
             "attachment_rebound": normalize_attachment_rebound(state.attachment_rebound),
+            "libido_pending": normalize_libido_pending(state.libido_pending),
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
             "effective_pa_na": self._weather_readout(state, drive_events=drive_events),
@@ -4477,6 +4634,7 @@ class DesireEngine:
                 for k, v in normalize_possessiveness_channels(state.possessiveness_channels).items()
             },
             "attachment_rebound": normalize_attachment_rebound(state.attachment_rebound),
+            "libido_pending": normalize_libido_pending(state.libido_pending),
             "local_fatigue": {k: round(v, 3) for k, v in state.local_fatigue.items()},
             "pa_na": self._pa_na_readout(state, consume_reunion=True),
             "effective_pa_na": self._weather_readout(state, drive_events=drive_events),
