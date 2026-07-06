@@ -246,6 +246,29 @@ def test_pulse_returns_compact_chord_change_signal(tmp_path):
     assert "chord_changed" not in repeated
 
 
+def test_user_message_drive_event_tints_weather_and_atmosphere(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+
+    result = engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "user_message",
+        "primary_drive": "attachment",
+        "intensity": 0.8,
+        "confidence": 0.9,
+        "agency": 0.9,
+        "event_label": "direct_closeness",
+        "brain": {
+            "source": "user_message",
+            "closeness_pull": "0.8",
+            "grounding": "实",
+            "anchor_target": "jiajia",
+        },
+    })
+
+    assert result["weather"].get("warmth_residue", 0) > 0
+    assert result["atmosphere"].get("source") == "dp"
+
+
 def test_soma_chord_is_short_strong_weather_impulse(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 

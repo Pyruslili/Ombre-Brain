@@ -24,6 +24,7 @@ from desire_engine import (
     refuse_intent,
     satisfy,
     pulse_attachment_nonlinear,
+    _feature_value,
     GriefState,
     LEGACY_RETURN_RUMINATION_PREFIX,
 )
@@ -278,6 +279,50 @@ def test_stewardship_slowly_regresses_without_coupling():
     ticked = tick_drives(state, now_ts=0, idle_seconds=0)
 
     assert DRIVE_BASELINES["stewardship"] < ticked.drives["stewardship"] < 0.80
+
+
+def test_numeric_string_brain_features_are_parsed():
+    assert _feature_value({"territorial_alarm": "0.8"}, "territorial_alarm") == 0.8
+    assert _feature_value({"closeness_pull": "0.65"}, "closeness_pull") == 0.65
+
+
+def test_manual_possessiveness_pulse_survives_next_tick(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    result = engine.pulse("possessiveness", 0.5)
+    pulsed = result["new_value"]
+
+    ticked = engine.tick(idle_seconds=0)
+
+    assert pulsed > DRIVE_BASELINES["possessiveness"]
+    assert ticked["drives"]["possessiveness"] > DRIVE_BASELINES["possessiveness"]
+
+
+def test_satisfy_possessiveness_reduces_channels_not_just_drive(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "speech_event",
+        "primary_drive": "possessiveness",
+        "intensity": 1.0,
+        "confidence": 1.0,
+        "agency": 1.0,
+        "event_label": "territorial_alarm",
+        "brain": {"source": "speech_event", "territorial_alarm": 1.0},
+    })
+    before = engine.state()["drives"]["possessiveness"]
+    engine.satisfy("possessiveness")
+    after_satisfy = engine.state()["drives"]["possessiveness"]
+    after_tick = engine.tick(idle_seconds=0)["drives"]["possessiveness"]
+
+    assert after_satisfy < before
+    assert after_tick <= after_satisfy + 0.01
+
+
+def test_invalid_pulse_drive_returns_error(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    result = engine.pulse("bad_drive", 0.1)
+
+    assert result["error"] == "invalid drive_key"
 
 
 def test_attachment_rebound_after_absence(tmp_path):

@@ -452,6 +452,7 @@ DRIVE_EVENT_WEATHER_SOURCES = {
     "feel",
     "legacy_feed",
     "speech_event",
+    "user_message",
 }
 
 DRIVE_EVENT_SOURCE_WEIGHTS = {
@@ -2222,6 +2223,31 @@ def apply_possessiveness_channel_delta(channels: dict, delta: float, source: str
     return channels
 
 
+def sync_possessiveness_channels_to_drive(channels: dict, drive_value: float, now_ts: float) -> dict:
+    channels = normalize_possessiveness_channels(channels)
+    drive_value = _clamp(drive_value)
+    current = combined_possessiveness(channels)
+    if drive_value <= current + 1e-9:
+        return channels
+    channels["event_spike"] = max(
+        channels["event_spike"],
+        max(0.0, drive_value - DRIVE_BASELINES["possessiveness"]),
+    )
+    channels["last_event_ts"] = now_ts
+    return channels
+
+
+def decay_possessiveness_channels(channels: dict, factor: float) -> dict:
+    channels = normalize_possessiveness_channels(channels)
+    factor = _clamp(factor)
+    baseline = DRIVE_BASELINES["possessiveness"]
+    channels["event_spike"] = _clamp(channels["event_spike"] * factor)
+    channels["territorial_baseline"] = _clamp(
+        baseline + (channels["territorial_baseline"] - baseline) * factor
+    )
+    return channels
+
+
 def tick_attachment_rebound(rebound: dict, now_ts: float) -> dict:
     rebound = normalize_attachment_rebound(rebound)
     if not rebound["active"]:
@@ -2522,6 +2548,13 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
     attachment_rebound = normalize_attachment_rebound(state.attachment_rebound)
     if drive_key == "attachment":
         attachment_rebound.update({"active": False, "phase": "settled", "overshoot": 0.0})
+    possessiveness_channels = state.possessiveness_channels
+    if drive_key == "possessiveness":
+        possessiveness_channels = decay_possessiveness_channels(
+            possessiveness_channels,
+            decay_map.get("possessiveness", 0.6),
+        )
+        new_drives["possessiveness"] = combined_possessiveness(possessiveness_channels)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
@@ -2529,7 +2562,7 @@ def satisfy(state: DriveState, drive_key: str) -> DriveState:
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
                       reunion_pa_boost=state.reunion_pa_boost,
-                      possessiveness_channels=state.possessiveness_channels,
+                      possessiveness_channels=possessiveness_channels,
                       attachment_rebound=attachment_rebound)
 
 
@@ -2546,6 +2579,10 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
     # 中等回落：只压目标维度，不波及其他；satisfy 仍然释放更多张力。
     if drive_key in new_drives:
         new_drives[drive_key] = _clamp(new_drives[drive_key] * 0.75)
+    possessiveness_channels = state.possessiveness_channels
+    if drive_key == "possessiveness":
+        possessiveness_channels = decay_possessiveness_channels(possessiveness_channels, 0.75)
+        new_drives["possessiveness"] = combined_possessiveness(possessiveness_channels)
     new_local = compute_local_fatigue(new_drives.get("fatigue", 0.0))
     return DriveState(drives=new_drives, tick_count=state.tick_count,
                       last_ts=state.last_ts, prev_drives=normalize_drive_values(state.drives),
@@ -2553,7 +2590,7 @@ def refuse_intent(state: DriveState, drive_key: str) -> DriveState:
                       escape_streak=state.escape_streak,
                       last_user_message_at=state.last_user_message_at,
                       reunion_pa_boost=state.reunion_pa_boost,
-                      possessiveness_channels=state.possessiveness_channels,
+                      possessiveness_channels=possessiveness_channels,
                       attachment_rebound=state.attachment_rebound)
 
 
@@ -2715,6 +2752,10 @@ def _feature_value(brain: dict, key: str) -> float:
     if isinstance(value, (int, float)):
         return _clamp(value)
     text = str(value or "").strip().lower()
+    try:
+        return _clamp(float(text))
+    except ValueError:
+        pass
     if text in ("high", "strong", "yes", "true", "1", "高", "强", "有"):
         return 1.0
     if text in ("medium", "mid", "0.5", "中"):
@@ -3932,7 +3973,14 @@ class DesireEngine:
 
     def pulse(self, drive_key: str, delta: float = 0.18, chord: str = "") -> dict:
         now = time.time()
-        drive_key = normalize_drive_key(drive_key, drive_key)
+        raw_drive_key = drive_key
+        drive_key = normalize_drive_key(drive_key)
+        if not drive_key:
+            return {
+                "error": "invalid drive_key",
+                "drive_key": str(raw_drive_key or "").strip(),
+                "valid_drives": DRIVE_KEYS,
+            }
         state = self.store.load_state()
         previous_chord = ""
         if chord.strip():
@@ -3942,6 +3990,13 @@ class DesireEngine:
             state = pulse_attachment_nonlinear(state, delta)
         else:
             state = pulse_drive(state, drive_key, delta)
+        if drive_key == "possessiveness":
+            state.possessiveness_channels = sync_possessiveness_channels_to_drive(
+                state.possessiveness_channels,
+                state.drives.get("possessiveness", DRIVE_BASELINES["possessiveness"]),
+                now,
+            )
+            state.drives["possessiveness"] = combined_possessiveness(state.possessiveness_channels)
         self.store.save_state(state)
         # pulse时标记有嘉嘉信号，更新grief
         grief = self.store.load_grief()
@@ -3960,7 +4015,10 @@ class DesireEngine:
         return result
 
     def satisfy(self, drive_key: str) -> dict:
-        drive_key = normalize_drive_key(drive_key, drive_key)
+        raw_drive_key = drive_key
+        drive_key = normalize_drive_key(drive_key)
+        if not drive_key:
+            return {"error": "invalid drive_key", "drive_key": str(raw_drive_key or "").strip()}
         state = self.store.load_state()
         before = state.drives.get(drive_key, DRIVE_BASELINES.get(drive_key, 0.0))
         state = satisfy(state, drive_key)
@@ -3982,7 +4040,10 @@ class DesireEngine:
         念头留在池子里，下次心跳还可以再冒出来。
         原因可选，可以只是"不想"。
         """
-        drive_key = normalize_drive_key(drive_key, drive_key)
+        raw_drive_key = drive_key
+        drive_key = normalize_drive_key(drive_key)
+        if not drive_key:
+            return {"error": "invalid drive_key", "drive_key": str(raw_drive_key or "").strip()}
         state = self.store.load_state()
         state = refuse_intent(state, drive_key)
         self.store.save_state(state)
@@ -3999,7 +4060,10 @@ class DesireEngine:
         让这一条念头自然过去。
         不改Drive，不进refractory，只给同drive的后续intent一个轻微、短期的优先级折扣。
         """
-        drive_key = normalize_drive_key(drive_key, drive_key)
+        raw_drive_key = drive_key
+        drive_key = normalize_drive_key(drive_key)
+        if not drive_key:
+            return {"error": "invalid drive_key", "drive_key": str(raw_drive_key or "").strip()}
         state = self.store.load_state()
         self.store.record_refusal(drive_key, f"pass:{reason or '没感觉'}")
         return {
