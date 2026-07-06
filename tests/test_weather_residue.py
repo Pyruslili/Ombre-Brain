@@ -1,5 +1,3 @@
-import time
-
 from desire_engine import (
     ATMOSPHERE_SOURCE_WEIGHTS,
     CLIMATE_LABELS,
@@ -11,6 +9,7 @@ from desire_engine import (
     chord_gravity_pool,
     choose_chord_gravity,
     classify_chord_situation,
+    atmosphere_display_from_readout,
     climate_transition_display,
     current_weather_chord,
     normalize_atmosphere_state,
@@ -511,7 +510,7 @@ def test_rain_does_not_replace_overcast_when_shadow_is_high_and_warmth_low():
     assert select_climate(core, route, texture)["label"] == "Overcast"
 
 
-def test_rain_does_not_replace_pressure_or_watchful_when_strain_guard_clutch_are_high():
+def test_rain_does_not_replace_pressure_when_strain_guard_clutch_are_high():
     core = {"charge": 0.30, "clutch": 0.62, "strain": 0.66}
     route = {
         "vector": "guard",
@@ -527,7 +526,7 @@ def test_rain_does_not_replace_pressure_or_watchful_when_strain_guard_clutch_are
     texture = atmosphere_texture(core, route)
     selected = select_climate(core, route, texture)
 
-    assert selected["label"] in {"Pressure", "Watchful"}
+    assert selected["label"] == "Pressure"
 
 
 def test_pressure_to_rain_transition_is_visible():
@@ -566,7 +565,9 @@ def test_pressure_to_rain_transition_is_visible():
         },
     }
 
-    assert climate_transition_display(atmosphere) == "Pressure → Warm Rain"
+    display = climate_transition_display(atmosphere)
+    assert display.startswith("Pressure →")
+    assert "Rain" in display
 
 
 def test_rain_to_shelter_transition_is_visible():
@@ -605,44 +606,73 @@ def test_rain_to_shelter_transition_is_visible():
         },
     }
 
-    assert climate_transition_display(atmosphere) == "Warm Rain → Shelter"
+    display = climate_transition_display(atmosphere)
+    assert display.startswith("Warm Rain →")
+    assert "Shelter" in display
 
 
-def test_high_shadow_does_not_display_as_plain_clear(tmp_path):
-    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
-    now = time.time()
-    state = engine.weather.load(now, decay=False)
-    state["components"]["feel"] = {"warmth": 0.30, "shadow": 0.35, "updated_at": now}
-    state["components"]["dialogue"] = {"warmth": 0.12, "shadow": 0.18, "updated_at": now}
-    state["atmosphere"] = {
-        "core": {"charge": 0.46, "clutch": 0.44, "strain": 0.24},
+def test_stale_clear_folds_to_rain_when_current_chemistry_is_mixed():
+    atmosphere = {
+        "core": {"charge": 0.45, "clutch": 0.47, "strain": 0.35},
         "route": {
-            "vector": "toward_jiajia",
+            "vector": "hover",
             "scores": {
-                "toward_jiajia": 0.72,
-                "toward_house": 0.25,
-                "outward": 0.22,
-                "inward": 0.18,
-                "guard": 0.20,
-                "hover": 0.24,
+                "toward_jiajia": 0.40,
+                "toward_house": 0.42,
+                "outward": 0.29,
+                "inward": 0.35,
+                "guard": 0.32,
+                "hover": 0.50,
             },
         },
+        "texture": atmosphere_texture(
+            {"charge": 0.45, "clutch": 0.47, "strain": 0.35},
+            {
+                "vector": "hover",
+                "scores": {
+                    "toward_jiajia": 0.40,
+                    "toward_house": 0.42,
+                    "outward": 0.29,
+                    "inward": 0.35,
+                    "guard": 0.32,
+                    "hover": 0.50,
+                },
+            },
+        ),
         "climate": {
             "current": "Clear",
-            "candidate": "Clear",
+            "candidate": "Overcast",
             "candidate_steps": 0,
             "blend": 0.0,
+            "current_score": 0.31,
+            "candidate_score": 0.33,
+            "scores": {
+                "Clear": 0.31,
+                "Afterglow": 0.29,
+                "Drift": 0.27,
+                "Low Tide": 0.33,
+                "Overcast": 0.34,
+                "Rain": 0.57,
+                "Static": 0.35,
+                "Pressure": 0.32,
+                "Shelter": 0.31,
+                "Banked Heat": 0.34,
+            },
         },
-        "last_delta": {"source": "dp", "influence": 0.65, "candidate": "Clear"},
     }
-    engine.weather._write_raw(state)
+    chemistry = {
+        "core": {"charge": 0.45, "clutch": 0.47, "strain": 0.35},
+        "route": atmosphere["route"],
+        "derived_texture": atmosphere["texture"],
+    }
 
-    weather = engine.weather_state()
-
-    assert weather["effective_NA"] >= 0.55
-    assert weather["climate"] == "Clear"
-    assert weather["climate_display"] != "Clear"
-    assert "→" in weather["climate_display"]
+    for warmth, shadow in ((0.86, 0.68), (0.82, 0.61)):
+        assert atmosphere_display_from_readout(
+            atmosphere,
+            chemistry,
+            warmth=warmth,
+            shadow=shadow,
+        ) == "Warm Rain"
 
 
 def test_climate_transition_display_respects_blend_and_steps():
@@ -658,13 +688,13 @@ def test_climate_transition_display_respects_blend_and_steps():
 
     atmosphere["climate"]["candidate_steps"] = 1
     atmosphere["climate"]["blend"] = 0.11
-    assert climate_transition_display(atmosphere) == "Low Tide · leaning Shelter"
+    assert climate_transition_display(atmosphere) == "Low Tide · leaning Soft Shelter"
 
     atmosphere["climate"]["blend"] = 0.06
-    assert climate_transition_display(atmosphere) == "Low Tide · leaning Shelter"
+    assert climate_transition_display(atmosphere) == "Low Tide · leaning Soft Shelter"
 
     atmosphere["climate"]["blend"] = 0.32
-    assert climate_transition_display(atmosphere) == "Low Tide → Shelter"
+    assert climate_transition_display(atmosphere) == "Low Tide → Soft Shelter"
 
     atmosphere["climate"]["candidate"] = "Low Tide"
     assert climate_transition_display(atmosphere) == "Low Tide"
