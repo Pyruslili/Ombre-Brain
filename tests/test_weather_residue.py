@@ -5,6 +5,7 @@ from desire_engine import (
     CLIMATE_LABELS,
     DesireEngine,
     DRIVE_BASELINES,
+    atmosphere_texture,
     chord_chemistry_snapshot,
     chord_event_tint_from_drive_events,
     chord_gravity_pool,
@@ -440,6 +441,38 @@ def test_legacy_gravity_atmosphere_normalizes_to_current_label():
     assert atmosphere["climate"]["candidate"] in CLIMATE_LABELS
     assert atmosphere["climate"]["current"] != "Gravity"
     assert climate_transition_display(atmosphere) != "Gravity"
+
+
+def test_rain_claims_mixed_warm_shadow_states():
+    core = {"charge": 0.60, "clutch": 0.46, "strain": 0.44}
+    route = {
+        "vector": "hover",
+        "scores": {
+            "toward_jiajia": 0.35,
+            "toward_house": 0.33,
+            "outward": 0.22,
+            "inward": 0.36,
+            "guard": 0.28,
+            "hover": 0.50,
+        },
+    }
+    texture = atmosphere_texture(core, route)
+    selected = select_climate(core, route, texture)
+    atmosphere = {
+        "core": core,
+        "route": route,
+        "texture": texture,
+        "climate": {
+            "current": "Rain",
+            "candidate": "Rain",
+            "candidate_steps": 0,
+            "blend": 0.0,
+            "scores": selected["scores"],
+        },
+    }
+
+    assert selected["label"] == "Rain"
+    assert climate_transition_display(atmosphere) == "Warm Rain"
 
 
 def test_high_shadow_does_not_display_as_plain_clear(tmp_path):

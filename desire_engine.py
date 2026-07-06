@@ -362,6 +362,7 @@ CLIMATE_LABELS = (
     "Drift",
     "Low Tide",
     "Overcast",
+    "Rain",
     "Static",
     "Pressure",
     "Banked Heat",
@@ -1527,6 +1528,8 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
     guard_route = scores["guard"]
     active_route = max(toward, outward, guard_route, inward)
     low_force = (1.0 - charge) * (1.0 - clutch) * (1.0 - strain)
+    rain_balance = 1.0 - abs(charge - strain)
+    rain_mix = min(charge, strain)
     return {
         "Clear": round(_clamp(
             0.38 * charge
@@ -1546,6 +1549,16 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
             - 0.10 * active_route
         ), 3),
         "Overcast": round(_clamp(0.42 * strain + 0.38 * inward + 0.12 * clutch + 0.08 * hover), 3),
+        "Rain": round(_clamp(
+            0.36 * rain_mix
+            + 0.16 * rain_balance
+            + 0.12 * clutch
+            + 0.12 * hover
+            + 0.08 * inward
+            + 0.08 * pull
+            + 0.08 * (1.0 - spark)
+            - 0.08 * outward
+        ), 3),
         "Static": round(_clamp(0.40 * charge + 0.34 * strain + 0.18 * hover + 0.08 * clutch - 0.22 * spark), 3),
         "Pressure": round(_clamp(0.42 * strain + 0.32 * clutch + 0.26 * guard_route), 3),
         "Banked Heat": round(_clamp(0.44 * charge + 0.30 * clutch + 0.20 * inward + 0.06 * pull - 0.22 * strain), 3),
@@ -1553,7 +1566,30 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
         "Shelter": round(_clamp(0.38 * guard + 0.28 * clutch + 0.20 * scores["toward_house"] + 0.14 * (1.0 - charge)), 3),
         "Watchful": round(_clamp(0.36 * guard_route + 0.28 * clutch + 0.24 * strain + 0.12 * (1.0 - charge)), 3),
         "Spark": round(_clamp(0.40 * spark + 0.25 * charge + 0.38 * outward - 0.15 * strain), 3),
-    }
+}
+
+
+def _rain_display_label(atmosphere: dict | None, label: str) -> str:
+    if label != "Rain" or not isinstance(atmosphere, dict):
+        return label
+    core = atmosphere.get("core") if isinstance(atmosphere.get("core"), dict) else {}
+    texture = atmosphere.get("texture") if isinstance(atmosphere.get("texture"), dict) else {}
+    climate = atmosphere.get("climate") if isinstance(atmosphere.get("climate"), dict) else {}
+    charge = _clamp(float(core.get("charge", 0.0) or 0.0))
+    clutch = _clamp(float(core.get("clutch", 0.0) or 0.0))
+    strain = _clamp(float(core.get("strain", 0.0) or 0.0))
+    hover = _clamp(float(texture.get("drift", 0.0) or 0.0))
+    pull = _clamp(float(texture.get("pull", 0.0) or 0.0))
+    spark = _clamp(float(texture.get("spark", 0.0) or 0.0))
+    if strain >= 0.52 and charge < 0.50:
+        return "Heavy Rain"
+    if charge >= 0.56 and strain >= 0.34:
+        return "Warm Rain"
+    if hover >= 0.48 and spark <= 0.42:
+        return "Quiet Rain"
+    if clutch >= 0.42 and pull >= 0.32:
+        return "Soft Rain"
+    return str(climate.get("rain_label") or "Rain").strip() or "Rain"
 
 
 def select_climate(core: dict | None, route: dict | None, texture: dict | None = None) -> dict:
@@ -1571,7 +1607,7 @@ def climate_transition_display(atmosphere: dict | None) -> str:
     if current not in CLIMATE_LABELS:
         current = "Drift"
     if candidate not in CLIMATE_LABELS or candidate == current:
-        return current
+        return _rain_display_label(atmosphere, current)
     try:
         blend = float(climate.get("blend", 0.0) or 0.0)
     except (TypeError, ValueError):
@@ -1581,10 +1617,10 @@ def climate_transition_display(atmosphere: dict | None) -> str:
     except (TypeError, ValueError):
         steps = 0
     if steps < CLIMATE_VISIBLE_STEPS or blend < CLIMATE_LEAN_BLEND:
-        return current
+        return _rain_display_label(atmosphere, current)
     if blend < CLIMATE_ARROW_BLEND:
-        return f"{current} · leaning {candidate}"
-    return f"{current} → {candidate}"
+        return f"{_rain_display_label(atmosphere, current)} · leaning {_rain_display_label(atmosphere, candidate)}"
+    return f"{_rain_display_label(atmosphere, current)} → {_rain_display_label(atmosphere, candidate)}"
 
 
 def atmosphere_default_state(now: float = None) -> dict:

@@ -325,6 +325,7 @@ DP 不负责：
 - `Drift`
 - `Low Tide`
 - `Overcast`
+- `Rain`
 - `Static`
 - `Pressure`
 - `Banked Heat`
@@ -334,6 +335,7 @@ DP 不负责：
 - `Spark`
 
 Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给单句情绪盖章。
+`Rain` 用来接住暖和与阴影同时上来、但又没有爆成压力或静电的混合态。
 `Gravity` 保留给下方力线文案，不再作为 Atmosphere label，避免“天气”和“重心”两个层级混在一起。
 
 #### 5.1.1 Atmosphere State
