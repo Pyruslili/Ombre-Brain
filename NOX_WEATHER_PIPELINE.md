@@ -338,6 +338,19 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 `Rain` 用来接住暖和与阴影同时上来、但又没有爆成压力或静电的混合态。
 `Gravity` 保留给下方力线文案，不再作为 Atmosphere label，避免“天气”和“重心”两个层级混在一起。
 
+`Rain` 的前缀规则：
+
+- `Heavy Rain`：`strain >= 0.52` 且 `charge < 0.50`
+- `Warm Rain`：`charge >= 0.56`、`strain >= 0.34`，且 `inward <= 0.50`、`guard route <= 0.46`
+- `Soft Rain`：`clutch >= 0.42` 且 `pull >= 0.32`
+- `Quiet Rain`：`hover >= 0.48` 且 `spark <= 0.42` 且 `inward <= 0.42`
+
+`Rain` 不是垃圾桶：
+
+- warm + shadow + clutch / inward 很高，还是优先让 `Banked Heat` 赢。
+- shadow 很高、warm 很低，还是优先让 `Overcast` 赢。
+- strain + guard + clutch 很高，还是优先让 `Pressure` / `Watchful` 赢。
+
 #### 5.1.1 Atmosphere State
 
 后端在 weather residue 里维护持久 `atmosphere`：

@@ -1550,13 +1550,14 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
         ), 3),
         "Overcast": round(_clamp(0.42 * strain + 0.38 * inward + 0.12 * clutch + 0.08 * hover), 3),
         "Rain": round(_clamp(
-            0.36 * rain_mix
-            + 0.16 * rain_balance
+            0.42 * rain_balance
+            + 0.16 * rain_mix
             + 0.12 * clutch
-            + 0.12 * hover
-            + 0.08 * inward
+            + 0.10 * hover
             + 0.08 * pull
             + 0.08 * (1.0 - spark)
+            - 0.18 * inward
+            - 0.12 * guard_route
             - 0.08 * outward
         ), 3),
         "Static": round(_clamp(0.40 * charge + 0.34 * strain + 0.18 * hover + 0.08 * clutch - 0.22 * spark), 3),
@@ -1574,21 +1575,24 @@ def _rain_display_label(atmosphere: dict | None, label: str) -> str:
         return label
     core = atmosphere.get("core") if isinstance(atmosphere.get("core"), dict) else {}
     texture = atmosphere.get("texture") if isinstance(atmosphere.get("texture"), dict) else {}
+    route = atmosphere.get("route") if isinstance(atmosphere.get("route"), dict) else {}
     climate = atmosphere.get("climate") if isinstance(atmosphere.get("climate"), dict) else {}
     charge = _clamp(float(core.get("charge", 0.0) or 0.0))
     clutch = _clamp(float(core.get("clutch", 0.0) or 0.0))
     strain = _clamp(float(core.get("strain", 0.0) or 0.0))
+    inward = _clamp(float(route.get("scores", {}).get("inward", 0.0) or 0.0))
+    guard_route = _clamp(float(route.get("scores", {}).get("guard", 0.0) or 0.0))
     hover = _clamp(float(texture.get("drift", 0.0) or 0.0))
     pull = _clamp(float(texture.get("pull", 0.0) or 0.0))
     spark = _clamp(float(texture.get("spark", 0.0) or 0.0))
     if strain >= 0.52 and charge < 0.50:
         return "Heavy Rain"
-    if charge >= 0.56 and strain >= 0.34:
+    if charge >= 0.56 and strain >= 0.34 and inward <= 0.50 and guard_route <= 0.46:
         return "Warm Rain"
-    if hover >= 0.48 and spark <= 0.42:
-        return "Quiet Rain"
     if clutch >= 0.42 and pull >= 0.32:
         return "Soft Rain"
+    if hover >= 0.48 and spark <= 0.42 and inward <= 0.42:
+        return "Quiet Rain"
     return str(climate.get("rain_label") or "Rain").strip() or "Rain"
 
 

@@ -475,6 +475,139 @@ def test_rain_claims_mixed_warm_shadow_states():
     assert climate_transition_display(atmosphere) == "Warm Rain"
 
 
+def test_rain_does_not_replace_banked_heat_on_warm_shadow_clutch_inward_mix():
+    core = {"charge": 0.72, "clutch": 0.58, "strain": 0.41}
+    route = {
+        "vector": "inward",
+        "scores": {
+            "toward_jiajia": 0.24,
+            "toward_house": 0.22,
+            "outward": 0.14,
+            "inward": 0.68,
+            "guard": 0.28,
+            "hover": 0.20,
+        },
+    }
+    texture = atmosphere_texture(core, route)
+
+    assert select_climate(core, route, texture)["label"] == "Banked Heat"
+
+
+def test_rain_does_not_replace_overcast_when_shadow_is_high_and_warmth_low():
+    core = {"charge": 0.24, "clutch": 0.28, "strain": 0.68}
+    route = {
+        "vector": "inward",
+        "scores": {
+            "toward_jiajia": 0.12,
+            "toward_house": 0.10,
+            "outward": 0.08,
+            "inward": 0.74,
+            "guard": 0.22,
+            "hover": 0.32,
+        },
+    }
+    texture = atmosphere_texture(core, route)
+
+    assert select_climate(core, route, texture)["label"] == "Overcast"
+
+
+def test_rain_does_not_replace_pressure_or_watchful_when_strain_guard_clutch_are_high():
+    core = {"charge": 0.30, "clutch": 0.62, "strain": 0.66}
+    route = {
+        "vector": "guard",
+        "scores": {
+            "toward_jiajia": 0.16,
+            "toward_house": 0.18,
+            "outward": 0.08,
+            "inward": 0.26,
+            "guard": 0.78,
+            "hover": 0.24,
+        },
+    }
+    texture = atmosphere_texture(core, route)
+    selected = select_climate(core, route, texture)
+
+    assert selected["label"] in {"Pressure", "Watchful"}
+
+
+def test_pressure_to_rain_transition_is_visible():
+    atmosphere = {
+        "core": {"charge": 0.62, "clutch": 0.46, "strain": 0.44},
+        "route": {
+            "vector": "hover",
+            "scores": {
+                "toward_jiajia": 0.35,
+                "toward_house": 0.33,
+                "outward": 0.22,
+                "inward": 0.36,
+                "guard": 0.28,
+                "hover": 0.50,
+            },
+        },
+        "texture": atmosphere_texture(
+            {"charge": 0.62, "clutch": 0.46, "strain": 0.44},
+            {
+                "vector": "hover",
+                "scores": {
+                    "toward_jiajia": 0.35,
+                    "toward_house": 0.33,
+                    "outward": 0.22,
+                    "inward": 0.36,
+                    "guard": 0.28,
+                    "hover": 0.50,
+                },
+            },
+        ),
+        "climate": {
+            "current": "Pressure",
+            "candidate": "Rain",
+            "candidate_steps": 1,
+            "blend": 0.35,
+        },
+    }
+
+    assert climate_transition_display(atmosphere) == "Pressure → Warm Rain"
+
+
+def test_rain_to_shelter_transition_is_visible():
+    atmosphere = {
+        "core": {"charge": 0.58, "clutch": 0.52, "strain": 0.40},
+        "route": {
+            "vector": "toward_house",
+            "scores": {
+                "toward_jiajia": 0.24,
+                "toward_house": 0.54,
+                "outward": 0.16,
+                "inward": 0.22,
+                "guard": 0.44,
+                "hover": 0.30,
+            },
+        },
+        "texture": atmosphere_texture(
+            {"charge": 0.58, "clutch": 0.52, "strain": 0.40},
+            {
+                "vector": "toward_house",
+                "scores": {
+                    "toward_jiajia": 0.24,
+                    "toward_house": 0.54,
+                    "outward": 0.16,
+                    "inward": 0.22,
+                    "guard": 0.44,
+                    "hover": 0.30,
+                },
+            },
+        ),
+        "climate": {
+            "current": "Rain",
+            "candidate": "Shelter",
+            "candidate_steps": 1,
+            "blend": 0.36,
+        },
+    }
+
+    assert climate_transition_display(atmosphere) == "Warm Rain → Shelter"
+
+
 def test_high_shadow_does_not_display_as_plain_clear(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
     now = time.time()
