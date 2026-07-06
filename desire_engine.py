@@ -255,6 +255,7 @@ RUMINATION_DECAY_RATE = 0.96       # legacy per-tick rate
 RUMINATION_HALFLIFE_HOURS = 24.0   # 反刍衰减最慢，24小时半衰期
 RUMINATION_BOOST_ON_TRIGGER = 1.05 # 被相关输入触发时加强而不是衰减
 RUMINATION_FADE_THRESHOLD = 0.06   # 低于这个才真正消失
+LEGACY_RETURN_RUMINATION_PREFIX = "她回来了。之前那段没有她的时间"
 
 DAMPING = 0.02
 
@@ -575,6 +576,15 @@ class Thought:
     source_type: str = ""
     source_created: str = ""
     last_ticked_at: float = 0.0      # 上次tick的时间戳，0表示用born_at
+
+
+def _is_legacy_return_rumination(thought: Thought) -> bool:
+    return (
+        thought.kind == "rumination"
+        and thought.drive == "attachment"
+        and thought.source == "reflex"
+        and str(thought.text or "").startswith(LEGACY_RETURN_RUMINATION_PREFIX)
+    )
 
 
 # ─── 悲恸引擎状态 ─────────────────────────────────────────────────────────────
@@ -2601,7 +2611,6 @@ def tick_grief(grief: GriefState, state: DriveState,
     """
     if has_signal:
         # 嘉嘉回来了，直接重置，不管在哪一层
-        # （余温由DesireEngine.tick负责落一条rumination，重置本身保持干净）
         return GriefState(layer="none", protest_ticks=0, last_signal_ts=now_ts)
 
     if quiet:
@@ -3216,11 +3225,15 @@ class DesireStore:
                 FROM thoughts
                 """
             ).fetchall()
-        return [Thought(tid=r[0], text=r[1], drive=normalize_drive_key(r[2], r[2]), kind=r[3],
-                        strength=r[4], born_at=r[5], fed_count=r[6],
-                        source=(r[7] or "manual"), source_bucket=(r[8] or ""),
-                        source_type=(r[9] or ""), source_created=(r[10] or ""),
-                        last_ticked_at=(r[11] or 0.0)) for r in rows]
+        thoughts = [
+            Thought(tid=r[0], text=r[1], drive=normalize_drive_key(r[2], r[2]), kind=r[3],
+                    strength=r[4], born_at=r[5], fed_count=r[6],
+                    source=(r[7] or "manual"), source_bucket=(r[8] or ""),
+                    source_type=(r[9] or ""), source_created=(r[10] or ""),
+                    last_ticked_at=(r[11] or 0.0))
+            for r in rows
+        ]
+        return [t for t in thoughts if not _is_legacy_return_rumination(t)]
 
     def save_thoughts(self, thoughts: list):
         with self._conn() as conn:
@@ -3897,12 +3910,6 @@ class DesireEngine:
         grief = tick_grief(old_grief, state, has_signal, now,
                            quiet=is_quiet_hours(now))
         self.store.save_grief(grief)
-        # 余温：从某一层被她的归来打断时，留一条rumination在池里。
-        # 重置可以快，但等过的那段时间得有痕迹。
-        if has_signal and old_grief.layer != "none" and grief.layer == "none":
-            self.store.add_rumination(
-                f"她回来了。之前那段没有她的时间——积了{old_grief.protest_ticks}拍，还在身上。",
-                "attachment", strength=0.5, source="reflex")
 
         # 节律层tick
         rhythm = self.store.load_rhythm()

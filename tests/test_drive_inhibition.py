@@ -23,6 +23,8 @@ from desire_engine import (
     reunion_boost_for_return,
     refuse_intent,
     satisfy,
+    GriefState,
+    LEGACY_RETURN_RUMINATION_PREFIX,
 )
 
 
@@ -277,6 +279,41 @@ def test_attachment_rebound_after_absence(tmp_path):
     assert rebound["phase"] == "overshoot"
     assert rebound_state["drives"]["attachment"] > rebound["baseline"]
     assert rebound_state["drive_outputs"]["attachment"]["rebound"]["active"] is True
+
+
+def test_return_signal_clears_grief_without_reflex_rumination(tmp_path):
+    import time
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    now = time.time()
+    state = engine.store.load_state()
+    state.drives["attachment"] = 0.80
+    engine.store.save_state(state)
+    engine.store.save_grief(GriefState(layer="protest", protest_ticks=6, last_signal_ts=now - 3600))
+
+    engine.tick(has_signal=True)
+
+    grief = engine.store.load_grief()
+    thoughts = engine.store.load_thoughts()
+    assert grief.layer == "none"
+    assert not any("她回来了。之前那段没有她的时间" in thought.text for thought in thoughts)
+    assert not any(thought.source == "reflex" and thought.drive == "attachment" for thought in thoughts)
+
+
+def test_legacy_return_rumination_is_hidden_from_thought_pool(tmp_path):
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    engine.store.add_rumination(
+        f"{LEGACY_RETURN_RUMINATION_PREFIX}——积了6拍，还在身上。",
+        "attachment",
+        strength=0.5,
+        source="reflex",
+    )
+    engine.store.add_rumination("她回来了，我想认真接住这一刻。", "attachment", strength=0.5, source="manual")
+
+    thoughts = engine.store.load_thoughts()
+
+    assert len(thoughts) == 1
+    assert thoughts[0].source == "manual"
 
 
 def test_settle_attachment_clears_rebound_floor(tmp_path):
