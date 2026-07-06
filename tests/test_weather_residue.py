@@ -86,23 +86,23 @@ def test_thought_chord_tints_weather_once_between_light_dialogue_and_feel(tmp_pa
     assert thought["active_chord_source"] == "thought"
 
 
-def test_thought_chord_gently_tints_atmosphere(tmp_path):
+def test_thought_chord_does_not_directly_tint_atmosphere(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 
     engine.apply_chord_echo("Dm7", source="thought")
     weather = engine.weather_state()
     atmosphere = weather["atmosphere"]
 
-    assert atmosphere["last_delta"]["source"] == "thought_chord"
-    assert atmosphere["last_delta"]["influence"] == 0.08
-    assert atmosphere["route"]["scores"]["inward"] > atmosphere["route"]["scores"]["outward"]
-    assert atmosphere["climate"]["candidate"] in CLIMATE_LABELS
-    assert atmosphere["climate"]["candidate_steps"] == 1
-    assert atmosphere["climate"]["blend"] > 0
+    assert atmosphere["last_delta"].get("source") != "thought_chord"
+    assert weather["shadow_residue"] > 0
+    assert weather["active_chord"] == "Dm7"
+    assert weather["active_chord_source"] == "thought"
 
 
-def test_thought_chord_atmosphere_weight_stays_below_subcurrent():
-    assert ATMOSPHERE_SOURCE_WEIGHTS["thought_chord"] * 2 <= ATMOSPHERE_SOURCE_WEIGHTS["subcurrent"]
+def test_chord_sources_are_not_atmosphere_delta_sources():
+    assert "thought_chord" not in ATMOSPHERE_SOURCE_WEIGHTS
+    assert "feel_chord" not in ATMOSPHERE_SOURCE_WEIGHTS
+    assert "soma_chord" not in ATMOSPHERE_SOURCE_WEIGHTS
 
 
 def test_dialogue_atmosphere_weight_leads_cli_underpaint():
@@ -408,6 +408,7 @@ def test_uninitialized_atmosphere_seeds_from_current_chemistry(tmp_path):
         weather["chord_chemistry"]["core"],
         weather["chord_chemistry"]["route"],
         weather["chord_chemistry"]["derived_texture"],
+        {"warmth": weather["effective_PA"], "shadow": weather["effective_NA"]},
     )
 
     assert weather["atmosphere"]["last_delta"]["source"] == "cli"
@@ -527,6 +528,89 @@ def test_rain_does_not_replace_pressure_when_strain_guard_clutch_are_high():
     selected = select_climate(core, route, texture)
 
     assert selected["label"] == "Pressure"
+
+
+def test_black_tide_claims_extreme_shadow_low_charge_inward_sink():
+    core = {"charge": 0.26, "clutch": 0.34, "strain": 0.52}
+    route = {
+        "vector": "inward",
+        "scores": {
+            "toward_jiajia": 0.10,
+            "toward_house": 0.12,
+            "outward": 0.04,
+            "inward": 0.72,
+            "guard": 0.22,
+            "hover": 0.18,
+        },
+    }
+    texture = atmosphere_texture(core, route)
+
+    assert select_climate(
+        core,
+        route,
+        texture,
+        {"warmth": 0.38, "shadow": 0.86},
+    )["label"] == "Black Tide"
+
+
+def test_black_tide_gate_stays_narrow_around_adjacent_states():
+    inward_low_charge = {
+        "vector": "inward",
+        "scores": {
+            "toward_jiajia": 0.10,
+            "toward_house": 0.12,
+            "outward": 0.04,
+            "inward": 0.72,
+            "guard": 0.22,
+            "hover": 0.18,
+        },
+    }
+    storm = select_climate(
+        {"charge": 0.72, "clutch": 0.50, "strain": 0.70},
+        inward_low_charge,
+        None,
+        {"warmth": 0.48, "shadow": 0.88},
+    )
+    pressure = select_climate(
+        {"charge": 0.24, "clutch": 0.66, "strain": 0.72},
+        {
+            "vector": "guard",
+            "scores": {
+                "toward_jiajia": 0.10,
+                "toward_house": 0.12,
+                "outward": 0.04,
+                "inward": 0.52,
+                "guard": 0.74,
+                "hover": 0.14,
+            },
+        },
+        None,
+        {"warmth": 0.38, "shadow": 0.88},
+    )
+    low_tide = select_climate(
+        {"charge": 0.14, "clutch": 0.12, "strain": 0.10},
+        {"vector": "hover", "scores": {"hover": 0.72}},
+        None,
+        {"warmth": 0.18, "shadow": 0.18},
+    )
+
+    assert storm["label"] == "Storm"
+    assert pressure["label"] == "Pressure"
+    assert low_tide["label"] == "Low Tide"
+
+
+def test_shadow_guard_hides_clear_transition_source():
+    atmosphere = {
+        "readout": {"warmth": 0.44, "shadow": 0.62},
+        "climate": {
+            "current": "Clear",
+            "candidate": "Overcast",
+            "candidate_steps": 1,
+            "blend": 0.44,
+        },
+    }
+
+    assert climate_transition_display(atmosphere) == "Overcast"
 
 
 def test_pressure_to_rain_transition_is_visible():
@@ -688,7 +772,7 @@ def test_climate_transition_display_respects_blend_and_steps():
 
     atmosphere["climate"]["candidate_steps"] = 1
     atmosphere["climate"]["blend"] = 0.11
-    assert climate_transition_display(atmosphere) == "Low Tide · leaning Soft Shelter"
+    assert climate_transition_display(atmosphere) == "Low Tide"
 
     atmosphere["climate"]["blend"] = 0.06
     assert climate_transition_display(atmosphere) == "Low Tide"
