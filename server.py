@@ -2295,35 +2295,23 @@ def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5)
     return compact if compact else packet
 
 
-def _weighted_bucket_sample(buckets: list[dict], limit: int) -> list[dict]:
-    """Pick buckets without replacement, weighted by current decay score."""
-    pool = list(buckets)
-    selected: list[dict] = []
-    count = max(0, min(limit, len(pool)))
-    for _ in range(count):
-        weights = [max(0.0, decay_engine.calculate_score(b.get("metadata", {}))) for b in pool]
-        total = sum(weights)
-        if total <= 0:
-            picked_index = random.randrange(len(pool))
-        else:
-            picked_index = random.choices(range(len(pool)), weights=weights, k=1)[0]
-        selected.append(pool.pop(picked_index))
-    return selected
-
-
 def _recent_weight_random_bucket_sample(
     buckets: list[dict],
     recent_limit: int,
     shortlist_limit: int,
     pick_limit: int,
 ) -> list[dict]:
-    """Bound by recency, weighted-shortlist inside that window, then sample for display."""
+    """Bound by recency, take the top weighted shortlist, then sample for display."""
     recent_pool = sorted(
         buckets,
         key=lambda b: b.get("metadata", {}).get("created", ""),
         reverse=True,
     )[:max(0, recent_limit)]
-    shortlist = _weighted_bucket_sample(recent_pool, shortlist_limit)
+    shortlist = sorted(
+        recent_pool,
+        key=lambda b: decay_engine.calculate_score(b.get("metadata", {})),
+        reverse=True,
+    )[:max(0, shortlist_limit)]
     pick_count = max(0, min(pick_limit, len(shortlist)))
     if pick_count >= len(shortlist):
         return shortlist
@@ -4518,76 +4506,81 @@ async def api_network(request):
 
 @mcp.custom_route("/api/breath-debug", methods=["GET"])
 async def api_breath_debug(request):
-    """Debug endpoint: simulate actual breath memory/feel surfacing pools."""
+    """Debug endpoint: simulate breath scoring and return per-bucket breakdown."""
     from starlette.responses import JSONResponse
     err = _require_auth(request)
     if err: return err
+    query = request.query_params.get("q", "")
+    q_valence = request.query_params.get("valence")
+    q_arousal = request.query_params.get("arousal")
+    q_valence = float(q_valence) if q_valence else None
+    q_arousal = float(q_arousal) if q_arousal else None
 
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=False)
-        memory_pool = sorted(
-            _breath_memory_candidates(all_buckets),
-            key=lambda b: b.get("metadata", {}).get("created", ""),
-            reverse=True,
-        )[:30]
-        feel_pool = sorted(
-            _breath_feel_candidates(all_buckets),
-            key=lambda b: b.get("metadata", {}).get("created", ""),
-            reverse=True,
-        )[:30]
-        memory_shortlist = _weighted_bucket_sample(memory_pool, 12)
-        feel_shortlist = _weighted_bucket_sample(feel_pool, 12)
-        memory_selected = random.sample(memory_shortlist, min(7, len(memory_shortlist)))
-        feel_selected = random.sample(feel_shortlist, min(8, len(feel_shortlist)))
-        memory_selected.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
-        feel_selected.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
+        results = []
+        w = {
+            "topic": bucket_mgr.w_topic,
+            "emotion": bucket_mgr.w_emotion,
+            "time": bucket_mgr.w_time,
+            "importance": bucket_mgr.w_importance,
+        }
+        w_sum = sum(w.values())
 
-        def debug_row(bucket: dict, section: str) -> dict:
+        for bucket in all_buckets:
+            if _is_wander_only_bucket(bucket):
+                continue
             meta = bucket.get("metadata", {})
-            score = decay_engine.calculate_score(meta)
-            importance = max(1, min(10, int(meta.get("importance", 5)))) / 10.0
-            arousal = max(0.0, min(1.0, float(meta.get("arousal", 0.3) or 0.3)))
-            activation = min(1.0, max(1.0, float(meta.get("activation_count", 1) or 1)) / 20.0)
-            return {
-                "id": bucket.get("id"),
-                "name": meta.get("name") or bucket.get("id"),
-                "section": section,
-                "domain": meta.get("domain", []),
-                "type": meta.get("type", "dynamic"),
-                "resolved": meta.get("resolved", False),
-                "digested": meta.get("digested", False),
-                "pinned": meta.get("pinned", False),
-                "created": meta.get("created", ""),
-                "last_active": meta.get("last_active", ""),
-                "scores": {
-                    "importance": round(importance, 4),
-                    "arousal": round(arousal, 4),
-                    "activation": round(activation, 4),
-                },
-                "weights": {"importance": 1, "arousal": 1, "activation": 1},
-                "normalized": round(score, 2),
-                "passed_threshold": True,
-            }
+            bid = bucket["id"]
+            try:
+                topic = bucket_mgr._calc_topic_score(query, bucket) if query else 0.0
+                emotion = bucket_mgr._calc_emotion_score(q_valence, q_arousal, meta)
+                time_s = bucket_mgr._calc_time_score(meta)
+                imp = max(1, min(10, int(meta.get("importance", 5)))) / 10.0
 
-        results = (
-            [debug_row(b, "memory") for b in memory_selected]
-            + [debug_row(b, "feel") for b in feel_selected]
-        )
+                raw_total = (
+                    topic * w["topic"]
+                    + emotion * w["emotion"]
+                    + time_s * w["time"]
+                    + imp * w["importance"]
+                )
+                normalized = (raw_total / w_sum) * 100 if w_sum > 0 else 0
+                resolved = meta.get("resolved", False)
+                if resolved:
+                    normalized *= 0.3
+
+                results.append({
+                    "id": bid,
+                    "name": meta.get("name", bid),
+                    "domain": meta.get("domain", []),
+                    "type": meta.get("type", "dynamic"),
+                    "resolved": resolved,
+                    "pinned": meta.get("pinned", False),
+                    "scores": {
+                        "topic": round(topic, 4),
+                        "emotion": round(emotion, 4),
+                        "time": round(time_s, 4),
+                        "importance": round(imp, 4),
+                    },
+                    "weights": w,
+                    "raw_total": round(raw_total, 4),
+                    "normalized": round(normalized, 2),
+                    "passed_threshold": normalized >= bucket_mgr.fuzzy_threshold,
+                })
+            except Exception:
+                continue
+
+        results.sort(key=lambda x: x["normalized"], reverse=True)
+        passed = [r for r in results if r["passed_threshold"]]
         return JSONResponse({
-            "mode": "breath",
-            "weights": {"score": "decay_engine.calculate_score"},
-            "threshold": None,
-            "total_candidates": len(memory_pool) + len(feel_pool),
-            "passed_count": len(results),
-            "pools": {
-                "memory_recent": len(memory_pool),
-                "memory_shortlist": len(memory_shortlist),
-                "memory_selected": len(memory_selected),
-                "feel_recent": len(feel_pool),
-                "feel_shortlist": len(feel_shortlist),
-                "feel_selected": len(feel_selected),
-            },
-            "results": results,
+            "query": query,
+            "valence": q_valence,
+            "arousal": q_arousal,
+            "weights": w,
+            "threshold": bucket_mgr.fuzzy_threshold,
+            "total_candidates": len(results),
+            "passed_count": len(passed),
+            "results": results[:50],  # top 50 for debug
         })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
