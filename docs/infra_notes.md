@@ -1,5 +1,11 @@
 # Infra Notes
 
+## 2026-07-08 Breath search retired; trace is literal-only
+
+- Symptom: `breath(query=...)` used keyword search, vector similarity, and random resurfacing, so sparse keyword searches could pull unrelated or already settled memories.
+- Fix: removed `query` / `max_tokens` from the MCP `breath` tool surface and deleted the breath search branch. Keyword lookup now belongs to `trace`.
+- Trace rules: search only literal content substrings or exact tag matches; exclude `resolved` / `digested` buckets; include memory / feel / letter / writing / window / unresolved / inner; cap output at 15 entries and return `null` when there is no literal match.
+
 ## 2026-07-08 DP memory analyzer replaces active CLI memory line
 
 - Old CLI analyzer source `analyze_nocturne_entry` is retained as a cold standby, but the active memory analyzer line now uses `dp_memory`.

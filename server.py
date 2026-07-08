@@ -2304,8 +2304,6 @@ def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5)
 
 @mcp.tool(name="breath")
 async def breath(
-    query: str = "",
-    max_tokens: int = 10000,
     domain: str = "",
     valence: float = -1,
     arousal: float = -1,
@@ -2342,7 +2340,33 @@ async def breath(
     except Exception:
         pass
     max_results = min(max_results, 50)
-    max_tokens = min(max_tokens, 20000)
+    max_tokens = 10000
+
+    # --- Feel retrieval: domain="feel" is a special channel ---
+    # --- Feel 检索：domain="feel" 是独立入口 ---
+    if domain.strip().lower() == "feel":
+        try:
+            all_buckets = await bucket_mgr.list_all(include_archive=False)
+            feels = [
+                b for b in all_buckets
+                if b["metadata"].get("type") == "feel"
+                and not b["metadata"].get("digested", False)
+                and not b["metadata"].get("resolved", False)
+            ]
+            feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
+            if not feels:
+                return "没有留下过 feel。"
+            results = []
+            for f in feels:
+                created = f["metadata"].get("created", "")
+                entry = f"[{created}]\n{strip_wikilinks(f['content'])}"
+                results.append(entry)
+                if count_tokens_approx("\n---\n".join(results)) > max_tokens:
+                    break
+            return "=== 你留下的 feel ===\n" + "\n---\n".join(results)
+        except Exception as e:
+            logger.error(f"Feel retrieval failed: {e}")
+            return "读取 feel 失败。"
 
     # --- importance_min mode: bulk fetch by importance threshold ---
     # --- 重要度批量拉取模式：跳过语义搜索，按 importance 降序返回 ---
@@ -2379,9 +2403,9 @@ async def breath(
                 logger.warning(f"importance_min dehydrate failed: {e}")
         return "\n---\n".join(results) if results else "没有可以展示的记忆。"
 
-    # --- No args or empty query: surfacing mode (weight pool active push) ---
-    # --- 无参数或空query：浮现模式（权重池主动推送）---
-    if not query or not query.strip():
+    # --- Default breath: surfacing mode (weight pool active push) ---
+    # --- 默认breath：浮现模式（权重池主动推送）---
+    if True:
         # Wake-up breath reads the room skeleton. Do not let an agent's
         # conservative tool call (for example max_tokens=6000) produce a
         # partial first breath.
@@ -2612,144 +2636,6 @@ async def breath(
             final_parts.append("=== House Rules ===\n" + "\n---\n".join(pinned_results))
 
         return "\n\n".join(final_parts)
-
-    # --- Feel retrieval: domain="feel" is a special channel ---
-    # --- Feel 检索：domain="feel" 是独立入口 ---
-    if domain.strip().lower() == "feel":
-        try:
-            all_buckets = await bucket_mgr.list_all(include_archive=False)
-            feels = [
-                b for b in all_buckets
-                if b["metadata"].get("type") == "feel"
-                and not b["metadata"].get("digested", False)
-                and not b["metadata"].get("resolved", False)
-            ]
-            feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
-            if not feels:
-                return "没有留下过 feel。"
-            results = []
-            for f in feels:
-                created = f["metadata"].get("created", "")
-                entry = f"[{created}]\n{strip_wikilinks(f['content'])}"
-                results.append(entry)
-                if count_tokens_approx("\n---\n".join(results)) > max_tokens:
-                    break
-            return "=== 你留下的 feel ===\n" + "\n---\n".join(results)
-        except Exception as e:
-            logger.error(f"Feel retrieval failed: {e}")
-            return "读取 feel 失败。"
-
-    # --- With args: search mode (keyword + vector dual channel) ---
-    # --- 有参数：检索模式（关键词 + 向量双通道）---
-    domain_filter = [d.strip() for d in domain.split(",") if d.strip()] or None
-    q_valence = valence if 0 <= valence <= 1 else None
-    q_arousal = arousal if 0 <= arousal <= 1 else None
-
-    try:
-        matches = await bucket_mgr.search(
-            query,
-            limit=max(max_results, 20),
-            domain_filter=domain_filter,
-            query_valence=q_valence,
-            query_arousal=q_arousal,
-        )
-    except Exception as e:
-        logger.error(f"Search failed / 检索失败: {e}")
-        return "检索过程出错，请稍后重试。"
-
-    # --- Exclude pinned/protected from search results (they surface in surfacing mode) ---
-    # --- 搜索模式排除钉选桶（它们在浮现模式中始终可见）---
-    matches = [b for b in matches if not (b["metadata"].get("pinned") or b["metadata"].get("protected"))]
-    # --- Include feel if semantically related ---
-    if query and query.strip():
-        try:
-            feel_buckets = [b for b in await bucket_mgr.list_all(include_archive=False)
-                           if b["metadata"].get("type") == "feel"]
-            feel_ids = {b["id"] for b in matches}
-            vector_feels = await embedding_engine.search_similar(query, top_k=3)
-            for bid, sim in vector_feels:
-                if sim > 0.6 and bid not in feel_ids:
-                    fb = next((b for b in feel_buckets if b["id"] == bid), None)
-                    if fb:
-                        fb["score"] = round(sim * 100, 2)
-                        matches.append(fb)
-        except Exception:
-            pass
-
-    # --- Vector similarity channel: find semantically related buckets ---
-    # --- 向量相似度通道：找到语义相关的桶 ---
-    matched_ids = {b["id"] for b in matches}
-    try:
-        vector_results = await embedding_engine.search_similar(query, top_k=max(max_results, 20))
-        for bucket_id, sim_score in vector_results:
-            if bucket_id not in matched_ids and sim_score > 0.5:
-                bucket = await bucket_mgr.get(bucket_id)
-                if bucket and not (bucket["metadata"].get("pinned") or bucket["metadata"].get("protected")):
-                    bucket["score"] = round(sim_score * 100, 2)
-                    bucket["vector_match"] = True
-                    matches.append(bucket)
-                    matched_ids.add(bucket_id)
-    except Exception as e:
-        logger.warning(f"Vector search failed, using keyword only / 向量搜索失败: {e}")
-
-    results = []
-    token_used = 0
-    for bucket in matches:
-        if token_used >= max_tokens:
-            break
-        try:
-            clean_meta = {k: v for k, v in bucket["metadata"].items() if k != "tags"}
-            # --- Memory reconstruction: shift displayed valence by current mood ---
-            # --- 记忆重构：根据当前情绪微调展示层 valence（±0.1）---
-            if q_valence is not None and "valence" in clean_meta:
-                original_v = float(clean_meta.get("valence", 0.5))
-                shift = (q_valence - 0.5) * 0.2  # ±0.1 max shift
-                clean_meta["valence"] = max(0.0, min(1.0, original_v + shift))
-            summary = await dehydrator.dehydrate(strip_wikilinks(bucket["content"]), clean_meta)
-            summary_tokens = count_tokens_approx(summary)
-            if token_used + summary_tokens > max_tokens:
-                break
-            await bucket_mgr.touch(bucket["id"])
-            if bucket.get("vector_match"):
-                summary = f"[语义关联] [bucket_id:{bucket['id']}] {summary}"
-            else:
-                summary = f"[bucket_id:{bucket['id']}] {summary}"
-            results.append(summary)
-            token_used += summary_tokens
-        except Exception as e:
-            logger.warning(f"Failed to dehydrate search result / 检索结果脱水失败: {e}")
-            continue
-
-    # --- Random surfacing: when search returns < 3, 40% chance to float old memories ---
-    # --- 随机浮现：检索结果不足 3 条时，40% 概率从低权重旧桶里漂上来 ---
-    if len(matches) < 3 and random.random() < 0.4:
-        try:
-            all_buckets = await bucket_mgr.list_all(include_archive=False)
-            matched_ids = {b["id"] for b in matches}
-            low_weight = [
-                b for b in all_buckets
-                if b["id"] not in matched_ids
-                and decay_engine.calculate_score(b["metadata"]) < 2.0
-            ]
-            if low_weight:
-                drifted = random.sample(low_weight, min(random.randint(1, 3), len(low_weight)))
-                drift_results = []
-                for b in drifted:
-                    clean_meta = {k: v for k, v in b["metadata"].items() if k != "tags"}
-                    summary = await dehydrator.dehydrate(strip_wikilinks(b["content"]), clean_meta)
-                    drift_results.append(f"[surface_type: random]\n{summary}")
-                results.append("--- 忽然想起来 ---\n" + "\n---\n".join(drift_results))
-        except Exception as e:
-            logger.warning(f"Random surfacing failed / 随机浮现失败: {e}")
-
-    if not results:
-        await _fire_webhook("breath", {"mode": "empty", "matches": 0})
-        return "未找到相关记忆。"
-
-    final_text = "\n---\n".join(results)
-    await _fire_webhook("breath", {"mode": "ok", "matches": len(matches), "chars": len(final_text)})
-    return final_text
-
 
 @mcp.tool(name="undercurrent")
 def undercurrent_tool() -> dict:
@@ -3603,6 +3489,11 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
     def matches_query(bucket: dict) -> bool:
         if not q_terms:
             return True
+        if mode == "trace":
+            meta = bucket.get("metadata", {})
+            content = strip_wikilinks(bucket.get("content", "")).lower()
+            tags = _bucket_tags(meta)
+            return any(term in content or term in tags for term in q_terms)
         meta = bucket.get("metadata", {})
         haystack = "\n".join([
             str(bucket.get("id", "")),
@@ -3731,9 +3622,12 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
         )
 
     if mode == "trace":
+        trace_limit = max(1, min(int(limit or 15), 15))
+
         def _type_label(b: dict) -> str:
             meta = b.get("metadata", {})
             mark_rows = marks_by_bucket.get(b.get("id", ""), [])
+            unresolved = _mark_counts(mark_rows)["悬置"] > 0
             if str(meta.get("type", "")).lower() == "feel":
                 base = "feel"
             else:
@@ -3749,6 +3643,8 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
                     base = "window"
                 else:
                     base = "memory"
+            if unresolved and base == "memory":
+                base = "unresolved"
             # 原本是letter/writing/window,但已经被认够次数晋升inner——
             # 两个标签都要看见,不能被_guess_wander_domain的优先级collapse掉
             if base != "feel" and _guess_wander_domain(b, mark_rows) == "inner":
@@ -3757,11 +3653,22 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
 
         selected = [
             b for b in buckets
-            if str(b.get("metadata", {}).get("type", "")).lower() not in ("breath", "dream")
+            if (
+                not is_settled(b)
+                and (
+                    str(b.get("metadata", {}).get("type", "")).lower() == "feel"
+                    or (
+                        str(b.get("metadata", {}).get("type", "")).lower() not in ("breath", "dream", "permanent")
+                        and _guess_wander_domain(b, marks_by_bucket.get(b.get("id", ""), []))
+                        in {"memory", "inner", "letter", "letter_jiajia", "writing", "window"}
+                    )
+                )
+            )
         ]
         selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
+        selected = selected[:trace_limit]
         if not selected:
-            return "没有匹配的条目。"
+            return "null"
         return "=== Trace ===\n" + "\n---\n".join(
             f"〔{_type_label(b)}〕" + _format_wander_entry(
                 b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True, show_bucket_id=True
@@ -3797,7 +3704,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
 
 
 @mcp.tool(name="trace")
-async def trace(query: str, limit: int = 20) -> str:
+async def trace(query: str, limit: int = 15) -> str:
     """按关键词搜索记忆。"""
     if not (query or "").strip():
         return "trace 要带 query。它是全量轨迹搜索，不是 Breath 浮现。"
