@@ -16,6 +16,7 @@ def test_drive_aliases_fold_to_v2_keys():
     assert normalize_drive_key("disgust") == ""
     assert normalize_drive_key("discernment") == ""
     assert DRIVE_EVENT_SOURCE_WEIGHTS["analyze_nocturne_entry"] > 0
+    assert DRIVE_EVENT_SOURCE_WEIGHTS["dp_memory"] == DRIVE_EVENT_SOURCE_WEIGHTS["analyze_nocturne_entry"]
 
 
 def test_drive_event_applies_once_and_records_ledger(tmp_path):

@@ -376,6 +376,7 @@ ATMOSPHERE_SOURCE_WEIGHTS = {
     # CLI/analyzer remains the stable underpaint, not the dominant brush stroke.
     "dp": 0.78,
     "cli": 0.24,
+    "dp_memory": 0.32,
     "subcurrent": 0.18,
 }
 ATMOSPHERE_SWITCH_STEPS = 2
@@ -468,6 +469,7 @@ DRIVE_EVENT_BASE_DELTA = {
 DRIVE_EVENT_WEATHER_SOURCES = {
     "analyze_nocturne_entry",
     "dialogue_residue",
+    "dp_memory",
     "feel",
     "legacy_feed",
     "speech_event",
@@ -482,6 +484,7 @@ DRIVE_EVENT_SOURCE_WEIGHTS = {
     "touch": 0.70,
     "external": 0.45,
     "analyze_nocturne_entry": 0.55,
+    "dp_memory": 0.55,
     "dialogue_residue": 0.50,
     "legacy_feed": 0.60,
     "manual": 0.75,
@@ -952,7 +955,7 @@ def _crystal_actor_weight(event: dict | None) -> float:
         if latest_role == "assistant":
             return 1.15
         return 1.45
-    if source in {"external", "memory", "analyze_nocturne_entry", "legacy_feed"}:
+    if source in {"external", "memory", "analyze_nocturne_entry", "dp_memory", "legacy_feed"}:
         return 0.62
     return 1.0
 
@@ -2570,7 +2573,7 @@ def apply_possessiveness_channel_delta(channels: dict, delta: float, source: str
     if delta <= 0:
         return channels
     time_mode = str((brain or {}).get("time_mode") or "").strip()
-    baseline_sources = {"reflection", "memory", "writing", "feel", "analyze_nocturne_entry"}
+    baseline_sources = {"reflection", "memory", "writing", "feel", "analyze_nocturne_entry", "dp_memory"}
     baseline_modes = {"residue", "memory", "unfinished"}
     if source in baseline_sources or time_mode in baseline_modes:
         channels["territorial_baseline"] = _clamp(channels["territorial_baseline"] + delta * 0.75)
@@ -3224,7 +3227,7 @@ def _reflection_forward_archival(event: dict, brain: dict,
     nested = event.get("forward_archival") if isinstance(event.get("forward_archival"), dict) else {}
     explicit = bool(event.get("archive_candidate") or brain.get("archive_candidate") or nested.get("archive_candidate"))
     source = str(event.get("source") or brain.get("source") or "").strip()
-    source_ok = source in {"speech_event", "writing", "memory", "feel", "analyze_nocturne_entry", "manual"}
+    source_ok = source in {"speech_event", "writing", "memory", "feel", "analyze_nocturne_entry", "dp_memory", "manual"}
     structural = max(
         _feature_value(brain, "structural_value"),
         _feature_value(brain, "handoff_value"),
@@ -4200,6 +4203,8 @@ class DesireEngine:
         source = str(source or "").strip()
         if source in {"dialogue_residue", "speech_event", "user_message"}:
             return "dp"
+        if source == "dp_memory":
+            return "dp_memory"
         if source in {"analyze_nocturne_entry", "feel", "legacy_feed", "manual"}:
             return "cli"
         return "dp"
@@ -4561,7 +4566,7 @@ class DesireEngine:
             brain["forward_archival"] = forward_archival
 
         reflective_self_inquiry = (
-            source == "analyze_nocturne_entry"
+            source in {"analyze_nocturne_entry", "dp_memory"}
             and primary == "reflection"
             and str(brain.get("target") or "").strip() == "nox_self"
             and _feature_value(brain, "inward_pull") >= 0.55

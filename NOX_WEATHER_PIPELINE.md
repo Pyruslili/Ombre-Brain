@@ -141,12 +141,12 @@ Drive 不是单一来源计算，而是多个来源叠加：
 
 ### 4.1 统一输出：drive_event_v2
 
-CLI、DP dialogue_residue 最终都尽量归一成 `drive_event_v2`，再进入 Drive / Ledger / Weather / Atmosphere。
+CLI、DP memory、DP dialogue_residue 最终都尽量归一成 `drive_event_v2`，再进入 Drive / Ledger / Weather / Atmosphere。
 
 通用字段：
 
 - `schema_version`: 固定 `drive_event_v2`
-- `source`: 来源名，例如 `analyze_nocturne_entry`、`dialogue_residue`
+- `source`: 来源名，例如 `analyze_nocturne_entry`、`dp_memory`、`dialogue_residue`
 - `event_label`: 事件短标签
 - `primary_drive`: 主驱动，9 维之一，或空字符串
 - `secondary_drives`: 可选副驱动 map
@@ -473,7 +473,8 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 解释：
 
 - `dp` / dialogue 是 live weather vane，负责让天气跟对话风向转。
-- `cli` / analyzer 是 stable underpaint，负责慢变量和记忆底色。
+- `cli` / analyzer 是旧慢分析线，保留作冷备。
+- `dp_memory` 是记忆慢分析线，负责慢变量和记忆底色；权重高于旧 `cli`，低于当前对话 `dp`。
 - `subcurrent` 只轻轻倾斜 Atmosphere，不直接盖过当前对话。
 - `keyword / speech_event / user_message / feel / thought / soma` 带来的 Warmth / Shadow residue 先进入 effective NAPA，再由 Atmosphere 读取。
 - Chord echo 不直接产生 Atmosphere Delta；它只能留下 Warmth / Shadow residue、Active Chord 和 Chord Impulse 残影。
@@ -481,6 +482,7 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 来源映射：
 
 - `dialogue_residue -> dp`
+- `dp_memory -> dp_memory`
 - `analyze_nocturne_entry / feel / legacy_feed / manual -> cli`
 - `latent-note / heartbeat subcurrent -> subcurrent`
 
@@ -1025,13 +1027,14 @@ Drive Ledger 中来源用 icon 表示：
 
 ### 10.3 记忆 / feel / writing
 
-`非 private 全量记忆 -> CLI analyze_nocturne_entry -> drive_event_v2 -> Drive / Chord Chemistry / Atmosphere`
+`非 private 全量记忆 -> dp_memory -> drive_event_v2 -> Drive / Chord Chemistry / Atmosphere`
 
 特点：
 
 - private 不喂。
-- feel 属于全量记忆，可以进入 CLI / Atmosphere。
-- Atmosphere 不吃 Thought Pool 文案本身；CLI 事件只在产生 Drive / Weather / Atmosphere Delta 后进入状态机，Chord 只保留残影。
+- feel 属于全量记忆，可以进入 DP memory / Atmosphere。
+- 旧 `analyze_nocturne_entry` CLI 线保留但默认停用，方便日后切换。
+- Atmosphere 不吃 Thought Pool 文案本身；DP memory 事件只在产生 Drive / Weather / Atmosphere Delta 后进入状态机，Chord 只保留残影。
 
 ### 10.4 触摸
 

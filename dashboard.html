@@ -2967,6 +2967,7 @@ const DRIVE_SOURCE_LABELS = {
   manual: 'Nox念头',
   thought: 'Nox念头',
   analyze_nocturne_entry: 'CLI',
+  dp_memory: 'DP记忆',
   collision: 'DP碰撞',
   speech_event: 'Speech Trace',
   dialogue_residue: 'Dialogue Residue',
@@ -3152,10 +3153,10 @@ async function doLogin() {
    
 function thoughtSourceInfo(source) {
   const key = String(source || 'manual').toLowerCase();
-  if (key === 'cli' || key === 'analyze_nocturne_entry' || key === 'feel_analysis') {
+  if (key === 'cli' || key === 'analyze_nocturne_entry' || key === 'feel_analysis' || key === 'dp_memory') {
     return {
-      key: 'cli',
-      label: 'CLI feel analysis',
+      key: key === 'dp_memory' ? 'dp-memory' : 'cli',
+      label: key === 'dp_memory' ? 'DP memory analysis' : 'CLI feel analysis',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><circle cx="11" cy="14" r="2.4"/><path d="m13 16 2.2 2.2"/></svg>'
     };
   }
@@ -3422,6 +3423,7 @@ function driveSourceLabel(source, sourceType = '') {
   if (DRIVE_SOURCE_LABELS[t]) return DRIVE_SOURCE_LABELS[t];
   if (s === 'feed' && (t.includes('thought') || t.includes('manual') || t.includes('writing') || t.includes('letter'))) return 'Nox念头';
   if (s.includes('collision') || t.includes('collision')) return 'DP碰撞';
+  if (s.includes('dp_memory') || t.includes('dp_memory')) return 'DP记忆';
   if (s.includes('dialogue') || t.includes('dialogue')) return 'Dialogue Residue';
   if (s.includes('cli') || t === 'cli') return 'CLI';
   if (s.includes('thought') || s.includes('manual') || s === 'analyze_nocturne_entry' || t.includes('thought') || t.includes('manual') || t.includes('writing')) return 'Nox念头';

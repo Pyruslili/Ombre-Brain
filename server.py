@@ -93,6 +93,11 @@ from dialogue_residue_engine import (
     save_dialogue_residue_state,
     append_dialogue_residue_ledger,
 )
+from memory_residue_engine import (
+    classify_memory_residue_dp,
+    memory_residue_available,
+    normalize_memory_entry,
+)
 
 # --- Load config & init logging / 加载配置 & 初始化日志 ---
 config = load_config()
@@ -5995,6 +6000,8 @@ async def api_analyzer_entries(request):
                 "chord": meta.get("chord", ""),
                 "tags": meta.get("tags", []),
                 "domain": meta.get("domain", []),
+                "drive_tags": meta.get("drive_tags", {}),
+                "signal_hints": meta.get("signal_hints", {}),
                 "source": "analyze_nocturne_entry",
                 "source_bucket": bid,
                 "source_type": entry_type,
@@ -6006,6 +6013,68 @@ async def api_analyzer_entries(request):
             entry.pop("_created_sort", None)
         return JSONResponse(entries, headers={"Access-Control-Allow-Origin": "*"})
     except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/analyzer/dp-memory", methods=["POST"])
+async def api_analyzer_dp_memory(request):
+    """
+    DP memory analyzer line. Keeps the old CLI analyzer dormant and accepts
+    the same entry shape from /api/analyzer/entries plus the old CLI preference.
+    """
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+    entry = normalize_memory_entry(body.get("entry") if isinstance(body.get("entry"), dict) else body)
+    preference = str(body.get("preference") or "").strip()
+    post_feed = bool(body.get("post_feed", False))
+    if not entry.get("content_preview"):
+        return JSONResponse({"error": "entry.content_preview required"}, status_code=400,
+                           headers={"Access-Control-Allow-Origin": "*"})
+    if not memory_residue_available():
+        return JSONResponse({"error": "dp_memory unavailable"}, status_code=503,
+                           headers={"Access-Control-Allow-Origin": "*"})
+
+    try:
+        event = await classify_memory_residue_dp(
+            entry,
+            preference=preference,
+            state_context=_dialogue_residue_context_snapshot(),
+        )
+        feed_result = None
+        if post_feed:
+            if event.get("primary_drive"):
+                event_result = _desire.apply_drive_event(event)
+            else:
+                event_result = {"ok": False, "reason": "no_primary_drive"}
+            added = 0
+            for thought in event.get("thoughts", []) if isinstance(event.get("thoughts"), list) else []:
+                text = str(thought.get("text") or "").strip()
+                if not text:
+                    continue
+                _desire.add_thought(
+                    text,
+                    normalize_drive_key(thought.get("drive"), event.get("primary_drive") or "reflection"),
+                    strength=float(thought.get("strength", 0.45) or 0.45),
+                    source="dp_memory",
+                    source_bucket=entry.get("id", ""),
+                    source_type=entry.get("type", ""),
+                    source_created=entry.get("created", ""),
+                )
+                _desire.store.add_echo(text, normalize_drive_key(thought.get("drive"), "reflection"))
+                if str(thought.get("chord") or "").strip():
+                    _desire.apply_chord_echo(str(thought.get("chord") or "").strip(), source="thought")
+                added += 1
+            feed_result = {"event": event_result, "thoughts_added": added}
+        return JSONResponse({"ok": True, "event": event, "feed": feed_result},
+                           headers={"Access-Control-Allow-Origin": "*"})
+    except Exception as e:
+        logger.warning(f"dp_memory analyzer failed: {e}")
         return JSONResponse({"error": str(e)}, status_code=500,
                            headers={"Access-Control-Allow-Origin": "*"})
 

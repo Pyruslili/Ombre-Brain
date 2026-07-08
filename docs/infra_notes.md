@@ -1,5 +1,12 @@
 # Infra Notes
 
+## 2026-07-08 DP memory analyzer replaces active CLI memory line
+
+- Old CLI analyzer source `analyze_nocturne_entry` is retained as a cold standby, but the active memory analyzer line now uses `dp_memory`.
+- `/api/analyzer/entries` still exposes the same non-private memory feed and now includes `drive_tags` / `signal_hints` so upstream hold texture can survive into analysis.
+- New POST `/api/analyzer/dp-memory` accepts an entry plus the old CLI preference text, calls the DP-compatible chat completion backend, and normalizes to `drive_event_v2`; the local analyzer script then feeds that event through the existing `/api/desire/feed` path.
+- `dp_memory` is weighted like the old slow analyzer for Drive, but maps to its own Atmosphere source (`dp_memory`) instead of pretending to be live `dialogue_residue` or legacy `cli`.
+
 ## 2026-07-06 Atmosphere stuck on Low Tide / Clear / Gravity
 
 - Symptom: Warmth / Shadow and dialogue mood changed, but `pulse_weather.climate` barely moved; before removing the label it often surfaced as `Gravity`, afterwards the selector collapsed into `Low Tide` / `Clear`.
