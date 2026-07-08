@@ -1772,6 +1772,9 @@ html[data-theme="sakura-milk"] .upload-zone.dragover {
 .chord-editor { margin-top: .85rem; }
 .chord-editor label { display: block; margin-bottom: .35rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
 .chord-editor input { padding: .62rem .75rem; border: 1px solid var(--line); font-size: .84rem; }
+.weight-editor { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; margin-top: .85rem; }
+.weight-editor label { display: grid; gap: .35rem; color: var(--mute); font: 300 .58rem/1.4 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; }
+.weight-editor input { min-width: 0; padding: .62rem .75rem; border: 1px solid var(--line); font-size: .84rem; }
 .tag-editor { margin-top: .8rem; }
 .tag-editor label { display: block; margin-bottom: .35rem; }
 .tag-editor textarea { min-height: 84px; max-height: none; padding: .62rem .75rem; border: 1px solid var(--line); font-size: .84rem; line-height: 1.65; resize: vertical; overflow: hidden; }
@@ -4485,13 +4488,27 @@ async function showDetail(id) {
     const valence = finiteNumber(meta.valence, .5);
     const arousal = finiteNumber(meta.arousal, .3);
     const modelValence = meta.model_valence == null ? null : finiteNumber(meta.model_valence, null);
-    activeDetail = { id, name: String(meta.name || id), type: String(meta.type || 'dynamic'), content: String(b.content || ''), tags: [...detailTags], signal: detailSignal, chord: detailChord };
+    activeDetail = {
+      id,
+      name: String(meta.name || id),
+      type: String(meta.type || 'dynamic'),
+      content: String(b.content || ''),
+      tags: [...detailTags],
+      signal: detailSignal,
+      chord: detailChord,
+      importance: Math.max(1, Math.min(10, Math.round(finiteNumber(meta.importance, 5)))),
+      valence,
+      arousal,
+      activation_count: Math.max(1, Math.round(finiteNumber(meta.activation_count, 1))),
+      pinned: !!meta.pinned || !!meta.protected || String(meta.type || '') === 'permanent'
+    };
     content.innerHTML =
       `<h2>${esc(meta.name || id)}</h2>
        <label class="detail-body-label">正文</label>
        <div class="detail-content" id="detail-body" data-bucket-id="${esc(id)}" data-tags="${esc(JSON.stringify(detailTags))}">${esc(b.content)}</div>
        <div class="detail-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap">
          <button onclick="startEdit()">编辑</button>
+         <button onclick="lowerBucketWeight('${id}')">降权</button>
          <button onclick="toggleResolved('${id}',${meta.resolved?1:0})">${meta.resolved?'捞回':'沉底'}</button>
          <button onclick="toggleDigested('${id}',${meta.digested?1:0})">${meta.digested?'取消消化':'消化(feel)'}</button>
          <button onclick="deleteBucket('${id}')" style="color:var(--negative);border-color:rgba(199,121,112,.35);margin-left:auto;">删除</button>
@@ -4529,6 +4546,10 @@ function startEdit() {
   const currentType = activeDetail?.id === id ? activeDetail.type : 'dynamic';
   const currentSignal = activeDetail?.id === id ? activeDetail.signal : '';
   const currentChord = activeDetail?.id === id ? activeDetail.chord : '';
+  const currentImportance = activeDetail?.id === id ? activeDetail.importance : 5;
+  const currentArousal = activeDetail?.id === id ? activeDetail.arousal : .3;
+  const currentActivation = activeDetail?.id === id ? activeDetail.activation_count : 1;
+  const lockedWeight = activeDetail?.id === id ? activeDetail.pinned : false;
   const actions = document.querySelector('#detail-content > .detail-actions');
   if (actions) actions.style.display = 'none';
   body.classList.add('detail-edit');
@@ -4549,6 +4570,17 @@ function startEdit() {
       <label for="edit-chord">Chord</label>
       <input id="edit-chord" type="text" placeholder="例如 Em7 → Fmaj7">
     </div>
+    <div class="weight-editor">
+      <label for="edit-importance">重要度
+        <input id="edit-importance" type="number" min="1" max="10" step="1" ${lockedWeight ? 'disabled' : ''}>
+      </label>
+      <label for="edit-arousal">唤醒度
+        <input id="edit-arousal" type="number" min="0" max="1" step="0.05">
+      </label>
+      <label for="edit-activation">激活次数
+        <input id="edit-activation" type="number" min="1" max="999" step="1" ${lockedWeight ? 'disabled' : ''}>
+      </label>
+    </div>
     ${renderSignalControls('edit', currentSignal)}
     <div class="tag-editor">
       <label for="edit-tags">标签</label>
@@ -4564,11 +4596,17 @@ function startEdit() {
   const tagField = document.getElementById('edit-tags');
   const typeField = document.getElementById('edit-type');
   const chordField = document.getElementById('edit-chord');
+  const importanceField = document.getElementById('edit-importance');
+  const arousalField = document.getElementById('edit-arousal');
+  const activationField = document.getElementById('edit-activation');
   titleField.value = currentName;
   contentField.value = currentContent;
   typeField.value = ['dynamic', 'feel', 'permanent'].includes(currentType) ? currentType : 'dynamic';
   tagField.value = currentTags.join(', ');
   chordField.value = currentChord;
+  importanceField.value = currentImportance;
+  arousalField.value = Number(currentArousal).toFixed(2);
+  activationField.value = currentActivation;
   autoSizeEditField(contentField, 180, 360);
   autoSizeEditField(tagField, 84);
   contentField.addEventListener('input', () => autoSizeEditField(contentField, 180, 360));
@@ -4588,11 +4626,14 @@ async function saveBucket(id) {
   const tags = parseTags(document.getElementById('edit-tags').value);
   const type = document.getElementById('edit-type')?.value || 'dynamic';
   const chord = (document.getElementById('edit-chord')?.value || '').trim();
+  const importance = Math.max(1, Math.min(10, Math.round(finiteNumber(document.getElementById('edit-importance')?.value, 5))));
+  const arousal = Math.max(0, Math.min(1, finiteNumber(document.getElementById('edit-arousal')?.value, .3)));
+  const activation_count = Math.max(1, Math.min(999, Math.round(finiteNumber(document.getElementById('edit-activation')?.value, 1))));
   const signal = readSignalControls('edit');
   const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
     method:'POST', credentials:'include',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({content: text, name, type, tags, chord, signal})
+    body: JSON.stringify({content: text, name, type, tags, chord, signal, importance, arousal, activation_count})
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -4626,6 +4667,25 @@ async function toggleResolved(id, current) {
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({resolved: !current})
   });
+  await loadBuckets();
+  showDetail(id);
+}
+
+async function lowerBucketWeight(id) {
+  const detail = activeDetail?.id === id ? activeDetail : {};
+  const currentImportance = Math.max(1, Math.min(10, Math.round(finiteNumber(detail.importance, 5))));
+  const currentArousal = Math.max(0, Math.min(1, finiteNumber(detail.arousal, .3)));
+  const nextImportance = Math.max(1, currentImportance - 2);
+  const nextArousal = Math.min(currentArousal, .35);
+  const res = await fetch(BASE + '/api/bucket/' + id + '/update', {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({importance: nextImportance, activation_count: 1, arousal: nextArousal, preserve_last_active: true})
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    return alert('降权失败：' + (error.error || res.status));
+  }
   await loadBuckets();
   showDetail(id);
 }

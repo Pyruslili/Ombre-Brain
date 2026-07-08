@@ -4041,7 +4041,25 @@ async def api_bucket_update(request):
     if "digested" in body:
         kwargs["digested"] = bool(body["digested"])
     if "importance" in body:
-        kwargs["importance"] = int(body["importance"])
+        try:
+            kwargs["importance"] = max(1, min(10, int(body["importance"])))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "importance must be an integer 1-10"}, status_code=400)
+    if "activation_count" in body:
+        try:
+            kwargs["activation_count"] = max(1, min(999, int(body["activation_count"])))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "activation_count must be an integer"}, status_code=400)
+    if "valence" in body:
+        try:
+            kwargs["valence"] = max(0.0, min(1.0, float(body["valence"])))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "valence must be a number 0-1"}, status_code=400)
+    if "arousal" in body:
+        try:
+            kwargs["arousal"] = max(0.0, min(1.0, float(body["arousal"])))
+        except (TypeError, ValueError):
+            return JSONResponse({"error": "arousal must be a number 0-1"}, status_code=400)
     if "pinned" in body:
         kwargs["pinned"] = bool(body["pinned"])
     if "name" in body:
@@ -4066,6 +4084,8 @@ async def api_bucket_update(request):
         signal = body["signal"].strip()
         kwargs["signal"] = signal
         kwargs["signal_hints"] = _parse_signal_hints(signal)
+    if body.get("preserve_last_active"):
+        kwargs["_preserve_last_active"] = True
 
     if not kwargs:
         return JSONResponse({"error": "nothing to update"}, status_code=400)

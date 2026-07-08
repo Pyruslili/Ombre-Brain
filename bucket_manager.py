@@ -257,6 +257,7 @@ class BucketManager:
         Update bucket content or metadata fields.
         更新桶的内容或元数据字段。
         """
+        preserve_last_active = bool(kwargs.pop("_preserve_last_active", False))
         file_path = self._find_bucket_file(bucket_id)
         if not file_path:
             return False
@@ -280,6 +281,8 @@ class BucketManager:
             post["tags"] = kwargs["tags"]
         if "importance" in kwargs:
             post["importance"] = max(1, min(10, int(kwargs["importance"])))
+        if "activation_count" in kwargs:
+            post["activation_count"] = max(1, min(999, int(kwargs["activation_count"])))
         if "domain" in kwargs:
             post["domain"] = kwargs["domain"]
         if "valence" in kwargs:
@@ -320,7 +323,8 @@ class BucketManager:
                 post["domain"] = ["未分类"]
 
         # --- Auto-refresh activation time / 自动刷新激活时间 ---
-        post["last_active"] = now_iso()
+        if not preserve_last_active:
+            post["last_active"] = now_iso()
 
         # --- Auto-move when type changes or pinned → permanent/ ---
         # --- 类型变化时同步移动文件；钉选仍进入 permanent/ ---

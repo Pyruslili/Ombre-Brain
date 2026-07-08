@@ -6,6 +6,11 @@
 - Fix: removed `query` / `max_tokens` from the MCP `breath` tool surface and deleted the breath search branch. Keyword lookup now belongs to `trace`.
 - Trace rules: search only literal content substrings or exact tag matches; exclude `resolved` / `digested` buckets; include memory / feel / letter / writing / window / unresolved / inner; cap output at 15 entries and return `null` when there is no literal match.
 
+## 2026-07-08 Manual memory downweight control
+
+- Dashboard detail cards now expose weight controls for `importance`, `arousal`, and `activation_count`, plus a quick `降权` action.
+- Important pitfall: lowering weight must not refresh `last_active`, or the time freshness boost cancels part of the downweight. Use `_preserve_last_active=True` / `preserve_last_active` for weight-only dampening.
+
 ## 2026-07-08 DP memory analyzer replaces active CLI memory line
 
 - Old CLI analyzer source `analyze_nocturne_entry` is retained as a cold standby, but the active memory analyzer line now uses `dp_memory`.
