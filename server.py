@@ -2732,7 +2732,7 @@ def catroom_hold(
 def catroom_read(limit: int = 15, topic: str = "", author: str = "") -> dict:
     """
     读取猫屋公共房间最近便签，默认最近15条。
-    这是公共房间读取，不是 Breath/memory 检索。
+    这是公共房间读取。
     """
     try:
         records = catroom_store.read(limit=limit, topic=topic, author=author)
@@ -2751,7 +2751,7 @@ def catroom_reply(
 ) -> dict:
     """
     回复猫屋公共房间里的一张便签。
-    只建立 reply_to 关系，不触发群聊 loop 或 weather。
+    只建立 reply_to 关系。
     """
     try:
         record = catroom_store.reply(
@@ -2819,7 +2819,7 @@ def room(
     tags: str = "",
     limit: int = 15,
 ) -> dict:
-    """猫屋房间。catroom: action=read/hold/reply；moss/ink/ash/nox: action=breath/hold/read。醒来用breath+自己的space。"""
+    """猫屋其他房间。catroom: action=read/hold/reply；moss/ink/ash/nox: action=breath/hold/read。其他三只猫醒来用breath+自己的space。"""
     action = (action or "").strip().lower()
     space = (space or "catroom").strip().lower()
 
