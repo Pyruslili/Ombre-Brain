@@ -107,6 +107,8 @@ def test_chord_sources_are_not_atmosphere_delta_sources():
 
 def test_dialogue_atmosphere_weight_leads_cli_underpaint():
     assert ATMOSPHERE_SOURCE_WEIGHTS["dp"] > ATMOSPHERE_SOURCE_WEIGHTS["cli"]
+    assert ATMOSPHERE_SOURCE_WEIGHTS["dp_memory"] == 0.70
+    assert ATMOSPHERE_SOURCE_WEIGHTS["dp"] > ATMOSPHERE_SOURCE_WEIGHTS["dp_memory"]
 
 
 def test_dialogue_event_adds_live_warmth_residue(tmp_path):

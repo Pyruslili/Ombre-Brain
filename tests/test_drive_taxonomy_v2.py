@@ -193,6 +193,38 @@ def test_drive_event_ledger_keeps_source_metadata(tmp_path):
     assert event["brain"]["source_created"] == "2026-06-25T01:02:03Z"
 
 
+def test_dp_memory_drive_discount_after_same_bucket_hold_signal(tmp_path):
+    plain = DesireEngine(str(tmp_path / "plain.db"))
+    discounted = DesireEngine(str(tmp_path / "discounted.db"))
+    discounted.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "feel",
+        "primary_drive": "attachment",
+        "intensity": 0.7,
+        "confidence": 0.82,
+        "agency": 0.82,
+        "event_label": "hold_memory_signal",
+        "brain": {"source": "feel", "source_bucket": "bucket-abc", "closeness_pull": 0.7},
+    })
+    event = {
+        "schema_version": "drive_event_v2",
+        "source": "dp_memory",
+        "source_bucket": "bucket-abc",
+        "primary_drive": "attachment",
+        "intensity": 0.7,
+        "confidence": 0.8,
+        "agency": 0.8,
+        "event_label": "memory_attachment",
+        "brain": {"source": "dp_memory", "source_bucket": "bucket-abc", "closeness_pull": 0.7},
+    }
+
+    plain_result = plain.apply_drive_event(event)
+    discounted_result = discounted.apply_drive_event(event)
+
+    assert discounted_result["applied"]["attachment"]["raw_delta"] < plain_result["applied"]["attachment"]["raw_delta"]
+    assert discounted.state()["drive_events"][0]["brain"]["memory_signal_discount"] == 0.55
+
+
 def test_drive_event_brain_normalizes_chord_anchor_fields(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     result = engine.apply_drive_event({

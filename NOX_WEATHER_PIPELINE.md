@@ -474,7 +474,7 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 
 - `dp` / dialogue 是 live weather vane，负责让天气跟对话风向转。
 - `cli` / analyzer 是旧慢分析线，保留作冷备。
-- `dp_memory` 是记忆慢分析线，负责慢变量和记忆底色；权重高于旧 `cli`，低于当前对话 `dp`。
+- `dp_memory` 是记忆分析线：入场染色要快，接近当前对话；退潮和底色保留要慢。权重高于旧 `cli`，略低于当前对话 `dp`。
 - `subcurrent` 只轻轻倾斜 Atmosphere，不直接盖过当前对话。
 - `keyword / speech_event / user_message / feel / thought / soma` 带来的 Warmth / Shadow residue 先进入 effective NAPA，再由 Atmosphere 读取。
 - Chord echo 不直接产生 Atmosphere Delta；它只能留下 Warmth / Shadow residue、Active Chord 和 Chord Impulse 残影。

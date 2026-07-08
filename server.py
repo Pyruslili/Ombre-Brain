@@ -3097,7 +3097,8 @@ def _primary_drive_from_hints(hints: dict) -> str:
     return candidates.get(best_key, "reflection")
 
 
-def _apply_hold_weather(content: str, kind: str, chord: str, signal_hints: dict, drive_tags: dict) -> None:
+def _apply_hold_weather(content: str, kind: str, chord: str, signal_hints: dict, drive_tags: dict,
+                        source_bucket: str = "") -> None:
     if chord.strip():
         try:
             _desire.apply_chord_echo(chord.strip(), source="feel")
@@ -3112,6 +3113,8 @@ def _apply_hold_weather(content: str, kind: str, chord: str, signal_hints: dict,
         "anchor_target": "memory",
         "hold_kind": kind,
     }
+    if source_bucket:
+        brain["source_bucket"] = str(source_bucket).strip()
     discernment = _signal_hint_value(signal_hints, "discernment")
     territorial = _signal_hint_value(signal_hints, "territorial")
     clutch = _signal_hint_value(signal_hints, "clutch")
@@ -3225,7 +3228,7 @@ async def hold(
             signal_hints=signal_hints or None,
             drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, bucket_id)
         # --- background: don't block response on Gemini latency ---
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         # --- Mark source memory as digested + store model's valence perspective ---
@@ -3284,7 +3287,7 @@ async def hold(
             signal_hints=signal_hints or None,
             drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, bucket_id)
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
 
@@ -3304,7 +3307,7 @@ async def hold(
             signal_hints=signal_hints or None,
             drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, bucket_id)
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"新建→{bucket_id} {','.join(final_domain)}"
 
@@ -3322,7 +3325,7 @@ async def hold(
         drive_tags=drive_tags or None,
     )
 
-    _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
+    _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, result_name)
     action = "合并→" if is_merged else "新建→"
     return f"{action}{result_name} {','.join(final_domain)}"
 

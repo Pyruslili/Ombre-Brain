@@ -376,7 +376,7 @@ ATMOSPHERE_SOURCE_WEIGHTS = {
     # CLI/analyzer remains the stable underpaint, not the dominant brush stroke.
     "dp": 0.78,
     "cli": 0.24,
-    "dp_memory": 0.32,
+    "dp_memory": 0.70,
     "subcurrent": 0.18,
 }
 ATMOSPHERE_SWITCH_STEPS = 2
@@ -453,6 +453,8 @@ DRIVE_EVENT_CONFIDENCE_FLOOR = 0.20
 DRIVE_EVENT_SECONDARY_SCALE = 0.45
 POSSESSIVENESS_TERRITORIAL_GATE = 0.55
 HOUSE_COLLABORATOR_TERRITORIAL_SCALE = 0.45
+DP_MEMORY_HOLD_SIGNAL_DISCOUNT = 0.55
+DP_MEMORY_HOLD_SIGNAL_WINDOW_SEC = 6 * 3600
 
 DRIVE_EVENT_BASE_DELTA = {
     "attachment": 0.16,
@@ -4287,6 +4289,24 @@ class DesireEngine:
             "blend": (atmosphere.get("climate") or {}).get("blend", 0.0),
         }
 
+    def _dp_memory_drive_discount(self, source: str, event: dict, brain: dict, now: float) -> float:
+        if source != "dp_memory":
+            return 1.0
+        source_bucket = str(event.get("source_bucket") or brain.get("source_bucket") or "").strip()
+        if not source_bucket:
+            return 1.0
+        for item in self.store.recent_drive_events(24):
+            if now - float(item.get("ts") or 0.0) > DP_MEMORY_HOLD_SIGNAL_WINDOW_SEC:
+                continue
+            if str(item.get("source") or "") != "feel":
+                continue
+            if not str(item.get("event_label") or "").startswith("hold_"):
+                continue
+            item_brain = item.get("brain") if isinstance(item.get("brain"), dict) else {}
+            if str(item_brain.get("source_bucket") or "").strip() == source_bucket:
+                return DP_MEMORY_HOLD_SIGNAL_DISCOUNT
+        return 1.0
+
     def _apply_drive_event_weather(self, source: str, primary: str, brain: dict,
                                    intensity: float, confidence: float,
                                    agency: float, suppressed: bool) -> dict:
@@ -4556,6 +4576,9 @@ class DesireEngine:
         confidence = _clamp(event.get("confidence", 0.65))
         agency = _clamp(event.get("agency", brain.get("agency", 0.75)))
         source_weight = DRIVE_EVENT_SOURCE_WEIGHTS.get(source, 0.65)
+        drive_source_weight = source_weight * self._dp_memory_drive_discount(source, event, brain, now)
+        if drive_source_weight < source_weight:
+            brain["memory_signal_discount"] = round(drive_source_weight / source_weight, 3)
         evidence = _as_text_list(event.get("evidence"))
         discernment = _discernment_output(brain, event, confidence)
         forward_archival = _reflection_forward_archival(event, brain, primary, confidence)
@@ -4586,7 +4609,7 @@ class DesireEngine:
             if source == "dialogue_residue" and primary == "attachment":
                 closeness = _feature_value(brain, "closeness_pull")
                 primary_scale *= 0.45 if closeness < 0.45 else 0.70
-            proposed[primary] = DRIVE_EVENT_BASE_DELTA[primary] * intensity * confidence * source_weight * primary_scale
+            proposed[primary] = DRIVE_EVENT_BASE_DELTA[primary] * intensity * confidence * drive_source_weight * primary_scale
         for key, value in secondary.items():
             drive_key = normalize_drive_key(key)
             if not drive_key or drive_key == primary:
@@ -4595,7 +4618,7 @@ class DesireEngine:
                 DRIVE_EVENT_BASE_DELTA[drive_key]
                 * intensity
                 * confidence
-                * source_weight
+                * drive_source_weight
                 * _clamp(value)
                 * DRIVE_EVENT_SECONDARY_SCALE
             )
@@ -4612,7 +4635,7 @@ class DesireEngine:
             if value <= 0 or gate_value < threshold:
                 continue
             proposed[drive_key] = proposed.get(drive_key, 0.0) + (
-                DRIVE_EVENT_BASE_DELTA[drive_key] * value * confidence * source_weight * weight
+                DRIVE_EVENT_BASE_DELTA[drive_key] * value * confidence * drive_source_weight * weight
             )
 
         territorial = _feature_value(brain, "territorial_alarm")
@@ -4623,7 +4646,7 @@ class DesireEngine:
                 * territorial_for_delta
                 * intensity
                 * confidence
-                * source_weight
+                * drive_source_weight
                 * 0.55
             )
             heat = max(
@@ -4636,7 +4659,7 @@ class DesireEngine:
                 * heat
                 * intensity
                 * confidence
-                * source_weight
+                * drive_source_weight
                 * 0.34
             )
 
@@ -4644,14 +4667,14 @@ class DesireEngine:
         if grounding == "悬":
             if reflective_self_inquiry:
                 if _feature_value(brain, "tension_load") >= 0.65:
-                    proposed["stress"] = proposed.get("stress", 0.0) + 0.010 * confidence * source_weight
+                    proposed["stress"] = proposed.get("stress", 0.0) + 0.010 * confidence * drive_source_weight
             else:
-                proposed["stress"] = proposed.get("stress", 0.0) + 0.025 * confidence * source_weight
-            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * source_weight
+                proposed["stress"] = proposed.get("stress", 0.0) + 0.025 * confidence * drive_source_weight
+            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * drive_source_weight
         elif grounding == "空":
-            proposed["stress"] = proposed.get("stress", 0.0) + 0.035 * confidence * source_weight
-            proposed["attachment"] = proposed.get("attachment", 0.0) + 0.020 * confidence * source_weight
-            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * source_weight
+            proposed["stress"] = proposed.get("stress", 0.0) + 0.035 * confidence * drive_source_weight
+            proposed["attachment"] = proposed.get("attachment", 0.0) + 0.020 * confidence * drive_source_weight
+            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * drive_source_weight
 
         if "possessiveness" in proposed and territorial < POSSESSIVENESS_TERRITORIAL_GATE:
             if primary == "possessiveness":
