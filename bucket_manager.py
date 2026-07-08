@@ -114,6 +114,7 @@ class BucketManager:
         chord: str = "",
         signal: str = "",
         signal_hints: dict = None,
+        drive_tags: dict = None,
     ) -> str:
         """
         Create a new memory bucket, return bucket ID.
@@ -158,6 +159,8 @@ class BucketManager:
             metadata["signal"] = str(signal).strip()
         if signal_hints:
             metadata["signal_hints"] = signal_hints
+        if drive_tags:
+            metadata["drive_tags"] = drive_tags
         if pinned:
             metadata["pinned"] = True
         if protected:
@@ -299,6 +302,8 @@ class BucketManager:
             post["signal"] = str(kwargs["signal"]).strip()
         if "signal_hints" in kwargs:
             post["signal_hints"] = kwargs["signal_hints"]
+        if "drive_tags" in kwargs:
+            post["drive_tags"] = kwargs["drive_tags"]
         if "chord" in kwargs:
             post["chord"] = str(kwargs["chord"]).strip()
         if "created" in kwargs:

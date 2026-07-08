@@ -41,6 +41,7 @@ import secrets
 import time
 import json as _json_lib
 import sqlite3
+import re
 from datetime import datetime, timedelta, timezone
 import httpx
 import os as _os
@@ -2090,6 +2091,7 @@ async def _merge_or_create(
     name: str = "",
     chord: str = "",
     signal_hints: dict | None = None,
+    drive_tags: dict | None = None,
 ) -> tuple[str, bool]:
     """
     Check if a similar bucket exists for merging; merge if so, create if not.
@@ -2126,6 +2128,8 @@ async def _merge_or_create(
                     updates["chord"] = chord.strip()
                 if signal_hints:
                     updates["signal_hints"] = signal_hints
+                if drive_tags:
+                    updates["drive_tags"] = drive_tags
                 await bucket_mgr.update(bucket["id"], **updates)
                 # --- Update embedding after merge (background: don't block response on Gemini latency) ---
                 asyncio.ensure_future(embedding_engine.generate_and_store(bucket["id"], merged))
@@ -2143,6 +2147,7 @@ async def _merge_or_create(
         name=name or None,
         chord=chord.strip(),
         signal_hints=signal_hints or None,
+        drive_tags=drive_tags or None,
     )
     # --- Generate embedding for new bucket (background: don't block response on Gemini latency) ---
     asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
@@ -3034,6 +3039,41 @@ def _signal_hint_value(hints: dict, key: str) -> float:
     return SIGNAL_LEVEL_VALUES.get(str((hints or {}).get(key) or "").strip().lower(), 0.0)
 
 
+def _drive_level_value(value) -> float:
+    level = _normalize_signal_level(value)
+    return SIGNAL_LEVEL_VALUES.get(level, SIGNAL_LEVEL_VALUES["mid"])
+
+
+def _parse_drive_tags(*raw_values: str) -> dict:
+    tags: dict[str, float] = {}
+    for raw in raw_values:
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        for part in re.split(r"[,，、/]+", text):
+            item = part.strip()
+            if not item:
+                continue
+            if ":" in item:
+                key, level = item.split(":", 1)
+            elif "=" in item:
+                key, level = item.split("=", 1)
+            else:
+                key, level = item, "mid"
+            drive_key = normalize_drive_key(key.strip())
+            if not drive_key:
+                continue
+            value = _drive_level_value(level)
+            tags[drive_key] = max(tags.get(drive_key, 0.0), value)
+    return tags
+
+
+def _primary_drive_from_tags_or_hints(drive_tags: dict, hints: dict) -> str:
+    if drive_tags:
+        return max(drive_tags, key=drive_tags.get)
+    return _primary_drive_from_hints(hints)
+
+
 def _primary_drive_from_hints(hints: dict) -> str:
     candidates = {
         "discernment": "reflection",
@@ -3052,13 +3092,13 @@ def _primary_drive_from_hints(hints: dict) -> str:
     return candidates.get(best_key, "reflection")
 
 
-def _apply_hold_weather(content: str, kind: str, chord: str, signal_hints: dict) -> None:
+def _apply_hold_weather(content: str, kind: str, chord: str, signal_hints: dict, drive_tags: dict) -> None:
     if chord.strip():
         try:
             _desire.apply_chord_echo(chord.strip(), source="feel")
         except Exception as e:
             logger.warning(f"hold chord echo failed: {e}")
-    if not signal_hints:
+    if not signal_hints and not drive_tags:
         return
     brain = {
         "source": "feel",
@@ -3086,12 +3126,19 @@ def _apply_hold_weather(content: str, kind: str, chord: str, signal_hints: dict)
     if charge:
         brain["novelty_pull"] = max(float(brain.get("novelty_pull", 0.0) or 0.0), charge)
         brain["expression_pressure"] = max(float(brain.get("expression_pressure", 0.0) or 0.0), charge * 0.7)
+    primary_drive = _primary_drive_from_tags_or_hints(drive_tags, signal_hints)
+    secondary_drives = {
+        key: value
+        for key, value in (drive_tags or {}).items()
+        if key != primary_drive and value > 0
+    }
     try:
         _desire.apply_drive_event({
             "schema_version": DRIVE_EVENT_SCHEMA,
             "source": "feel",
-            "primary_drive": _primary_drive_from_hints(signal_hints),
-            "intensity": max(discernment, territorial, clutch, strain, charge),
+            "primary_drive": primary_drive,
+            "secondary_drives": secondary_drives,
+            "intensity": max(discernment, territorial, clutch, strain, charge, *(drive_tags or {"": 0.0}).values()),
             "confidence": 0.82,
             "agency": 0.82,
             "event_label": f"hold_{kind}_signal",
@@ -3118,6 +3165,8 @@ async def hold(
     valence: float = -1,
     arousal: float = -1,
     chord: str = "",
+    drive: str = "",
+    drives: str = "",
     discernment: str = "",
     territorial: str = "",
     clutch: str = "",
@@ -3126,7 +3175,7 @@ async def hold(
     domain: str = "",
     created_at: str = "",
 ) -> str:
-    """写入长期沉淀。kind=memory/feel/writing/private/window；chord和discernment/territorial/clutch/strain/charge有感觉就点亮。"""
+    """写入长期沉淀。kind=memory/feel/writing/private/window；drive/drives可写possessiveness:high,stewardship:mid；chord和五个手感有感觉就点亮。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -3143,6 +3192,7 @@ async def hold(
     importance = max(1, min(10, importance))
     extra_tags = [t.strip() for t in tags.split(",") if t.strip()]
     chord = chord.strip()
+    drive_tags = _parse_drive_tags(drive, drives)
     signal_hints = _explicit_signal_hints(
         discernment=discernment,
         territorial=territorial,
@@ -3168,8 +3218,9 @@ async def hold(
             bucket_type="feel",
             chord=chord,
             signal_hints=signal_hints or None,
+            drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints)
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
         # --- background: don't block response on Gemini latency ---
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         # --- Mark source memory as digested + store model's valence perspective ---
@@ -3226,8 +3277,9 @@ async def hold(
             created_at=created_at,
             chord=chord,
             signal_hints=signal_hints or None,
+            drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints)
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
 
@@ -3245,8 +3297,9 @@ async def hold(
             created_at=created_at,
             chord=chord,
             signal_hints=signal_hints or None,
+            drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints)
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"新建→{bucket_id} {','.join(final_domain)}"
 
@@ -3261,9 +3314,10 @@ async def hold(
         name=suggested_name,
         chord=chord,
         signal_hints=signal_hints or None,
+        drive_tags=drive_tags or None,
     )
 
-    _apply_hold_weather(content, normalized_kind, chord, signal_hints)
+    _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags)
     action = "合并→" if is_merged else "新建→"
     return f"{action}{result_name} {','.join(final_domain)}"
 
@@ -4007,6 +4061,7 @@ async def api_buckets(request):
                 "chord": meta.get("chord", ""),
                 "signal": meta.get("signal", ""),
                 "signal_hints": meta.get("signal_hints", {}),
+                "drive_tags": meta.get("drive_tags", {}),
                 "valence": meta.get("valence", 0.5),
                 "arousal": meta.get("arousal", 0.3),
                 "model_valence": meta.get("model_valence"),
@@ -5016,6 +5071,7 @@ async def api_import_results(request):
                 "chord": b["metadata"].get("chord", ""),
                 "signal": b["metadata"].get("signal", ""),
                 "signal_hints": b["metadata"].get("signal_hints", {}),
+                "drive_tags": b["metadata"].get("drive_tags", {}),
                 "importance": b["metadata"].get("importance", 5),
                 "created": b["metadata"].get("created", ""),
             })
@@ -5966,6 +6022,7 @@ async def api_feels_public(request):
                 "content_preview": b["content"][:300],
                 "created": b["metadata"].get("created", ""),
                 "chord": b["metadata"].get("chord", ""),
+                "drive_tags": b["metadata"].get("drive_tags", {}),
                 "digested": bool(b["metadata"].get("digested", False)),
                 "resolved": bool(b["metadata"].get("resolved", False)),
             }
