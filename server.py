@@ -2819,7 +2819,7 @@ def room(
     tags: str = "",
     limit: int = 15,
 ) -> dict:
-    """猫屋房间。醒来读墙: action=breath space=moss/ink/ash；客厅space=catroom，action=hold/read/reply。"""
+    """猫屋的房间和客厅。自己的房间: action=breath space=moss/ink/ash/nox；客厅space=catroom，action=hold/read/reply。"""
     action = (action or "").strip().lower()
     space = (space or "catroom").strip().lower()
 
