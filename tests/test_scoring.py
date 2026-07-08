@@ -118,8 +118,20 @@ class TestDecayScoreSpecial:
     def test_protected_is_999(self, decay_eng):
         assert decay_eng.calculate_score({"protected": True}) == 999.0
 
-    def test_feel_is_50(self, decay_eng):
-        assert decay_eng.calculate_score({"type": "feel"}) == 50.0
+    def test_feel_uses_weight_score(self, decay_eng):
+        low = decay_eng.calculate_score({
+            "type": "feel",
+            "importance": 2,
+            "activation_count": 1,
+            "arousal": 0.1,
+        })
+        high = decay_eng.calculate_score({
+            "type": "feel",
+            "importance": 8,
+            "activation_count": 4,
+            "arousal": 0.8,
+        })
+        assert high > low
 
     def test_empty_metadata_is_0(self, decay_eng):
         assert decay_eng.calculate_score("not a dict") == 0.0

@@ -10,6 +10,7 @@
 
 - Dashboard detail cards now expose weight controls for `importance`, `arousal`, and `activation_count`, plus a quick `降权` action.
 - Important pitfall: lowering weight must not refresh `last_active`, or the time freshness boost cancels part of the downweight. Use `_preserve_last_active=True` / `preserve_last_active` for weight-only dampening.
+- Follow-up: `feel` buckets now use the same weight score instead of fixed `50.0`; breath picks the top weighted active feels, while the decay cycle still skips feel archival.
 
 ## 2026-07-08 DP memory analyzer replaces active CLI memory line
 

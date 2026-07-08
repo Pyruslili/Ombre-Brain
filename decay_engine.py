@@ -109,10 +109,6 @@ class DecayEngine:
         if metadata.get("type") == "permanent":
             return 999.0
 
-        # --- Feel buckets: never decay, fixed moderate score ---
-        if metadata.get("type") == "feel":
-            return 50.0
-
         importance = max(1, min(10, int(metadata.get("importance", 5))))
         activation_count = max(1.0, float(metadata.get("activation_count", 1)))
 

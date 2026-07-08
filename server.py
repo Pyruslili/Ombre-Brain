@@ -2531,7 +2531,7 @@ async def breath(
         except Exception as e:
             logger.warning(f"Failed to load latest dream / 梦境加载失败: {e}")
 
-        # --- Feel section: 8 most recent feels (no title shown) ---
+        # --- Feel section: top weighted feels (no title shown) ---
         feel_results = []
         try:
             feels = [
@@ -2540,7 +2540,13 @@ async def breath(
                 and not b["metadata"].get("digested", False)
                 and not b["metadata"].get("resolved", False)
             ]
-            feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
+            feels.sort(
+                key=lambda b: (
+                    decay_engine.calculate_score(b.get("metadata", {})),
+                    b.get("metadata", {}).get("created", ""),
+                ),
+                reverse=True,
+            )
             for f in feels[:8]:
                 created = f["metadata"].get("created", "")[:16].replace("T", " ")
                 feel_results.append(f"[{created}]\n{strip_wikilinks(f['content'])}")

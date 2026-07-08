@@ -177,21 +177,24 @@ class TestFeelLifecycle:
         assert source["metadata"].get("digested") is True
 
     @pytest.mark.asyncio
-    async def test_feel_never_decays(self, isolated_tools):
-        """Feel buckets always score 50.0."""
+    async def test_feel_score_uses_weight_fields(self, isolated_tools):
+        """Feel buckets use the same weight fields as memory buckets."""
         bm, dh, de, bd = isolated_tools
 
         bid = await bm.create(
-            content="这是一条永不衰减的 feel",
-            tags=[], importance=5, domain=[],
-            valence=0.5, arousal=0.3,
+            content="这是一条可以降权的 feel",
+            tags=[], importance=8, domain=[],
+            valence=0.5, arousal=0.8,
             name=None, bucket_type="feel",
         )
 
         all_b = await bm.list_all()
         feel_b = next(b for b in all_b if b["id"] == bid)
-        score = de.calculate_score(feel_b["metadata"])
-        assert score == 50.0
+        high_score = de.calculate_score(feel_b["metadata"])
+        await bm.update(bid, importance=2, arousal=0.1, activation_count=1, _preserve_last_active=True)
+        lowered = await bm.get(bid)
+        low_score = de.calculate_score(lowered["metadata"])
+        assert low_score < high_score
 
     @pytest.mark.asyncio
     async def test_feel_not_in_search_merge(self, isolated_tools):
