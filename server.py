@@ -2535,8 +2535,8 @@ async def breath(
                 if _marg_text:
                     marginalia_section = (
                         "=== Shape Trace ===\n"
-                        "这是从旧 writing / letter 中整理出的骨架摘录。完整版看`archive`\n"
-                        "可认、可不认、可反驳，可以在wander中mark。\n\n"
+                        "这是从旧writing/letter中整理出的骨架摘录。完整版看`archive`\n"
+                        "可认、可不认、可反驳。\n\n"
                         + _marg_text
                     )
         except Exception as e:
