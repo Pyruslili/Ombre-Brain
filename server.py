@@ -2819,7 +2819,7 @@ def room(
     tags: str = "",
     limit: int = 15,
 ) -> dict:
-    """猫屋的房间和客厅。自己的房间: action=breath space=moss/ink/ash/nox；客厅space=catroom，action=hold/read/reply。"""
+    """猫屋房间。catroom: action=read/hold/reply；moss/ink/ash/nox: action=breath/hold/read。醒来用breath+自己的space。"""
     action = (action or "").strip().lower()
     space = (space or "catroom").strip().lower()
 
@@ -2847,9 +2847,9 @@ def room(
                     mood=mood,
                     model=model,
                 )
-            if action in {"read", "breath"}:
+            if action == "read":
                 return catroom_read(limit=limit, topic=topic, author=author)
-            return {"ok": False, "error": "catroom action must be hold/read/reply"}
+            return {"ok": False, "error": "catroom action must be read/hold/reply"}
 
         if action in {"hold", "write", "leave"}:
             return room_hold(cat=space, content=content, kind=kind, weight=weight, tags=tags)
@@ -2858,7 +2858,7 @@ def room(
             return {"ok": True, "cat": space, "records": records, "count": len(records)}
         if action == "breath":
             return room_breath(cat=space, limit=limit)
-        return {"ok": False, "error": "cat room action must be hold/read/breath"}
+        return {"ok": False, "error": "cat room action must be breath/hold/read"}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
 
