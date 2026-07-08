@@ -2743,7 +2743,7 @@ async def breath(
 
 @mcp.tool(name="undercurrent")
 def undercurrent_tool() -> dict:
-    """读Drive/Affect/Chemistry/ThoughtPool调试层。日常先看breath里的PulseWeather。"""
+    """weather当前状态与详细展开层。"""
     _desire.tick(idle_seconds=0)
     return _undercurrent_state(_desire.state())
 
