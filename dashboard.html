@@ -1246,6 +1246,11 @@ html[data-theme="sakura-milk"] .undertow-chord {
   border-color: rgba(217,189,143,.24);
   background: rgba(217,189,143,.06);
 }
+.drive-source-icon.dp-memory {
+  color: #9fbfa5;
+  border-color: rgba(159,191,165,.25);
+  background: rgba(159,191,165,.07);
+}
 .drive-source-icon .thought-icon {
   width: 15px;
   height: 15px;
@@ -1268,6 +1273,7 @@ html[data-theme="sakura-milk"] .undertow-chord {
 }
 .thought-icon svg { display: block; width: 13px; height: 13px; }
 .thought-source-cli { color: #92b2d2; background: rgba(146,178,210,.08); }
+.thought-source-dp-memory { color: #9fbfa5; background: rgba(159,191,165,.085); }
 .thought-source-self { color: var(--accent-deep); background: rgba(232,149,79,.075); }
 .thought-source-collision { color: #d9bd8f; background: rgba(217,189,143,.08); }
 .thought-text { color: var(--ink-soft); font-size: .84rem; line-height: 1.65; }
@@ -3154,9 +3160,16 @@ async function doLogin() {
 function thoughtSourceInfo(source) {
   const key = String(source || 'manual').toLowerCase();
   if (key === 'cli' || key === 'analyze_nocturne_entry' || key === 'feel_analysis' || key === 'dp_memory') {
+    if (key === 'dp_memory') {
+      return {
+        key: 'dp-memory',
+        label: 'DP memory analysis',
+        icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55"><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4H19v15H7.5A2.5 2.5 0 0 1 5 16.5Z"/><path d="M5 16.5A2.5 2.5 0 0 0 7.5 19H19"/><path d="M9 8h6"/><path d="M9 11.5h5"/><path d="M9 15h3"/></svg>'
+      };
+    }
     return {
-      key: key === 'dp_memory' ? 'dp-memory' : 'cli',
-      label: key === 'dp_memory' ? 'DP memory analysis' : 'CLI feel analysis',
+      key: 'cli',
+      label: 'CLI feel analysis',
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><circle cx="11" cy="14" r="2.4"/><path d="m13 16 2.2 2.2"/></svg>'
     };
   }
@@ -3436,21 +3449,24 @@ function driveSourceLabel(source, sourceType = '') {
 function driveSourceChip(source, sourceType = '') {
   const label = driveSourceLabel(source, sourceType);
   const isCli = label === 'CLI';
+  const isDpMemory = label === 'DP记忆';
   const isNox = label === 'Nox念头';
   const isCollision = label === 'DP碰撞';
   const isSpeech = label === 'Speech Trace';
   const isDialogue = label === 'Dialogue Residue';
   const icon = isCli
     ? thoughtSourceIcon('cli')
+    : (isDpMemory
+      ? thoughtSourceIcon('dp_memory')
     : (isNox
       ? thoughtSourceIcon('self')
     : (isCollision
       ? thoughtSourceIcon('collision')
       : (isSpeech
         ? `<span class="thought-icon" title="Speech Trace" aria-label="Speech Trace">${ICONS.speech}</span>`
-        : (isDialogue ? `<span class="thought-icon" title="Dialogue Residue" aria-label="Dialogue Residue">${ICONS.dialogue}</span>` : ''))));
-  const tone = isCli ? 'cli' : isNox ? 'nox' : isCollision ? 'collision' : '';
-  return isCli || isNox || isCollision || isSpeech || isDialogue
+        : (isDialogue ? `<span class="thought-icon" title="Dialogue Residue" aria-label="Dialogue Residue">${ICONS.dialogue}</span>` : '')))));
+  const tone = isCli ? 'cli' : isDpMemory ? 'dp-memory' : isNox ? 'nox' : isCollision ? 'collision' : '';
+  return isCli || isDpMemory || isNox || isCollision || isSpeech || isDialogue
     ? `<span class="drive-summary-chip neutral drive-source-icon ${tone}">${icon}</span>`
     : `<span class="drive-summary-chip neutral"><strong>${esc(label)}</strong></span>`;
 }
