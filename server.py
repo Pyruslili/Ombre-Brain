@@ -2009,15 +2009,8 @@ async def breath_hook(request):
             parts.append(f"❣️ [核心准则] {summary}")
             token_budget -= count_tokens_approx(summary)
 
-        # Diversity: top-1 fixed + shuffle rest from top-20
-        candidates = list(scored)
-        if len(candidates) > 1:
-            top1 = [candidates[0]]
-            pool = candidates[1:min(20, len(candidates))]
-            random.shuffle(pool)
-            candidates = top1 + pool + candidates[min(20, len(candidates)):]
-        # Hard cap: max 20 surfacing buckets in hook
-        candidates = candidates[:20]
+        # Hard cap: max 20 surfacing buckets in hook, strictly by weight.
+        candidates = scored[:20]
 
         for b in candidates:
             if token_budget <= 0:
@@ -2302,6 +2295,22 @@ def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5)
     return compact if compact else packet
 
 
+def _weighted_bucket_sample(buckets: list[dict], limit: int) -> list[dict]:
+    """Pick buckets without replacement, weighted by current decay score."""
+    pool = list(buckets)
+    selected: list[dict] = []
+    count = max(0, min(limit, len(pool)))
+    for _ in range(count):
+        weights = [max(0.0, decay_engine.calculate_score(b.get("metadata", {}))) for b in pool]
+        total = sum(weights)
+        if total <= 0:
+            picked_index = random.randrange(len(pool))
+        else:
+            picked_index = random.choices(range(len(pool)), weights=weights, k=1)[0]
+        selected.append(pool.pop(picked_index))
+    return selected
+
+
 @mcp.tool(name="breath")
 async def breath(
     domain: str = "",
@@ -2461,38 +2470,15 @@ async def breath(
             top_scores = [(b["metadata"].get("name", b["id"]), decay_engine.calculate_score(b["metadata"])) for b in scored[:5]]
             logger.info(f"Top unresolved scores: {top_scores}")
 
-        # --- Cold-start detection: never-seen important buckets surface first ---
-        # --- 冷启动检测：从未被访问过且重要度>=8的桶优先插入最前面（最多2个）---
-        cold_start = [
-            b for b in unresolved
-            if int(b["metadata"].get("activation_count", 0)) == 0
-            and int(b["metadata"].get("importance", 0)) >= 8
-        ][:2]
-        cold_start_ids = {b["id"] for b in cold_start}
-        # Merge: cold_start first, then scored (excluding duplicates)
-        scored_deduped = [b for b in scored if b["id"] not in cold_start_ids]
-        scored_with_cold = cold_start + scored_deduped
-
-        # --- Token-budgeted surfacing with diversity + hard cap ---
-        # --- 按 token 预算浮现，带多样性 + 硬上限 ---
-        # Top-1 always surfaces; rest sampled from top-20 for diversity
+        # --- Token-budgeted surfacing with hard cap ---
+        # --- 按 token 预算浮现 + 硬上限 ---
+        # Select strictly by weight first, then display by time below.
         token_budget = max_tokens
         for r in pinned_results:
             token_budget -= count_tokens_approx(r)
 
-        candidates = list(scored_with_cold)
-        if len(candidates) > 1:
-            # Cold-start buckets stay at front; shuffle rest from top-20
-            n_cold = len(cold_start)
-            non_cold = candidates[n_cold:]
-            if len(non_cold) > 1:
-                top1 = [non_cold[0]]
-                pool = non_cold[1:min(20, len(non_cold))]
-                random.shuffle(pool)
-                non_cold = top1 + pool + non_cold[min(20, len(non_cold)):]
-            candidates = cold_start + non_cold
         # Hard cap: wake breath stays lean; feels and Shape Trace carry the rest.
-        candidates = candidates[:7]
+        candidates = scored[:7]
 
         # 按时间倒序
         candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
@@ -2540,14 +2526,9 @@ async def breath(
                 and not b["metadata"].get("digested", False)
                 and not b["metadata"].get("resolved", False)
             ]
-            feels.sort(
-                key=lambda b: (
-                    decay_engine.calculate_score(b.get("metadata", {})),
-                    b.get("metadata", {}).get("created", ""),
-                ),
-                reverse=True,
-            )
-            for f in feels[:8]:
+            selected_feels = _weighted_bucket_sample(feels, 8)
+            selected_feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
+            for f in selected_feels:
                 created = f["metadata"].get("created", "")[:16].replace("T", " ")
                 feel_results.append(f"[{created}]\n{strip_wikilinks(f['content'])}")
         except Exception as e:
