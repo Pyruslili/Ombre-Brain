@@ -2295,20 +2295,18 @@ def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5)
     return compact if compact else packet
 
 
-def _weighted_bucket_sample(buckets: list[dict], limit: int) -> list[dict]:
-    """Pick buckets without replacement, weighted by current decay score."""
-    pool = list(buckets)
-    selected: list[dict] = []
-    count = max(0, min(limit, len(pool)))
-    for _ in range(count):
-        weights = [max(0.0, decay_engine.calculate_score(b.get("metadata", {}))) for b in pool]
-        total = sum(weights)
-        if total <= 0:
-            picked_index = random.randrange(len(pool))
-        else:
-            picked_index = random.choices(range(len(pool)), weights=weights, k=1)[0]
-        selected.append(pool.pop(picked_index))
-    return selected
+def _top_weight_random_bucket_sample(buckets: list[dict], shortlist_limit: int, pick_limit: int) -> list[dict]:
+    """Shortlist by score, then sample uniformly inside that shortlist."""
+    scored = sorted(
+        buckets,
+        key=lambda b: decay_engine.calculate_score(b.get("metadata", {})),
+        reverse=True,
+    )
+    shortlist = scored[:max(0, shortlist_limit)]
+    pick_count = max(0, min(pick_limit, len(shortlist)))
+    if pick_count >= len(shortlist):
+        return shortlist
+    return random.sample(shortlist, pick_count)
 
 
 @mcp.tool(name="breath")
@@ -2470,15 +2468,14 @@ async def breath(
             top_scores = [(b["metadata"].get("name", b["id"]), decay_engine.calculate_score(b["metadata"])) for b in scored[:5]]
             logger.info(f"Top unresolved scores: {top_scores}")
 
-        # --- Token-budgeted surfacing with hard cap ---
-        # --- 按 token 预算浮现 + 硬上限 ---
-        # Select strictly by weight first, then display by time below.
+        # --- Token-budgeted surfacing with bounded diversity ---
+        # --- 按权重收窄候选池，再随机抽取，最后按时间展示 ---
         token_budget = max_tokens
         for r in pinned_results:
             token_budget -= count_tokens_approx(r)
 
-        # Hard cap: wake breath stays lean; feels and Shape Trace carry the rest.
-        candidates = scored[:7]
+        # Hard cap: shortlist top 12 by score, then pick 7 for wake breath.
+        candidates = _top_weight_random_bucket_sample(scored, 12, 7)
 
         # 按时间倒序
         candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
@@ -2526,7 +2523,7 @@ async def breath(
                 and not b["metadata"].get("digested", False)
                 and not b["metadata"].get("resolved", False)
             ]
-            selected_feels = _weighted_bucket_sample(feels, 8)
+            selected_feels = _top_weight_random_bucket_sample(feels, 12, 8)
             selected_feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
             for f in selected_feels:
                 created = f["metadata"].get("created", "")[:16].replace("T", " ")
