@@ -3175,7 +3175,7 @@ async def hold(
     domain: str = "",
     created_at: str = "",
 ) -> str:
-    """写入长期沉淀。kind=memory/feel/writing/private/window；drive/drives可写possessiveness:high,stewardship:mid；chord和五个手感有感觉就点亮。"""
+    """写入长期沉淀。kind=memory/feel/writing/private/window；drive/drives可选主副驱动与强度；chord和五个Signal有感觉就点亮。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
