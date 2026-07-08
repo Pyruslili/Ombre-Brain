@@ -5318,28 +5318,23 @@ async function runBreathDebug() {
     document.getElementById('fs-threshold').classList.add('active');
     document.getElementById('fs-sort').classList.add('active');
 
-    const w = data.weights;
+    const pools = data.pools || {};
     info.style.display = '';
     info.innerHTML =
       '<div class="breath-summary">' +
-      '<span class="breath-summary-label">Recall weights</span>' +
-      '<span class="breath-summary-chip">topic <b>' + esc(w.topic) + '</b></span>' +
-      '<span class="breath-summary-chip">emotion <b>' + esc(w.emotion) + '</b></span>' +
-      '<span class="breath-summary-chip">time <b>' + esc(w.time) + '</b></span>' +
-      '<span class="breath-summary-chip">importance <b>' + esc(w.importance) + '</b></span>' +
-      '<span class="breath-summary-chip">threshold <b>' + esc(data.threshold) + '</b></span>' +
-      '<span class="breath-summary-chip">candidates <b>' + esc(data.total_candidates) + '</b></span>' +
+      '<span class="breath-summary-label">Breath surfacing</span>' +
+      '<span class="breath-summary-chip">memory <b>' + esc(pools.memory_recent ?? 0) + '→' + esc(pools.memory_shortlist ?? 0) + '→' + esc(pools.memory_selected ?? 0) + '</b></span>' +
+      '<span class="breath-summary-chip">feel <b>' + esc(pools.feel_recent ?? 0) + '→' + esc(pools.feel_shortlist ?? 0) + '→' + esc(pools.feel_selected ?? 0) + '</b></span>' +
       '<span class="breath-summary-chip">returned <b>' + esc(data.passed_count) + '</b></span>' +
-      (query ? '' : '<span class="breath-summary-note">等待 signal · topic 暂停计权</span>') +
+      '<span class="breath-summary-note">最新30 → 权重抽12 → 随机浮现 · query不参与breath</span>' +
       '</div>';
 
     if (!data.results.length) { results.innerHTML = '<div class="loading">无结果</div>'; return; }
 
     const cs = getComputedStyle(document.documentElement);
     const barColors = {
-      topic: cs.getPropertyValue('--accent-deep').trim(),
-      emotion: cs.getPropertyValue('--accent').trim(),
-      time: cs.getPropertyValue('--warning').trim(),
+      arousal: cs.getPropertyValue('--accent').trim(),
+      activation: cs.getPropertyValue('--warning').trim(),
       importance: cs.getPropertyValue('--cool').trim(),
     };
 
@@ -5349,7 +5344,7 @@ async function runBreathDebug() {
       const icon = r.pinned ? ICONS.pinned : r.resolved ? ICONS.resolved : r.type === 'feel' ? ICONS.feel : ICONS.dynamic;
       const bars = Object.entries(s).map(([key, val]) => {
         const pct = Math.round(val * 100);
-        const wt = r.weights[key];
+        const wt = r.weights?.[key] ?? 1;
         return `<div class="score-bar-group">
           <div class="score-bar-label"><span>${key} ×${wt}</span><span>${val.toFixed(2)}</span></div>
           <div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%;background:${barColors[key]}"></div></div>
@@ -5358,9 +5353,9 @@ async function runBreathDebug() {
       const bid = r.id || r.bucket_id;
       return `<div class="score-row" title="${esc(r.name)}" data-bucket-id="${esc(bid || '')}" ${bid ? 'onclick="showDetail(this.dataset.bucketId)"' : ''}>
         <span class="rank">${i < 9 ? '0' : ''}${i + 1}</span>
-        <span class="name">${icon}${esc(r.name)}</span>
+        <span class="name">${icon}${esc((r.section ? r.section + ' · ' : '') + r.name)}</span>
         <div class="score-bars">${bars}</div>
-        <span class="score-final ${passed ? 'score-pass' : 'score-fail'}">${r.normalized.toFixed(1)}${r.resolved ? '<small>×0.3</small>' : ''}</span>
+        <span class="score-final ${passed ? 'score-pass' : 'score-fail'}">${r.normalized.toFixed(1)}</span>
       </div>`;
     }).join('');
   } catch (e) {

@@ -13,6 +13,7 @@
 - Follow-up: `feel` buckets now use the same weight score instead of fixed `50.0`; breath picks the top weighted active feels, while the decay cycle still skips feel archival.
 - Follow-up: breath memory and feel surfacing first bound the active pool to the newest 30 items, then weighted-sample 12 candidates inside that recent pool, randomly pick display items (7 memory / 8 feel), and finally display by time. Do not sample from the full historical pool; old high-weight buckets can otherwise crowd out current material.
 - Follow-up: dream refresh now runs after breath memory/feel selection, excludes those selected buckets, takes the newest 10 active memory+feel items as a bounded pool, randomly picks 5, and includes the previous/current Atmosphere as dream weather. Dream output is forced into one paragraph to avoid blank-line drift.
+- Follow-up: `/api/breath-debug` now mirrors actual breath surfacing instead of the old query/topic recall scorer. Dashboard Breath Debug should show memory/feel pools as `recent30 -> weighted12 -> selected`, not topic/emotion threshold bars.
 
 ## 2026-07-08 DP memory analyzer replaces active CLI memory line
 
