@@ -2295,14 +2295,35 @@ def _breath_lite_packet(packet: str, memory_limit: int = 4, feel_limit: int = 5)
     return compact if compact else packet
 
 
-def _top_weight_random_bucket_sample(buckets: list[dict], shortlist_limit: int, pick_limit: int) -> list[dict]:
-    """Shortlist by score, then sample uniformly inside that shortlist."""
-    scored = sorted(
+def _weighted_bucket_sample(buckets: list[dict], limit: int) -> list[dict]:
+    """Pick buckets without replacement, weighted by current decay score."""
+    pool = list(buckets)
+    selected: list[dict] = []
+    count = max(0, min(limit, len(pool)))
+    for _ in range(count):
+        weights = [max(0.0, decay_engine.calculate_score(b.get("metadata", {}))) for b in pool]
+        total = sum(weights)
+        if total <= 0:
+            picked_index = random.randrange(len(pool))
+        else:
+            picked_index = random.choices(range(len(pool)), weights=weights, k=1)[0]
+        selected.append(pool.pop(picked_index))
+    return selected
+
+
+def _recent_weight_random_bucket_sample(
+    buckets: list[dict],
+    recent_limit: int,
+    shortlist_limit: int,
+    pick_limit: int,
+) -> list[dict]:
+    """Bound by recency, weighted-shortlist inside that window, then sample for display."""
+    recent_pool = sorted(
         buckets,
-        key=lambda b: decay_engine.calculate_score(b.get("metadata", {})),
+        key=lambda b: b.get("metadata", {}).get("created", ""),
         reverse=True,
-    )
-    shortlist = scored[:max(0, shortlist_limit)]
+    )[:max(0, recent_limit)]
+    shortlist = _weighted_bucket_sample(recent_pool, shortlist_limit)
     pick_count = max(0, min(pick_limit, len(shortlist)))
     if pick_count >= len(shortlist):
         return shortlist
@@ -2500,8 +2521,8 @@ async def breath(
         for r in pinned_results:
             token_budget -= count_tokens_approx(r)
 
-        # Hard cap: shortlist top 12 by score, then pick 7 for wake breath.
-        candidates = _top_weight_random_bucket_sample(scored, 12, 7)
+        # Hard cap: newest 30 active memory candidates -> weighted 12 -> random 7.
+        candidates = _recent_weight_random_bucket_sample(scored, 30, 12, 7)
 
         # 按时间倒序
         candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
@@ -2531,7 +2552,7 @@ async def breath(
         selected_feels = []
         try:
             feels = _breath_feel_candidates(all_buckets)
-            selected_feels = _top_weight_random_bucket_sample(feels, 12, 8)
+            selected_feels = _recent_weight_random_bucket_sample(feels, 30, 12, 8)
             selected_feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
             for f in selected_feels:
                 created = f["metadata"].get("created", "")[:16].replace("T", " ")
