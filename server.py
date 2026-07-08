@@ -2088,7 +2088,7 @@ async def _merge_or_create(
     valence: float,
     arousal: float,
     name: str = "",
-    signal: str = "",
+    chord: str = "",
     signal_hints: dict | None = None,
 ) -> tuple[str, bool]:
     """
@@ -2122,8 +2122,8 @@ async def _merge_or_create(
                     "valence": merged_valence,
                     "arousal": merged_arousal,
                 }
-                if signal.strip():
-                    updates["signal"] = signal.strip()
+                if chord.strip():
+                    updates["chord"] = chord.strip()
                 if signal_hints:
                     updates["signal_hints"] = signal_hints
                 await bucket_mgr.update(bucket["id"], **updates)
@@ -2141,7 +2141,7 @@ async def _merge_or_create(
         valence=valence,
         arousal=arousal,
         name=name or None,
-        signal=signal.strip(),
+        chord=chord.strip(),
         signal_hints=signal_hints or None,
     )
     # --- Generate embedding for new bucket (background: don't block response on Gemini latency) ---
@@ -2975,6 +2975,7 @@ SIGNAL_HINT_KEYS = {
     "charge": ("charge", "想动", "想说", "想冲"),
 }
 SIGNAL_LEVEL_WORDS = ("low", "mid", "high")
+SIGNAL_LEVEL_VALUES = {"low": 0.35, "mid": 0.62, "high": 0.86}
 
 
 def _parse_signal_hints(signal: str) -> dict:
@@ -3001,6 +3002,106 @@ def _parse_signal_hints(signal: str) -> dict:
     return hints
 
 
+def _normalize_signal_level(value) -> str:
+    text = str(value or "").strip().lower()
+    if not text or text in {"none", "no", "false", "0"}:
+        return ""
+    if text in SIGNAL_LEVEL_VALUES:
+        return text
+    try:
+        number = float(text)
+    except (TypeError, ValueError):
+        return "mid"
+    if number <= 0:
+        return ""
+    if number < 0.5:
+        return "low"
+    if number < 0.78:
+        return "mid"
+    return "high"
+
+
+def _explicit_signal_hints(**values) -> dict:
+    hints = {}
+    for key in SIGNAL_HINT_KEYS:
+        level = _normalize_signal_level(values.get(key))
+        if level:
+            hints[key] = level
+    return hints
+
+
+def _signal_hint_value(hints: dict, key: str) -> float:
+    return SIGNAL_LEVEL_VALUES.get(str((hints or {}).get(key) or "").strip().lower(), 0.0)
+
+
+def _primary_drive_from_hints(hints: dict) -> str:
+    candidates = {
+        "discernment": "reflection",
+        "territorial": "possessiveness",
+        "clutch": "attachment",
+        "strain": "stress",
+        "charge": "curiosity",
+    }
+    best_key = ""
+    best_value = 0.0
+    for key in candidates:
+        value = _signal_hint_value(hints, key)
+        if value > best_value:
+            best_key = key
+            best_value = value
+    return candidates.get(best_key, "reflection")
+
+
+def _apply_hold_weather(content: str, kind: str, chord: str, signal_hints: dict) -> None:
+    if chord.strip():
+        try:
+            _desire.apply_chord_echo(chord.strip(), source="feel")
+        except Exception as e:
+            logger.warning(f"hold chord echo failed: {e}")
+    if not signal_hints:
+        return
+    brain = {
+        "source": "feel",
+        "target": "nox_self",
+        "grounding": "实",
+        "anchor_target": "memory",
+        "hold_kind": kind,
+    }
+    discernment = _signal_hint_value(signal_hints, "discernment")
+    territorial = _signal_hint_value(signal_hints, "territorial")
+    clutch = _signal_hint_value(signal_hints, "clutch")
+    strain = _signal_hint_value(signal_hints, "strain")
+    charge = _signal_hint_value(signal_hints, "charge")
+    if discernment:
+        brain["discernment_alarm"] = discernment
+    if territorial:
+        brain["territorial_alarm"] = territorial
+        brain["territorial_event"] = "memory_boundary"
+        brain["anchor_target"] = "boundary"
+    if clutch:
+        brain["closeness_pull"] = clutch
+    if strain:
+        brain["tension_load"] = strain
+        brain["inward_pull"] = max(float(brain.get("inward_pull", 0.0) or 0.0), strain * 0.65)
+    if charge:
+        brain["novelty_pull"] = max(float(brain.get("novelty_pull", 0.0) or 0.0), charge)
+        brain["expression_pressure"] = max(float(brain.get("expression_pressure", 0.0) or 0.0), charge * 0.7)
+    try:
+        _desire.apply_drive_event({
+            "schema_version": DRIVE_EVENT_SCHEMA,
+            "source": "feel",
+            "primary_drive": _primary_drive_from_hints(signal_hints),
+            "intensity": max(discernment, territorial, clutch, strain, charge),
+            "confidence": 0.82,
+            "agency": 0.82,
+            "event_label": f"hold_{kind}_signal",
+            "brain": brain,
+            "evidence": [str(content or "").strip()[:180]],
+        })
+    except Exception as e:
+        logger.warning(f"hold signal weather failed: {e}")
+
+
 # =============================================================
 # Tool 2: hold — Hold on to this
 # 工具 2：hold — 握住，留下来
@@ -3017,11 +3118,15 @@ async def hold(
     valence: float = -1,
     arousal: float = -1,
     chord: str = "",
+    discernment: str = "",
+    territorial: str = "",
+    clutch: str = "",
+    strain: str = "",
+    charge: str = "",
     domain: str = "",
-    signal: str = "",
     created_at: str = "",
 ) -> str:
-    """写入长期沉淀。kind=memory/feel/writing/private/window；常用只填content/kind/importance/tags。discernment/territorial/clutch/strain/charge有感觉建议填。"""
+    """写入长期沉淀。kind=memory/feel/writing/private/window；chord和discernment/territorial/clutch/strain/charge有感觉就点亮。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -3037,8 +3142,14 @@ async def hold(
 
     importance = max(1, min(10, importance))
     extra_tags = [t.strip() for t in tags.split(",") if t.strip()]
-    signal = signal.strip()
-    signal_hints = _parse_signal_hints(signal)
+    chord = chord.strip()
+    signal_hints = _explicit_signal_hints(
+        discernment=discernment,
+        territorial=territorial,
+        clutch=clutch,
+        strain=strain,
+        charge=charge,
+    )
 
     # --- Feel mode: store as feel type, minimal metadata ---
     # --- Feel 模式：存为 feel 类型，最少元数据 ---
@@ -3055,15 +3166,10 @@ async def hold(
             arousal=feel_arousal,
             name=_feel_title(content) or None,
             bucket_type="feel",
-            chord=chord.strip(),
-            signal=signal,
+            chord=chord,
             signal_hints=signal_hints or None,
         )
-        if chord.strip():
-            try:
-                _desire.apply_chord_echo(chord.strip(), source="feel")
-            except Exception as e:
-                logger.warning(f"feel chord echo failed: {e}")
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints)
         # --- background: don't block response on Gemini latency ---
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         # --- Mark source memory as digested + store model's valence perspective ---
@@ -3076,7 +3182,7 @@ async def hold(
                 await bucket_mgr.update(source_bucket.strip(), **update_kwargs)
             except Exception as e:
                 logger.warning(f"Failed to mark source as digested / 标记已消化失败: {e}")
-        suffix = f" signal={signal}" if signal else ""
+        suffix = f" signal_hints={signal_hints}" if signal_hints else ""
         return f"🫧feel→{bucket_id}{suffix}"
 
     # --- Step 1: auto-tagging / 自动打标 ---
@@ -3118,9 +3224,10 @@ async def hold(
             bucket_type="permanent",
             pinned=True,
             created_at=created_at,
-            signal=signal,
+            chord=chord,
             signal_hints=signal_hints or None,
         )
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints)
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
 
@@ -3136,9 +3243,10 @@ async def hold(
             arousal=final_arousal,
             name=suggested_name or None,
             created_at=created_at,
-            signal=signal,
+            chord=chord,
             signal_hints=signal_hints or None,
         )
+        _apply_hold_weather(content, normalized_kind, chord, signal_hints)
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"新建→{bucket_id} {','.join(final_domain)}"
 
@@ -3151,10 +3259,11 @@ async def hold(
         valence=final_valence,
         arousal=final_arousal,
         name=suggested_name,
-        signal=signal,
+        chord=chord,
         signal_hints=signal_hints or None,
     )
 
+    _apply_hold_weather(content, normalized_kind, chord, signal_hints)
     action = "合并→" if is_merged else "新建→"
     return f"{action}{result_name} {','.join(final_domain)}"
 
