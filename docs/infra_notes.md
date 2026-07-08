@@ -12,6 +12,7 @@
 - Important pitfall: lowering weight must not refresh `last_active`, or the time freshness boost cancels part of the downweight. Use `_preserve_last_active=True` / `preserve_last_active` for weight-only dampening.
 - Follow-up: `feel` buckets now use the same weight score instead of fixed `50.0`; breath picks the top weighted active feels, while the decay cycle still skips feel archival.
 - Follow-up: breath memory and feel surfacing shortlist the top 12 active buckets by weight, then randomly pick display items inside that shortlist (7 memory / 8 feel), and finally display by time. Do not shuffle or sample from the full pool; that lets low-weight noise displace relevant items.
+- Follow-up: dream refresh now runs after breath memory/feel selection, excludes those selected buckets, takes the newest 10 active memory+feel items as a bounded pool, randomly picks 5, and includes the previous/current Atmosphere as dream weather. Dream output is forced into one paragraph to avoid blank-line drift.
 
 ## 2026-07-08 DP memory analyzer replaces active CLI memory line
 

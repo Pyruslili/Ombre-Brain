@@ -1800,6 +1800,7 @@ def atmosphere_default_state(now: float = None) -> dict:
         "readout": _atmosphere_readout({}, core),
         "climate": {
             "current": selected["label"],
+            "previous": "",
             "candidate": selected["label"],
             "candidate_steps": 0,
             "inertia_counter": 0,
@@ -1827,6 +1828,7 @@ def atmosphere_state_from_chemistry(chemistry: dict | None, now: float = None) -
         "readout": _atmosphere_readout(delta.get("readout"), core),
         "climate": {
             "current": selected["label"],
+            "previous": "",
             "candidate": selected["label"],
             "candidate_steps": 0,
             "inertia_counter": 0,
@@ -1866,6 +1868,7 @@ def normalize_atmosphere_state(value: dict | None, now: float = None) -> dict:
     candidate = str(climate.get("candidate") or selected["label"]).strip()
     state["climate"] = {
         "current": current if current in CLIMATE_LABELS else selected["label"],
+        "previous": climate.get("previous") if climate.get("previous") in CLIMATE_LABELS else "",
         "candidate": candidate if candidate in CLIMATE_LABELS else selected["label"],
         "candidate_steps": max(0, int(climate.get("candidate_steps", 0) or 0)),
         "inertia_counter": max(0, int(climate.get("inertia_counter", 0) or 0)),
@@ -2206,6 +2209,7 @@ class WeatherResidueStore:
                 "readout": readout,
                 "climate": {
                     "current": selected["label"],
+                    "previous": "",
                     "candidate": selected["label"],
                     "candidate_steps": 0,
                     "inertia_counter": 0,
@@ -2296,7 +2300,9 @@ class WeatherResidueStore:
                 or strong_dp_turn
             )
         )
+        previous = climate.get("previous") if climate.get("previous") in CLIMATE_LABELS else ""
         if should_switch:
+            previous = current
             current = candidate
             current_score = selected["score"]
             candidate_steps = 0
@@ -2304,6 +2310,7 @@ class WeatherResidueStore:
 
         climate.update({
             "current": current,
+            "previous": previous,
             "candidate": candidate,
             "candidate_steps": candidate_steps,
             "inertia_counter": int(climate.get("inertia_counter", 0) or 0) + 1,
@@ -2316,6 +2323,7 @@ class WeatherResidueStore:
         atmosphere["last_delta"] = {
             "source": delta.get("source", ""),
             "influence": round(influence, 3),
+            "previous": previous,
             "candidate": candidate,
         }
         state["atmosphere"] = atmosphere

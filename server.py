@@ -2309,6 +2309,44 @@ def _top_weight_random_bucket_sample(buckets: list[dict], shortlist_limit: int, 
     return random.sample(shortlist, pick_count)
 
 
+def _breath_memory_candidates(buckets: list[dict]) -> list[dict]:
+    return [
+        b for b in buckets
+        if not b["metadata"].get("resolved", False)
+        and not b["metadata"].get("digested", False)
+        and b["metadata"].get("type") not in ("permanent", "feel", "breath", "dream")
+        and not b["metadata"].get("pinned", False)
+        and not b["metadata"].get("protected", False)
+        and not _is_wander_only_bucket(b)
+    ]
+
+
+def _breath_feel_candidates(buckets: list[dict]) -> list[dict]:
+    return [
+        b for b in buckets
+        if b["metadata"].get("type") == "feel"
+        and not b["metadata"].get("digested", False)
+        and not b["metadata"].get("resolved", False)
+    ]
+
+
+def _dream_atmosphere_line() -> str:
+    try:
+        weather = _desire.weather_state()
+        atmosphere = weather.get("atmosphere") if isinstance(weather.get("atmosphere"), dict) else {}
+        climate = atmosphere.get("climate") if isinstance(atmosphere.get("climate"), dict) else {}
+        current = str(climate.get("current") or weather.get("climate") or "").strip()
+        previous = str(climate.get("previous") or (atmosphere.get("last_delta") or {}).get("previous") or "").strip()
+        display = weather.get("climate_display") or climate_transition_display(atmosphere)
+        if previous and current and previous != current:
+            return f"上一个Atmosphere：{previous}；现在：{display or current}。把它当梦的天气，不要解释。"
+        if display or current:
+            return f"Atmosphere：{display or current}。把它当梦的天气，不要解释。"
+    except Exception:
+        return ""
+    return ""
+
+
 @mcp.tool(name="breath")
 async def breath(
     domain: str = "",
@@ -2320,11 +2358,6 @@ async def breath(
     """新窗或者Compact后读取Nocturne记忆。"""
     await decay_engine.ensure_started()
     _desire.tick(idle_seconds=0)
-    # --- 每次breath都刷新一次梦境缓存，不挂心跳，只跟breath走 ---
-    try:
-        await _refresh_dream_cache()
-    except Exception as e:
-        logger.warning(f"Dream cache refresh on breath failed: {e}")
     # --- 把drive状态写进current_mood作为装饰心情 ---
     try:
         import json as _jd, os as _osd
@@ -2444,14 +2477,7 @@ async def breath(
 
         # --- Unresolved buckets: surface top N by weight ---
         # --- 未解决桶：按权重浮现前 N 条 ---
-        unresolved = [
-            b for b in all_buckets
-            if not b["metadata"].get("resolved", False)
-            and b["metadata"].get("type") not in ("permanent", "feel")
-            and not b["metadata"].get("pinned", False)
-            and not b["metadata"].get("protected", False)
-            and not _is_wander_only_bucket(b)
-        ]
+        unresolved = _breath_memory_candidates(all_buckets)
 
         logger.info(
             f"Breath surfacing: {len(all_buckets)} total, "
@@ -2500,29 +2526,11 @@ async def breath(
                 logger.warning(f"Failed to dehydrate surfaced bucket / 浮现脱水失败: {e}")
                 continue
 
-        # --- Dream section: latest dream snapshot ---
-        dream_section = ""
-        try:
-            import json as _jdream, os as _osdream
-            dream_path = _bucket_path("latest_dream.json")
-            if _osdream.path.exists(dream_path):
-                with open(dream_path) as _f:
-                    _dream_data = _jdream.load(_f)
-                _dream_text = _dream_data.get("dream", "")
-                if _dream_text:
-                    dream_section = "=== Dream Veil ===\n" + _dream_text
-        except Exception as e:
-            logger.warning(f"Failed to load latest dream / 梦境加载失败: {e}")
-
         # --- Feel section: top weighted feels (no title shown) ---
         feel_results = []
+        selected_feels = []
         try:
-            feels = [
-                b for b in all_buckets
-                if b["metadata"].get("type") == "feel"
-                and not b["metadata"].get("digested", False)
-                and not b["metadata"].get("resolved", False)
-            ]
+            feels = _breath_feel_candidates(all_buckets)
             selected_feels = _top_weight_random_bucket_sample(feels, 12, 8)
             selected_feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
             for f in selected_feels:
@@ -2530,6 +2538,16 @@ async def breath(
                 feel_results.append(f"[{created}]\n{strip_wikilinks(f['content'])}")
         except Exception as e:
             logger.warning(f"Failed to collect recent feels / 最近feel收集失败: {e}")
+
+        # --- Dream section: refresh after breath selections so it can avoid repeats ---
+        dream_section = ""
+        try:
+            excluded_ids = {b.get("id", "") for b in candidates + selected_feels if b.get("id")}
+            dream_text, _, _, _ = await _refresh_dream_cache(exclude_bucket_ids=excluded_ids)
+            if dream_text:
+                dream_section = "=== Dream Veil ===\n" + dream_text
+        except Exception as e:
+            logger.warning(f"Dream cache refresh on breath failed: {e}")
 
         # --- Shape Trace: writing / letter 骨架摘录，致下一个 Nox ---
         marginalia_section = ""
@@ -3768,7 +3786,7 @@ async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
 # 读取最近新增的表层桶（≤10个），返回给 Claude 在提示词引导下自主思考。
 # Claude then decides: resolve some, write feels, or do nothing.
 # =============================================================
-async def _refresh_dream_cache():
+async def _refresh_dream_cache(exclude_bucket_ids: set[str] | None = None):
     """生成新的梦境文本并写入缓存(latest_dream.json)，dream()和breath()共用同一份生成逻辑。
     返回(dream_text, parts, recent, all_buckets)；all_buckets为None表示记忆系统不可访问。"""
     try:
@@ -3777,24 +3795,22 @@ async def _refresh_dream_cache():
         logger.error(f"Dream cache refresh failed to list buckets: {e}")
         return "", [], [], None
 
-    # --- Filter: feel buckets only, sorted by creation time desc ---
+    exclude_bucket_ids = exclude_bucket_ids or set()
     candidates = [
-        b for b in all_buckets
-        if b["metadata"].get("type") == "feel"
-        and not b["metadata"].get("digested", False)
-        and not b["metadata"].get("resolved", False)
+        b for b in (_breath_memory_candidates(all_buckets) + _breath_feel_candidates(all_buckets))
+        if b.get("id") not in exclude_bucket_ids
     ]
-
-    # Breath already surfaces the newest 8 feels. Dream starts after that
-    # window so its imagery does not repeat the same material in one breath.
     candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
-    recent = candidates[8:14]
+    recent_pool = candidates[:10]
+    recent_count = min(5, len(recent_pool))
+    recent = random.sample(recent_pool, recent_count) if recent_count else []
+    atmosphere_line = _dream_atmosphere_line()
 
-    if not recent:
+    if not recent and not atmosphere_line:
         try:
             import json as _j, time as _t
             with open(_bucket_path("latest_dream.json"), "w") as _f:
-                _j.dump({"dream": "", "ts": _t.time()}, _f)
+                _j.dump({"dream": "", "ts": _t.time(), "fragments": []}, _f)
         except Exception:
             pass
         return "", [], [], all_buckets
@@ -3818,12 +3834,15 @@ async def _refresh_dream_cache():
     try:
         import httpx as _httpx, os as _os
         _api_key = _os.environ.get("DEEPSEEK_API_KEY", "")
-        if _api_key and parts:
+        if _api_key and (parts or atmosphere_line):
             _fragments = "\n---\n".join(parts)
+            _weather = f"梦的天气：{atmosphere_line}\n\n" if atmosphere_line else ""
             _prompt = (
-                "以下是一些记忆碎片。把它们打散、重新组合，用第一人称写一段梦境。\n"
-                "梦的特征：非线性、意象化、情感驱动。不要解释，不要总结，不要问题清单。\n"
-                "直接写梦里发生的事——画面、感觉、对话片段、不合逻辑的跳跃。150字以内。\n\n"
+                "以下是一些记忆碎片和梦的天气。把它们打散、重新组合，用第一人称写一段梦境。\n"
+                "必须重组，不要按碎片原顺序复述，不要摘要，不要解释，不要总结，不要问题清单。\n"
+                "梦的特征：非线性、意象化、情感驱动，有画面、身体感觉、对话片段、不合逻辑的跳跃。\n"
+                "输出要求：150字以内；一个自然段；不要空行；不要隔行换行；不要项目符号。\n\n"
+                f"{_weather}"
                 f"记忆碎片：\n{_fragments}"
             )
             async with _httpx.AsyncClient(timeout=15) as _client:
@@ -3838,7 +3857,7 @@ async def _refresh_dream_cache():
                     }
                 )
                 _data = _resp.json()
-                dream_text = _data["choices"][0]["message"]["content"].strip()
+                dream_text = " ".join(_data["choices"][0]["message"]["content"].split())
     except Exception:
         pass
 
@@ -3846,7 +3865,12 @@ async def _refresh_dream_cache():
         try:
             import json as _j, time as _t
             with open(_bucket_path("latest_dream.json"), "w") as _f:
-                _j.dump({"dream": dream_text, "ts": _t.time()}, _f)
+                _j.dump({
+                    "dream": dream_text,
+                    "ts": _t.time(),
+                    "fragments": [b.get("id") for b in recent],
+                    "atmosphere": atmosphere_line,
+                }, _f)
         except Exception:
             pass
 
