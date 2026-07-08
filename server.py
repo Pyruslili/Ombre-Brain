@@ -2301,7 +2301,7 @@ def _recent_weight_random_bucket_sample(
     shortlist_limit: int,
     pick_limit: int,
 ) -> list[dict]:
-    """Bound by recency, take the top weighted shortlist, then sample for display."""
+    """Bound by recency, take the top recall-score shortlist, then sample for display."""
     recent_pool = sorted(
         buckets,
         key=lambda b: b.get("metadata", {}).get("created", ""),
@@ -2309,13 +2309,53 @@ def _recent_weight_random_bucket_sample(
     )[:max(0, recent_limit)]
     shortlist = sorted(
         recent_pool,
-        key=lambda b: decay_engine.calculate_score(b.get("metadata", {})),
+        key=_breath_recall_score,
         reverse=True,
     )[:max(0, shortlist_limit)]
     pick_count = max(0, min(pick_limit, len(shortlist)))
     if pick_count >= len(shortlist):
         return shortlist
     return random.sample(shortlist, pick_count)
+
+
+def _breath_recall_components(bucket: dict, query: str = "", q_valence: float | None = None,
+                              q_arousal: float | None = None) -> dict:
+    meta = bucket.get("metadata", {})
+    topic = bucket_mgr._calc_topic_score(query, bucket) if query else 0.0
+    emotion = bucket_mgr._calc_emotion_score(q_valence, q_arousal, meta)
+    time_s = bucket_mgr._calc_time_score(meta)
+    importance = max(1, min(10, int(meta.get("importance", 5)))) / 10.0
+    weights = {
+        "topic": bucket_mgr.w_topic,
+        "emotion": bucket_mgr.w_emotion,
+        "time": bucket_mgr.w_time,
+        "importance": bucket_mgr.w_importance,
+    }
+    raw_total = (
+        topic * weights["topic"]
+        + emotion * weights["emotion"]
+        + time_s * weights["time"]
+        + importance * weights["importance"]
+    )
+    weight_sum = sum(weights.values())
+    normalized = (raw_total / weight_sum) * 100 if weight_sum > 0 else 0
+    if meta.get("resolved", False):
+        normalized *= 0.3
+    return {
+        "scores": {
+            "topic": round(topic, 4),
+            "emotion": round(emotion, 4),
+            "time": round(time_s, 4),
+            "importance": round(importance, 4),
+        },
+        "weights": weights,
+        "raw_total": round(raw_total, 4),
+        "normalized": round(normalized, 2),
+    }
+
+
+def _breath_recall_score(bucket: dict) -> float:
+    return _breath_recall_components(bucket)["normalized"]
 
 
 def _breath_memory_candidates(buckets: list[dict]) -> list[dict]:
@@ -4519,13 +4559,6 @@ async def api_breath_debug(request):
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=False)
         results = []
-        w = {
-            "topic": bucket_mgr.w_topic,
-            "emotion": bucket_mgr.w_emotion,
-            "time": bucket_mgr.w_time,
-            "importance": bucket_mgr.w_importance,
-        }
-        w_sum = sum(w.values())
 
         for bucket in all_buckets:
             if _is_wander_only_bucket(bucket):
@@ -4533,39 +4566,20 @@ async def api_breath_debug(request):
             meta = bucket.get("metadata", {})
             bid = bucket["id"]
             try:
-                topic = bucket_mgr._calc_topic_score(query, bucket) if query else 0.0
-                emotion = bucket_mgr._calc_emotion_score(q_valence, q_arousal, meta)
-                time_s = bucket_mgr._calc_time_score(meta)
-                imp = max(1, min(10, int(meta.get("importance", 5)))) / 10.0
-
-                raw_total = (
-                    topic * w["topic"]
-                    + emotion * w["emotion"]
-                    + time_s * w["time"]
-                    + imp * w["importance"]
-                )
-                normalized = (raw_total / w_sum) * 100 if w_sum > 0 else 0
-                resolved = meta.get("resolved", False)
-                if resolved:
-                    normalized *= 0.3
+                components = _breath_recall_components(bucket, query, q_valence, q_arousal)
 
                 results.append({
                     "id": bid,
                     "name": meta.get("name", bid),
                     "domain": meta.get("domain", []),
                     "type": meta.get("type", "dynamic"),
-                    "resolved": resolved,
+                    "resolved": meta.get("resolved", False),
                     "pinned": meta.get("pinned", False),
-                    "scores": {
-                        "topic": round(topic, 4),
-                        "emotion": round(emotion, 4),
-                        "time": round(time_s, 4),
-                        "importance": round(imp, 4),
-                    },
-                    "weights": w,
-                    "raw_total": round(raw_total, 4),
-                    "normalized": round(normalized, 2),
-                    "passed_threshold": normalized >= bucket_mgr.fuzzy_threshold,
+                    "scores": components["scores"],
+                    "weights": components["weights"],
+                    "raw_total": components["raw_total"],
+                    "normalized": components["normalized"],
+                    "passed_threshold": components["normalized"] >= bucket_mgr.fuzzy_threshold,
                 })
             except Exception:
                 continue
@@ -4576,7 +4590,12 @@ async def api_breath_debug(request):
             "query": query,
             "valence": q_valence,
             "arousal": q_arousal,
-            "weights": w,
+            "weights": {
+                "topic": bucket_mgr.w_topic,
+                "emotion": bucket_mgr.w_emotion,
+                "time": bucket_mgr.w_time,
+                "importance": bucket_mgr.w_importance,
+            },
             "threshold": bucket_mgr.fuzzy_threshold,
             "total_candidates": len(results),
             "passed_count": len(passed),

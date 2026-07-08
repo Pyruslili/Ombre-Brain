@@ -11,7 +11,7 @@
 - Dashboard detail cards now expose weight controls for `importance`, `arousal`, and `activation_count`, plus a quick `降权` action.
 - Important pitfall: lowering weight must not refresh `last_active`, or the time freshness boost cancels part of the downweight. Use `_preserve_last_active=True` / `preserve_last_active` for weight-only dampening.
 - Follow-up: `feel` buckets now use the same weight score instead of fixed `50.0`; breath picks the top weighted active feels, while the decay cycle still skips feel archival.
-- Follow-up: breath memory and feel surfacing first bound the active pool to the newest 30 items, then take the top-weighted 12 candidates inside that recent pool, randomly pick display items (7 memory / 8 feel), and finally display by time. Do not sample from the full historical pool; old high-weight buckets can otherwise crowd out current material.
+- Follow-up: breath memory and feel surfacing first bound the active pool to the newest 30 items, then take the top 12 by the same normalized recall score shown in dashboard Breath Debug, randomly pick display items (7 memory / 8 feel), and finally display by time. Do not sample from the full historical pool; old high-score buckets can otherwise crowd out current material.
 - Follow-up: dream refresh now runs after breath memory/feel selection, excludes those selected buckets, takes the newest 10 active memory+feel items as a bounded pool, randomly picks 5, and includes the previous/current Atmosphere as dream weather. Dream output is forced into one paragraph to avoid blank-line drift.
 
 ## 2026-07-08 DP memory analyzer replaces active CLI memory line
