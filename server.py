@@ -2302,7 +2302,7 @@ async def breath(
     max_results: int = 20,
     importance_min: int = -1,
 ) -> str:
-    """breath — Retrieve/surface memories from Nocturne memory system. 检索/浮现记忆。不传query或传空=自动浮现,有query=关键词检索。max_tokens控制返回总token上限(默认10000)。domain逗号分隔,valence/arousal 0~1(-1忽略)。max_results控制返回数量上限(默认20,最大50)。importance_min>=1时按重要度批量拉取(不走语义搜索,按importance降序返回最多20条)。"""
+    """新窗或者Compact后读取Nocturne记忆。"""
     await decay_engine.ensure_started()
     _desire.tick(idle_seconds=0)
     # --- 每次breath都刷新一次梦境缓存，不挂心跳，只跟breath走 ---
@@ -2743,10 +2743,7 @@ async def breath(
 
 @mcp.tool(name="undercurrent")
 def undercurrent_tool() -> dict:
-    """
-    展开潜流读数：Drive / Affect / Chemistry / Thought Pool。
-    日常第一层看 Pulse Weather；想细看或 debug 时调用这个。
-    """
+    """读Drive/Affect/Chemistry/ThoughtPool调试层。日常先看breath里的PulseWeather。"""
     _desire.tick(idle_seconds=0)
     return _undercurrent_state(_desire.state())
 
@@ -2796,11 +2793,7 @@ def pass_tool(drive_key: str, reason: str = "") -> dict:
 
 @mcp.tool(name="drive")
 def drive(action: str, drive_key: str, delta: float = 0.18, thought: str = "", reason: str = "", chord: str = "") -> dict:
-    """
-    Nox Drive控制入口。action: stir/settle/break/pass。
-    stir=让驱动上涨; settle=完成后回落并进不应期; break=拒绝当前intent; pass=让念头自然过去。
-    drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress。
-    """
+    """调NoxDrive。action=stir/settle/break/pass；drive_key见参数名；stir可带delta/thought/chord，break/pass可带reason。"""
     action = (action or "").strip().lower()
     if action == "stir":
         return stir(drive_key, delta=delta, thought=thought, chord=chord)
@@ -2930,11 +2923,7 @@ def room(
     tags: str = "",
     limit: int = 15,
 ) -> dict:
-    """
-    猫屋房间入口。space=catroom读写客厅; space=ink/ash/moss/nox读写单猫房间墙。
-    action: hold/read/reply/breath。catroom支持hold/read/reply; 单猫房间支持hold/read/breath。
-    客厅hold/reply需要author=ink|ash|moss|nox|jiajia; 单猫hold把content存进space对应的房间墙。
-    """
+    """猫屋房间。space=catroom或ink/ash/moss/nox；action=hold/read/reply/breath。客厅写入需author，单猫写入用content。"""
     action = (action or "").strip().lower()
     space = (space or "catroom").strip().lower()
 
@@ -3032,7 +3021,7 @@ async def hold(
     signal: str = "",
     created_at: str = "",
 ) -> str:
-    """存储单条沉淀。kind=memory/feel/writing/private/window。tags逗号分隔,importance 1-10。pinned=True创建永久钉选桶。feel=True兼容旧入口,等价于kind=feel。source_bucket=被消化的记忆桶ID(feel模式下,标记源记忆为已消化)。chord仅feel模式使用。signal可选,写一句手感贴纸,只识别discernment/territorial/clutch/strain/charge + low/mid/high。created_at可选:ISO日期字符串。"""
+    """写入长期沉淀。kind=memory/feel/writing/private/window；常用只填content/kind/importance/tags。discernment/territorial/clutch/strain/charge有感觉建议填。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -3412,7 +3401,7 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """wander — Nox自用抽屉漫游。mode=flotsam随机漂上来的旧记忆+feel,开盲盒,不是查找; archive合并letter+writing+window按时间线排; letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉。全量关键词轨迹用平级trace工具。window=外部刺激,不进breath/dream。private仅Nox可见。"""
+    """抽屉漫游。mode=flotsam/archive/letter/writing/window/unresolved/inner/private。"""
     mode = (mode or "").strip().lower()
     valid_modes = {"flotsam", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private", "trace"}
     if mode not in valid_modes:
@@ -3638,7 +3627,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
 
 @mcp.tool(name="trace")
 async def trace(query: str, limit: int = 20) -> str:
-    """trace — 全量轨迹搜索入口。按关键词在 memory/feel/writing/letter/window/inner 中统一查找；等价于 wander(mode="trace", query=...)，但作为平级工具更容易被想起来。"""
+    """按关键词搜索记忆。"""
     if not (query or "").strip():
         return "trace 要带 query。它是全量轨迹搜索，不是 Breath 浮现。"
     return await wander(mode="trace", query=query, limit=limit)
@@ -3646,7 +3635,7 @@ async def trace(query: str, limit: int = 20) -> str:
 
 @mcp.tool()
 async def wander_mark(bucket_id: str, mark: str, note: str = "") -> str:
-    """wander_mark — 给条目叠加批注标记, 不覆盖旧标记。mark可选: 认 / 不认 / 悬置。每次记录timestamp和可选note; 认累计3次且跨至少2个日期自动晋升inner(domain加inner标记)。"""
+    """对骨架记忆archive/unresolved/inner进行mark，认/不认/悬置；多次认会晋升inner。"""
     bucket_id = (bucket_id or "").strip()
     mark = _normalize_wander_mark(mark)
     note = (note or "").strip()
