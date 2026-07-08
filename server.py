@@ -2751,7 +2751,6 @@ def undercurrent_tool() -> dict:
     return _undercurrent_state(_desire.state())
 
 
-@mcp.tool(name="stir")
 def stir(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
     """
     让某个驱动维度上涨。
@@ -2768,7 +2767,6 @@ def stir(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = ""
     return result
 
 
-@mcp.tool(name="settle")
 def settle(drive_key: str) -> dict:
     """
     做完了某类行动后调用，对应驱动明显回落并进入不应期。
@@ -2778,7 +2776,6 @@ def settle(drive_key: str) -> dict:
     return _desire.satisfy(drive_key)
 
 
-@mcp.tool(name="break")
 def break_tool(drive_key: str, reason: str = "") -> dict:
     """
     拒绝执行当前 intent。
@@ -2789,7 +2786,6 @@ def break_tool(drive_key: str, reason: str = "") -> dict:
     return _desire.refuse(drive_key, reason=reason if reason.strip() else None)
 
 
-@mcp.tool(name="pass")
 def pass_tool(drive_key: str, reason: str = "") -> dict:
     """
     这一刻没感觉，让念头自然过去。
@@ -2798,7 +2794,25 @@ def pass_tool(drive_key: str, reason: str = "") -> dict:
     return _desire.pass_intent(drive_key, reason=reason if reason.strip() else None)
 
 
-@mcp.tool(name="catroom_hold")
+@mcp.tool(name="drive")
+def drive(action: str, drive_key: str, delta: float = 0.18, thought: str = "", reason: str = "", chord: str = "") -> dict:
+    """
+    Nox Drive控制入口。action: stir/settle/break/pass。
+    stir=让驱动上涨; settle=完成后回落并进不应期; break=拒绝当前intent; pass=让念头自然过去。
+    drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress。
+    """
+    action = (action or "").strip().lower()
+    if action == "stir":
+        return stir(drive_key, delta=delta, thought=thought, chord=chord)
+    if action == "settle":
+        return settle(drive_key)
+    if action == "break":
+        return break_tool(drive_key, reason=reason)
+    if action == "pass":
+        return pass_tool(drive_key, reason=reason)
+    return {"ok": False, "error": "action must be stir/settle/break/pass"}
+
+
 def catroom_hold(
     author: str,
     content: str,
@@ -2826,7 +2840,6 @@ def catroom_hold(
         return {"ok": False, "error": str(e)}
 
 
-@mcp.tool(name="catroom_read")
 def catroom_read(limit: int = 15, topic: str = "", author: str = "") -> dict:
     """
     读取猫屋公共房间最近便签，默认最近15条。
@@ -2839,7 +2852,6 @@ def catroom_read(limit: int = 15, topic: str = "", author: str = "") -> dict:
         return {"ok": False, "error": str(e)}
 
 
-@mcp.tool(name="catroom_reply")
 def catroom_reply(
     author: str,
     reply_to: str,
@@ -2866,7 +2878,6 @@ def catroom_reply(
         return {"ok": False, "error": str(e)}
 
 
-@mcp.tool(name="room_hold")
 def room_hold(
     cat: str,
     content: str,
@@ -2892,7 +2903,6 @@ def room_hold(
         return {"ok": False, "error": str(e)}
 
 
-@mcp.tool(name="room_breath")
 def room_breath(cat: str, limit: int = 6) -> dict:
     """
     读取单猫房间门牌和最近痕迹，默认6条。
@@ -2901,6 +2911,69 @@ def room_breath(cat: str, limit: int = 6) -> dict:
     try:
         text, records = room_store.breath(cat=cat, limit=limit)
         return {"ok": True, "cat": cat.strip().lower(), "breath": text, "records": records}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@mcp.tool(name="room")
+def room(
+    action: str,
+    space: str = "catroom",
+    content: str = "",
+    author: str = "",
+    reply_to: str = "",
+    topic: str = "",
+    mood: str = "",
+    model: str = "",
+    kind: str = "residue",
+    weight: float = -1.0,
+    tags: str = "",
+    limit: int = 15,
+) -> dict:
+    """
+    猫屋房间入口。space=catroom读写客厅; space=ink/ash/moss/nox读写单猫房间墙。
+    action: hold/read/reply/breath。catroom支持hold/read/reply; 单猫房间支持hold/read/breath。
+    客厅hold/reply需要author=ink|ash|moss|nox|jiajia; 单猫hold把content存进space对应的房间墙。
+    """
+    action = (action or "").strip().lower()
+    space = (space or "catroom").strip().lower()
+
+    try:
+        if space in {"catroom", "public", "lounge", "客厅"}:
+            if action in {"hold", "write", "leave"}:
+                if not author.strip():
+                    return {"ok": False, "error": "author is required for catroom hold"}
+                return catroom_hold(
+                    author=author,
+                    content=content,
+                    topic=topic,
+                    mood=mood,
+                    model=model,
+                    reply_to=reply_to,
+                )
+            if action == "reply":
+                if not author.strip():
+                    return {"ok": False, "error": "author is required for catroom reply"}
+                return catroom_reply(
+                    author=author,
+                    reply_to=reply_to,
+                    content=content,
+                    topic=topic,
+                    mood=mood,
+                    model=model,
+                )
+            if action in {"read", "breath"}:
+                return catroom_read(limit=limit, topic=topic, author=author)
+            return {"ok": False, "error": "catroom action must be hold/read/reply"}
+
+        if action in {"hold", "write", "leave"}:
+            return room_hold(cat=space, content=content, kind=kind, weight=weight, tags=tags)
+        if action == "read":
+            records = room_store.read(cat=space, limit=limit)
+            return {"ok": True, "cat": space, "records": records, "count": len(records)}
+        if action == "breath":
+            return room_breath(cat=space, limit=limit)
+        return {"ok": False, "error": "cat room action must be hold/read/breath"}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
 
@@ -3339,11 +3412,11 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """wander — Nox自用抽屉漫游。mode=flotsam随机漂上来的旧记忆+feel,开盲盒,不是查找; archive合并letter+writing+window按时间线排(带bucket_id方便mark); letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉; trace=带query时不分类型(letter/writing/window/feel/memory全捞,已晋升inner的标"原类型→inner"不丢原身份)按时间线统一排序,看一个关键词的完整轨迹,必须带query。window=外部刺激(被什么撞到),不进breath/dream。private仅Nox可见。"""
+    """wander — Nox自用抽屉漫游。mode=flotsam随机漂上来的旧记忆+feel,开盲盒,不是查找; archive合并letter+writing+window按时间线排; letter/writing/window单独查看; unresolved悬置; inner核心沉淀; private私人抽屉。全量关键词轨迹用平级trace工具。window=外部刺激,不进breath/dream。private仅Nox可见。"""
     mode = (mode or "").strip().lower()
     valid_modes = {"flotsam", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private", "trace"}
     if mode not in valid_modes:
-        return "mode 必须是 flotsam / archive / letter / writing / letter_jiajia / window / unresolved / inner / private / trace。"
+        return "mode 必须是 flotsam / archive / letter / writing / letter_jiajia / window / unresolved / inner / private。全量关键词轨迹用 trace。"
 
     if mode == "trace" and not (query or "").strip():
         return "trace 模式要带 query——这是按关键词捞全部类型的轨迹，不是随便漂(那个用 flotsam)。"
