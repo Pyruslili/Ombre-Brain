@@ -2804,24 +2804,6 @@ def room_breath(cat: str, limit: int = 6) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-@mcp.tool(name="room_breath_moss")
-def room_breath_moss(limit: int = 6) -> dict:
-    """Moss醒来读自己的房间墙。轻量呼吸，不进正式Breath。"""
-    return room_breath(cat="moss", limit=limit)
-
-
-@mcp.tool(name="room_breath_ink")
-def room_breath_ink(limit: int = 6) -> dict:
-    """Ink醒来读自己的房间墙。轻量呼吸，不进正式Breath。"""
-    return room_breath(cat="ink", limit=limit)
-
-
-@mcp.tool(name="room_breath_ash")
-def room_breath_ash(limit: int = 6) -> dict:
-    """Ash醒来读自己的房间墙。轻量呼吸，不进正式Breath。"""
-    return room_breath(cat="ash", limit=limit)
-
-
 @mcp.tool(name="room")
 def room(
     action: str,
@@ -2837,7 +2819,7 @@ def room(
     tags: str = "",
     limit: int = 15,
 ) -> dict:
-    """猫屋房间。space=catroom或ink/ash/moss/nox；action=hold/read/reply/breath。客厅写入需author，单猫写入用content。"""
+    """猫屋房间。醒来读墙: action=breath space=moss/ink/ash；客厅space=catroom，action=hold/read/reply。"""
     action = (action or "").strip().lower()
     space = (space or "catroom").strip().lower()
 
