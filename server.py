@@ -2643,6 +2643,8 @@ def stir(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = ""
     warm: Dmaj7/Amaj7/Fmaj7/Fmaj7#11/Gmaj7；shadow: Dm7/Em7/F#dim/Bm7b5；liminal: C6/Am7/Gsus4。
     speech/DP chord_hint暂不接入天气；Soma触碰由/api/soma/report以source=soma写入短时余波。
     """
+    if drive_key.strip().lower() == "attachment" and thought.strip():
+        delta *= 0.30
     result = _desire.pulse(drive_key, delta, chord=chord.strip())
     if thought.strip():
         _desire.add_thought(thought.strip(), drive_key, strength=0.5)

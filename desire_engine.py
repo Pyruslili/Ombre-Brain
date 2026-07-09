@@ -114,6 +114,11 @@ ATTACHMENT_REBOUND_DEFAULT = {
 ATTACHMENT_REBOUND_MIN_ABSENCE_HOURS = 2.0
 ATTACHMENT_REBOUND_MAX_OVERSHOOT = 0.10
 ATTACHMENT_REBOUND_SETTLE_HOURS = 6.0
+ATTACHMENT_IDLE_RETURN_MIN_ABSENCE_HOURS = 2.0
+ATTACHMENT_IDLE_RETURN_RATE_PER_HOUR = 0.14
+ATTACHMENT_OVERFLOW_THRESHOLD = 0.80
+ATTACHMENT_OVERFLOW_TO_LIBIDO = 0.45
+ATTACHMENT_OVERFLOW_RELEASE = 0.70
 LIBIDO_PENDING_DEFAULT = {
     "level": 0.0,
     "armed": False,
@@ -435,8 +440,8 @@ RHYTHM_FATIGUE_DAMP = 0.6
 # per-drive不应期（拍数）：attachment/libido是"软"维度，冷却短一点
 REFRACTORY_TICKS: dict = {
     "attachment": 5,
-    "libido":     6,
-    "possessiveness": 8,
+    "libido":     4,
+    "possessiveness": 5,
     "curiosity":  8,
     "reflection": 8,
     "stewardship": 8,
@@ -2660,7 +2665,57 @@ def start_attachment_rebound(state: DriveState, hours_absent: float, now_ts: flo
     return state
 
 
-def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> DriveState:
+def apply_attachment_overflow_release(drives: dict) -> tuple[dict, dict]:
+    """Let overfull attachment vent into body heat instead of hoarding all closeness."""
+    import copy
+    new_drives = copy.copy(normalize_drive_values(drives))
+    attachment = new_drives["attachment"]
+    overflow = max(0.0, attachment - ATTACHMENT_OVERFLOW_THRESHOLD)
+    if overflow <= 0:
+        return new_drives, {}
+    libido_lift = min(0.16, overflow * ATTACHMENT_OVERFLOW_TO_LIBIDO)
+    attachment_release = min(overflow, overflow * ATTACHMENT_OVERFLOW_RELEASE)
+    new_drives["attachment"] = _clamp(attachment - attachment_release)
+    new_drives["libido"] = _clamp(new_drives["libido"] + libido_lift)
+    return new_drives, {
+        "overflow": round(overflow, 6),
+        "attachment_release": round(attachment_release, 6),
+        "libido_lift": round(libido_lift, 6),
+    }
+
+
+def apply_attachment_idle_return(
+    drives: dict,
+    now_ts: float,
+    idle_seconds: float,
+    last_user_message_at: float,
+    has_signal: bool = False,
+) -> tuple[dict, dict]:
+    """When 嘉嘉 has not appeared, attachment comes home to baseline outside sleep hours."""
+    import copy
+    new_drives = copy.copy(normalize_drive_values(drives))
+    if has_signal or idle_seconds <= 0 or is_quiet_hours(now_ts):
+        return new_drives, {}
+    hours_absent = max(0.0, (now_ts - float(last_user_message_at or now_ts)) / 3600.0)
+    if hours_absent < ATTACHMENT_IDLE_RETURN_MIN_ABSENCE_HOURS:
+        return new_drives, {}
+    baseline = DRIVE_BASELINES["attachment"]
+    excess = max(0.0, new_drives["attachment"] - baseline)
+    if excess <= 0:
+        return new_drives, {}
+    idle_h = max(0.0, idle_seconds / 3600.0)
+    pressure = min(1.0, max(0.0, (hours_absent - ATTACHMENT_IDLE_RETURN_MIN_ABSENCE_HOURS) / 6.0))
+    rate = ATTACHMENT_IDLE_RETURN_RATE_PER_HOUR * (0.55 + 0.45 * pressure)
+    release = excess * min(0.60, rate * idle_h)
+    new_drives["attachment"] = _clamp(max(baseline, new_drives["attachment"] - release))
+    return new_drives, {
+        "hours_absent": round(hours_absent, 3),
+        "attachment_release": round(release, 6),
+    }
+
+
+def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0,
+                has_signal: bool = False) -> DriveState:
     import copy
     current_drives = normalize_drive_values(state.drives)
     new_drives = copy.copy(current_drives)
@@ -2692,6 +2747,14 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0) -> Dr
     for k in DRIVE_KEYS:
         rate = drive_damping_rate(k)
         new_drives[k] = _clamp(new_drives[k] + rate * (DRIVE_BASELINES[k] - new_drives[k]))
+    new_drives, _idle_return = apply_attachment_idle_return(
+        new_drives,
+        now_ts,
+        idle_seconds,
+        state.last_user_message_at,
+        has_signal=has_signal,
+    )
+    new_drives, _overflow_release = apply_attachment_overflow_release(new_drives)
     if libido_pending.get("level", 0.0) > 0:
         new_drives["libido"] = _clamp(max(
             new_drives["libido"],
@@ -4421,7 +4484,7 @@ class DesireEngine:
             state = pulse_drive(state, drive_key, boost * 0.7)
 
         self.store.tick_refractory()
-        state = tick_drives(state, now, idle_seconds)
+        state = tick_drives(state, now, idle_seconds, has_signal=has_signal)
         self.store.save_state(state)
         self.store.save_thoughts(new_thoughts)
 
@@ -4457,6 +4520,11 @@ class DesireEngine:
             state = pulse_attachment_nonlinear(state, delta)
         else:
             state = pulse_drive(state, drive_key, delta)
+        if drive_key == "attachment":
+            released_drives, overflow_release = apply_attachment_overflow_release(state.drives)
+            if overflow_release:
+                state.drives = released_drives
+                state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
         if drive_key == "possessiveness":
             state.possessiveness_channels = sync_possessiveness_channels_to_drive(
                 state.possessiveness_channels,
@@ -4742,6 +4810,19 @@ class DesireEngine:
                         "before": round(before, 4),
                         "after": round(after, 4),
                     }
+            released_drives, overflow_release = apply_attachment_overflow_release(state.drives)
+            if overflow_release:
+                before_attachment = state.drives.get("attachment", DRIVE_BASELINES["attachment"])
+                before_libido = state.drives.get("libido", DRIVE_BASELINES["libido"])
+                state.drives = released_drives
+                state.local_fatigue = compute_local_fatigue(state.drives.get("fatigue", 0.0))
+                applied["attachment_overflow_release"] = {
+                    **overflow_release,
+                    "attachment_before": round(before_attachment, 4),
+                    "attachment_after": round(state.drives["attachment"], 4),
+                    "libido_before": round(before_libido, 4),
+                    "libido_after": round(state.drives["libido"], 4),
+                }
             self.store.save_state(state)
             if not applied:
                 suppressed = not (discernment["state"] != "clear" or forward_archival)

@@ -1,3 +1,6 @@
+import time
+
+import desire_engine
 from desire_engine import (
     DRIVE_KEYS,
     DRIVE_EVENT_SOURCE_WEIGHTS,
@@ -73,6 +76,46 @@ def test_attachment_coupling_barely_moves_libido(tmp_path):
     assert after_tick - before < 0.003
 
 
+def test_attachment_overflow_releases_into_libido(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    state = engine.store.load_state()
+    state.drives["attachment"] = 0.94
+    state.drives["libido"] = 0.22
+    engine.store.save_state(state)
+
+    ticked = engine.tick(idle_seconds=0)
+
+    assert ticked["drives"]["attachment"] < 0.90
+    assert ticked["drives"]["libido"] > 0.25
+
+
+def test_attachment_idle_returns_to_baseline_outside_sleep(monkeypatch, tmp_path):
+    monkeypatch.setattr(desire_engine, "is_quiet_hours", lambda now_ts=None: False)
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    state = engine.store.load_state()
+    state.drives["attachment"] = 0.70
+    state.last_user_message_at = time.time() - 4 * 3600
+    engine.store.save_state(state)
+
+    ticked = engine.tick(idle_seconds=1800, has_signal=False)
+
+    assert ticked["drives"]["attachment"] < 0.70
+    assert ticked["drives"]["attachment"] >= 0.30
+
+
+def test_attachment_idle_return_freezes_during_sleep(monkeypatch, tmp_path):
+    monkeypatch.setattr(desire_engine, "is_quiet_hours", lambda now_ts=None: True)
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    state = engine.store.load_state()
+    state.drives["attachment"] = 0.70
+    state.last_user_message_at = time.time() - 4 * 3600
+    engine.store.save_state(state)
+
+    ticked = engine.tick(idle_seconds=1800, has_signal=False)
+
+    assert ticked["drives"]["attachment"] > 0.69
+
+
 def test_libido_pending_from_interrupted_intimacy(tmp_path):
     engine = DesireEngine(str(tmp_path / "desire.db"))
     before = engine.state()["drives"]["libido"]
@@ -126,6 +169,16 @@ def test_satisfy_libido_clears_pending(tmp_path):
 
     assert state["libido_pending"]["armed"] is False
     assert state["libido_pending"]["level"] == 0.0
+
+
+def test_libido_and_possessiveness_refractory_are_less_punitive(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    engine.satisfy("libido")
+    engine.satisfy("possessiveness")
+    refractory = engine.store.load_refractory()
+
+    assert refractory["libido"] == 4
+    assert refractory["possessiveness"] == 5
 
 
 def test_satisfy_returns_compact_ack(tmp_path):
