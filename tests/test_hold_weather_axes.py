@@ -21,6 +21,16 @@ def test_hold_tool_signature_stays_lean():
     assert "created_at" not in arg_names
 
 
+def test_breath_tool_signature_stays_zero_arg():
+    tree = ast.parse(Path("server.py").read_text(encoding="utf-8"))
+    breath_node = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "breath"
+    )
+
+    assert [arg.arg for arg in breath_node.args.args] == []
+
+
 @pytest.mark.asyncio
 async def test_bucket_create_persists_drive_tags(bucket_mgr):
     bucket_id = await bucket_mgr.create(

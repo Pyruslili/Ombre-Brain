@@ -2397,13 +2397,7 @@ def _dream_atmosphere_line() -> str:
 
 
 @mcp.tool(name="breath")
-async def breath(
-    domain: str = "",
-    valence: float = -1,
-    arousal: float = -1,
-    max_results: int = 20,
-    importance_min: int = -1,
-) -> str:
+async def breath() -> str:
     """新窗或者Compact后读取Nocturne记忆。"""
     await decay_engine.ensure_started()
     _desire.tick(idle_seconds=0)
@@ -2428,69 +2422,7 @@ async def breath(
                 _jd.dump(_mood_data, _f)
     except Exception:
         pass
-    max_results = min(max_results, 50)
     max_tokens = 10000
-
-    # --- Feel retrieval: domain="feel" is a special channel ---
-    # --- Feel 检索：domain="feel" 是独立入口 ---
-    if domain.strip().lower() == "feel":
-        try:
-            all_buckets = await bucket_mgr.list_all(include_archive=False)
-            feels = [
-                b for b in all_buckets
-                if b["metadata"].get("type") == "feel"
-                and not b["metadata"].get("digested", False)
-                and not b["metadata"].get("resolved", False)
-            ]
-            feels.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
-            if not feels:
-                return "没有留下过 feel。"
-            results = []
-            for f in feels:
-                created = f["metadata"].get("created", "")
-                entry = f"[{created}]\n{strip_wikilinks(f['content'])}"
-                results.append(entry)
-                if count_tokens_approx("\n---\n".join(results)) > max_tokens:
-                    break
-            return "=== 你留下的 feel ===\n" + "\n---\n".join(results)
-        except Exception as e:
-            logger.error(f"Feel retrieval failed: {e}")
-            return "读取 feel 失败。"
-
-    # --- importance_min mode: bulk fetch by importance threshold ---
-    # --- 重要度批量拉取模式：跳过语义搜索，按 importance 降序返回 ---
-    if importance_min >= 1:
-        try:
-            all_buckets = await bucket_mgr.list_all(include_archive=False)
-        except Exception as e:
-            return f"记忆系统暂时无法访问: {e}"
-        filtered = [
-            b for b in all_buckets
-            if int(b["metadata"].get("importance", 0)) >= importance_min
-            and b["metadata"].get("type") not in ("feel",)
-            and not _is_wander_only_bucket(b)
-        ]
-        filtered.sort(key=lambda b: int(b["metadata"].get("importance", 0)), reverse=True)
-        filtered = filtered[:20]
-        if not filtered:
-            return f"没有重要度 >= {importance_min} 的记忆。"
-        results = []
-        token_used = 0
-        for b in filtered:
-            if token_used >= max_tokens:
-                break
-            try:
-                clean_meta = {k: v for k, v in b["metadata"].items() if k != "tags"}
-                summary = await dehydrator.dehydrate(strip_wikilinks(b["content"]), clean_meta)
-                t = count_tokens_approx(summary)
-                if token_used + t > max_tokens:
-                    break
-                imp = b["metadata"].get("importance", 0)
-                results.append(f"[importance:{imp}] [bucket_id:{b['id']}] {summary}")
-                token_used += t
-            except Exception as e:
-                logger.warning(f"importance_min dehydrate failed: {e}")
-        return "\n---\n".join(results) if results else "没有可以展示的记忆。"
 
     # --- Default breath: surfacing mode (weight pool active push) ---
     # --- 默认breath：浮现模式（权重池主动推送）---
