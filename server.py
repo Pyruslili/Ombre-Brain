@@ -2949,41 +2949,36 @@ def _parse_signal_hints(signal: str) -> dict:
     return hints
 
 
-def _normalize_signal_level(value) -> str:
+def _normalize_signal_value(value, default: float = 0.0) -> float:
     text = str(value or "").strip().lower()
     if not text or text in {"none", "no", "false", "0"}:
-        return ""
+        return 0.0
     if text in SIGNAL_LEVEL_VALUES:
-        return text
+        return SIGNAL_LEVEL_VALUES[text]
     try:
         number = float(text)
     except (TypeError, ValueError):
-        return "mid"
+        return default
     if number <= 0:
-        return ""
-    if number < 0.5:
-        return "low"
-    if number < 0.78:
-        return "mid"
-    return "high"
+        return 0.0
+    return max(0.0, min(1.0, number))
 
 
 def _explicit_signal_hints(**values) -> dict:
     hints = {}
     for key in SIGNAL_HINT_KEYS:
-        level = _normalize_signal_level(values.get(key))
-        if level:
-            hints[key] = level
+        value = _normalize_signal_value(values.get(key))
+        if value > 0:
+            hints[key] = round(value, 3)
     return hints
 
 
 def _signal_hint_value(hints: dict, key: str) -> float:
-    return SIGNAL_LEVEL_VALUES.get(str((hints or {}).get(key) or "").strip().lower(), 0.0)
+    return _normalize_signal_value((hints or {}).get(key))
 
 
 def _drive_level_value(value) -> float:
-    level = _normalize_signal_level(value)
-    return SIGNAL_LEVEL_VALUES.get(level, SIGNAL_LEVEL_VALUES["mid"])
+    return _normalize_signal_value(value, default=SIGNAL_LEVEL_VALUES["mid"])
 
 
 def _parse_drive_tags(*raw_values: str) -> dict:
