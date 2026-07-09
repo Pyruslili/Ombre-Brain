@@ -3099,7 +3099,6 @@ async def hold(
     kind: str = "memory",
     tags: str = "",
     importance: int = 5,
-    pinned: bool = False,
     chord: str = "",
     drive: str = "",
     drives: str = "",
@@ -3108,10 +3107,8 @@ async def hold(
     clutch: str = "",
     strain: str = "",
     charge: str = "",
-    domain: str = "",
-    created_at: str = "",
 ) -> str:
-    """写入长期沉淀。kind=memory/feel/writing/private/window；chord可选；drive/drives与五个Signal填0-1。"""
+    """写入长期沉淀。kind=memory/feel/writing/private/window；tags/chord可选；drive/drives可写主副驱动和强度；Signal填0-1：discernment皱眉辨认，territorial边界占位，clutch靠近抓力，strain绷紧压力，charge想动亮起。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -3140,7 +3137,7 @@ async def hold(
     if normalized_kind == "feel":
         bucket_id = await bucket_mgr.create(
             content=content,
-            tags=[],
+            tags=extra_tags,
             importance=5,
             domain=[],
             valence=0.5,
@@ -3168,8 +3165,7 @@ async def hold(
         }
 
     kind_domain = [] if normalized_kind == "memory" else [normalized_kind]
-    user_domain = [d.strip() for d in domain.split(",") if d.strip()] if domain else kind_domain
-    final_domain = user_domain if user_domain else analysis["domain"]
+    final_domain = kind_domain if kind_domain else analysis["domain"]
     auto_valence = analysis["valence"]
     auto_arousal = analysis["arousal"]
     auto_tags = analysis["tags"]
@@ -3180,31 +3176,9 @@ async def hold(
 
     all_tags = list(dict.fromkeys(auto_tags + extra_tags))
 
-    # --- Pinned buckets bypass merge and are created directly in permanent dir ---
-    # --- 钉选桶跳过合并，直接新建到 permanent 目录 ---
-    if pinned:
-        bucket_id = await bucket_mgr.create(
-            content=content,
-            tags=all_tags,
-            importance=10,
-            domain=final_domain,
-            valence=final_valence,
-            arousal=final_arousal,
-            name=suggested_name or None,
-            bucket_type="permanent",
-            pinned=True,
-            created_at=created_at,
-            chord=chord,
-            signal_hints=signal_hints or None,
-            drive_tags=drive_tags or None,
-        )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, bucket_id)
-        asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
-        return f"❣️钉选→{bucket_id} {','.join(final_domain)}"
-
     # --- Writing/private/window: skip merge, create directly ---
     _DIRECT_DOMAINS = {"writing", "window", "private"}
-    if user_domain and set(user_domain) & _DIRECT_DOMAINS:
+    if kind_domain and set(kind_domain) & _DIRECT_DOMAINS:
         bucket_id = await bucket_mgr.create(
             content=content,
             tags=all_tags,
@@ -3213,7 +3187,6 @@ async def hold(
             valence=final_valence,
             arousal=final_arousal,
             name=suggested_name or None,
-            created_at=created_at,
             chord=chord,
             signal_hints=signal_hints or None,
             drive_tags=drive_tags or None,

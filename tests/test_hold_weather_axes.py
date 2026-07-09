@@ -16,6 +16,9 @@ def test_hold_tool_signature_stays_lean():
     assert "arousal" not in arg_names
     assert "feel" not in arg_names
     assert "source_bucket" not in arg_names
+    assert "pinned" not in arg_names
+    assert "domain" not in arg_names
+    assert "created_at" not in arg_names
 
 
 @pytest.mark.asyncio
