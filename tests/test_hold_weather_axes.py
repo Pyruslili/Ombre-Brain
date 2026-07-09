@@ -1,4 +1,21 @@
 import pytest
+import ast
+from pathlib import Path
+
+
+def test_hold_tool_signature_stays_lean():
+    tree = ast.parse(Path("server.py").read_text(encoding="utf-8"))
+    hold_node = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "hold"
+    )
+    arg_names = [arg.arg for arg in hold_node.args.args]
+
+    assert "chord" in arg_names
+    assert "valence" not in arg_names
+    assert "arousal" not in arg_names
+    assert "feel" not in arg_names
+    assert "source_bucket" not in arg_names
 
 
 @pytest.mark.asyncio

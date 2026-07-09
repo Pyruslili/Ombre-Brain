@@ -3100,10 +3100,6 @@ async def hold(
     tags: str = "",
     importance: int = 5,
     pinned: bool = False,
-    feel: bool = False,
-    source_bucket: str = "",
-    valence: float = -1,
-    arousal: float = -1,
     chord: str = "",
     drive: str = "",
     drives: str = "",
@@ -3115,16 +3111,14 @@ async def hold(
     domain: str = "",
     created_at: str = "",
 ) -> str:
-    """写入长期沉淀。kind=memory/feel/writing/private/window；drive/drives可选主副驱动与强度；chord和五个Signal有感觉就点亮。"""
+    """写入长期沉淀。kind=memory/feel/writing/private/window；chord可选；drive/drives与五个Signal填0-1。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
     if not content or not content.strip():
         return "内容为空，无法存储。"
 
-    normalized_kind = (kind or "").strip().lower() or ("feel" if feel else "memory")
-    if feel and normalized_kind == "memory":
-        normalized_kind = "feel"
+    normalized_kind = (kind or "").strip().lower() or "memory"
     valid_kinds = {"memory", "feel", "writing", "private", "window"}
     if normalized_kind not in valid_kinds:
         return f"kind无效：{normalized_kind}。可用: memory/feel/writing/private/window。念头请用 stir，不要用 hold。"
@@ -3144,16 +3138,13 @@ async def hold(
     # --- Feel mode: store as feel type, minimal metadata ---
     # --- Feel 模式：存为 feel 类型，最少元数据 ---
     if normalized_kind == "feel":
-        # Feel valence/arousal = model's own perspective
-        feel_valence = valence if 0 <= valence <= 1 else 0.5
-        feel_arousal = arousal if 0 <= arousal <= 1 else 0.3
         bucket_id = await bucket_mgr.create(
             content=content,
             tags=[],
             importance=5,
             domain=[],
-            valence=feel_valence,
-            arousal=feel_arousal,
+            valence=0.5,
+            arousal=0.3,
             name=_feel_title(content) or None,
             bucket_type="feel",
             chord=chord,
@@ -3163,16 +3154,6 @@ async def hold(
         _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, bucket_id)
         # --- background: don't block response on Gemini latency ---
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
-        # --- Mark source memory as digested + store model's valence perspective ---
-        # --- 标记源记忆为已消化 + 存储模型视角的 valence ---
-        if source_bucket and source_bucket.strip():
-            try:
-                update_kwargs = {"digested": True}
-                if 0 <= valence <= 1:
-                    update_kwargs["model_valence"] = feel_valence
-                await bucket_mgr.update(source_bucket.strip(), **update_kwargs)
-            except Exception as e:
-                logger.warning(f"Failed to mark source as digested / 标记已消化失败: {e}")
         suffix = f" signal_hints={signal_hints}" if signal_hints else ""
         return f"🫧feel→{bucket_id}{suffix}"
 
@@ -3194,10 +3175,8 @@ async def hold(
     auto_tags = analysis["tags"]
     suggested_name = analysis.get("suggested_name", "")
 
-    # --- User-supplied valence/arousal takes priority over analyze() result ---
-    # --- 用户显式传入的 valence/arousal 优先，analyze() 结果作为 fallback ---
-    final_valence = valence if 0 <= valence <= 1 else auto_valence
-    final_arousal = arousal if 0 <= arousal <= 1 else auto_arousal
+    final_valence = auto_valence
+    final_arousal = auto_arousal
 
     all_tags = list(dict.fromkeys(auto_tags + extra_tags))
 
