@@ -2915,6 +2915,7 @@ let catroomRecords = [];
 let currentCatroomTopic = 'Catroom';
 const CATROOM_ROOMS = [
   { value: 'Catroom', label: 'Catroom', sub: '客厅 · recent notes outside Breath / Weather / Memory' },
+  { value: 'Unresolved', label: 'Unresolved', sub: '悬置 · questions and loose ends that still need a place' },
   { value: 'InkRoom', label: 'InkRoom', sub: 'Ink room · private wall signals made visible here' },
   { value: 'AshRoom', label: 'AshRoom', sub: 'Ash room · sparks, objections, fast notes' },
   { value: 'MossRoom', label: 'MossRoom', sub: 'Moss room · structure, repairs, things that should not vanish' },
@@ -4326,11 +4327,12 @@ function updateStats() {
   const resolved = allBuckets.filter(b => b.resolved).length;
   const digested = allBuckets.filter(b => b.digested).length;
   const inner = allBuckets.filter(b => bucketFacets(b).includes('inner')).length;
+  const unresolved = allBuckets.filter(b => isUnresolvedBucket(b)).length;
   const letters = allBuckets.filter(b => bucketFacets(b).some(d => d === 'letter' || d === 'letter_jiajia')).length;
   const writing = allBuckets.filter(b => bucketFacets(b).includes('writing')).length;
   const windowed = allBuckets.filter(b => bucketFacets(b).includes('window')).length;
   document.getElementById('stats').textContent =
-    `TRACES ${total} · FEEL ${feels} · PINNED ${pinned} · INNER ${inner} · LETTER ${letters} · WRITING ${writing} · WINDOW ${windowed} · RESOLVED ${resolved} · SETTLED ${digested}`;
+    `TRACES ${total} · FEEL ${feels} · PINNED ${pinned} · UNRESOLVED ${unresolved} · INNER ${inner} · LETTER ${letters} · WRITING ${writing} · WINDOW ${windowed} · RESOLVED ${resolved} · SETTLED ${digested}`;
 }
 
 function buildFilters() {
@@ -4369,8 +4371,8 @@ function filterBuckets(buckets) {
   if (currentFilter === 'feel') return buckets.filter(b => b.type === 'feel');
   if (currentFilter === 'window') return buckets.filter(b => bucketFacets(b).includes('window'));
   if (currentFilter === 'inner') return buckets.filter(b => bucketFacets(b).includes('inner'));
-  if (currentFilter === 'dynamic') return buckets.filter(b => b.type === 'dynamic' && !b.resolved && !b.digested && !bucketFacets(b).some(d => ['window','inner','letter','letter_jiajia','writing','private'].includes(d)));
-  if (currentFilter === 'unresolved') return buckets.filter(b => !b.resolved && b.type !== 'permanent' && !b.pinned);
+  if (currentFilter === 'dynamic') return buckets.filter(b => b.type === 'dynamic' && !b.resolved && !b.digested && !isUnresolvedBucket(b) && !bucketFacets(b).some(d => ['window','inner','letter','letter_jiajia','writing','private'].includes(d)));
+  if (currentFilter === 'unresolved') return buckets.filter(b => isUnresolvedBucket(b));
   if (currentFilter === 'digested') return buckets.filter(b => b.digested || b.resolved);
   if (currentFilter === 'letter') return buckets.filter(b => bucketFacets(b).some(d => d === 'letter' || d === 'letter_jiajia'));
   if (currentFilter === 'writing') return buckets.filter(b => bucketFacets(b).includes('writing'));
@@ -4654,6 +4656,11 @@ function normalizeTags(value) {
 
 function bucketFacets(bucket) {
   return [...normalizeTags(bucket.domain), ...normalizeTags(bucket.tags)].map(value => value.toLowerCase());
+}
+
+function isUnresolvedBucket(bucket) {
+  const marks = bucket?.marks || {};
+  return Boolean(bucket?.unresolved) || bucketFacets(bucket).includes('unresolved') || finiteNumber(marks['悬置']) > 0;
 }
 
 function finiteNumber(value, fallback = 0) {

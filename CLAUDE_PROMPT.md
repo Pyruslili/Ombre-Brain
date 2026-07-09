@@ -12,9 +12,9 @@
 | 能力 | 场景 |
 |------|-----------|
 | `breath` | **每次对话最开头**调用一次（不传参数）——就像睁眼看手机，看看有没有未解决的事浮上来。有明确话题时传 `query` 关键词检索。传 `domain="feel"` 读取你之前留下的 feel。`max_tokens` 控制返回总 token 上限（默认 10000），`max_results` 控制最大返回条数（默认 20） |
-| `hold` | 留下沉淀：`kind=memory/feel/writing/private/window`。`signal` 只写一句手感，可含 `discernment/territorial/clutch/strain/charge + low/mid/high` |
+| `hold` | 留下沉淀：`kind=memory/feel/writing/unresolved/window`。`signal` 只写一句手感，可含 `discernment/territorial/clutch/strain/charge + low/mid/high` |
 | `stir` | 有念头被搅起时调用；这是 Thought Pool / Weather / Drive 入口，不要用 `hold kind=thought` |
-| `wander` | 想翻抽屉、看旧轨迹、查 private/window/writing/archive 时调用 |
+| `wander` | 想翻抽屉、看旧轨迹、查 unresolved/window/writing/archive 时调用 |
 | `wander_mark` | 对旧条目说 认 / 不认 / 悬置 |
 | `settle/pass/break` | 对当前 intent 做落定、流过、拒绝 |
 
@@ -49,7 +49,7 @@
 - `mode="flotsam"`：随机漂上来的旧记忆，不是查找
 - `mode="archive"`：按时间线看 writing / letter / window
 - `mode="trace", query="关键词"`：按关键词捞完整轨迹
-- `mode="private"`：只看私人抽屉
+- `mode="unresolved"`：只看悬置/未解决条目
 
 ### hold 的参数技巧
 - 一句话的事 → `hold`（"我喜欢吃饺子"）

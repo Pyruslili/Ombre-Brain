@@ -16,8 +16,8 @@ from __future__ import annotations
 #     暴露 9 个 MCP 工具：
 #       breath — Surface unresolved memories or search by keyword
 #                浮现未解决记忆 或 按关键词检索
-#       hold   — Store memory/feel/writing/private/window with optional signal hints
-#                存储记忆/感受/写作/私人/窗口，并可附轻量信号
+#       hold   — Store memory/feel/writing/unresolved/window with optional signal hints
+#                存储记忆/感受/写作/悬置/窗口，并可附轻量信号
 #       wander / wander_mark — Browse drawers and mark old entries
 #                抽屉漫游与旧条目标记
 #       stir / settle / pass / break / undercurrent — Weather and drive controls
@@ -939,6 +939,12 @@ def _is_private_bucket(bucket: dict, mark_rows: list[dict]) -> bool:
     return _guess_wander_domain(bucket, mark_rows) == "private"
 
 
+def _is_unresolved_bucket(bucket: dict, mark_rows: list[dict] = None) -> bool:
+    meta = bucket.get("metadata", {})
+    labels = _bucket_domains(meta) | _bucket_tags(meta)
+    return "unresolved" in labels or _mark_counts(mark_rows or [])["悬置"] > 0
+
+
 # Domains that should not surface in breath/dream — they have their own wander modes
 _WANDER_ONLY_DOMAINS = {"letter", "letter_jiajia", "writing", "window", "private"}
 
@@ -1046,14 +1052,14 @@ def _analyzer_entry_type(bucket: dict, mark_rows: list[dict]) -> str:
     domains = _bucket_domains(meta)
     tags = _bucket_tags(meta)
     labels = domains | tags
+    if _is_unresolved_bucket(bucket, mark_rows):
+        return "unresolved"
     if labels & {"letter", "letter_jiajia"}:
         return "letter"
     if "writing" in labels:
         return "writing"
     if "window" in labels:
         return "window"
-    if _mark_counts(mark_rows)["悬置"] > 0:
-        return "unresolved"
     if btype == "archived":
         return ""
     if not _is_settled_bucket(bucket) and _guess_wander_domain(bucket, mark_rows) == "memory":
@@ -3040,7 +3046,7 @@ async def hold(
     strain: str = "",
     charge: str = "",
 ) -> str:
-    """写入长期沉淀。kind=memory/feel/writing/private/window；tags/chord可选；drive/drives可写主副驱动和强度；Signal填0-1：discernment皱眉辨认，territorial边界占位，clutch靠近抓力，strain绷紧压力，charge想动亮起。"""
+    """写入长期沉淀。kind=memory/feel/writing/unresolved/window；tags/chord可选；drive/drives可写主副驱动和强度；Signal填0-1：discernment皱眉辨认，territorial边界占位，clutch靠近抓力，strain绷紧压力，charge想动亮起。"""
     await decay_engine.ensure_started()
 
     # --- Input validation / 输入校验 ---
@@ -3048,9 +3054,9 @@ async def hold(
         return "内容为空，无法存储。"
 
     normalized_kind = (kind or "").strip().lower() or "memory"
-    valid_kinds = {"memory", "feel", "writing", "private", "window"}
+    valid_kinds = {"memory", "feel", "writing", "unresolved", "window"}
     if normalized_kind not in valid_kinds:
-        return f"kind无效：{normalized_kind}。可用: memory/feel/writing/private/window。念头请用 stir，不要用 hold。"
+        return f"kind无效：{normalized_kind}。可用: memory/feel/writing/unresolved/window。念头请用 stir，不要用 hold。"
 
     importance = max(1, min(10, importance))
     extra_tags = [t.strip() for t in tags.split(",") if t.strip()]
@@ -3108,8 +3114,8 @@ async def hold(
 
     all_tags = list(dict.fromkeys(auto_tags + extra_tags))
 
-    # --- Writing/private/window: skip merge, create directly ---
-    _DIRECT_DOMAINS = {"writing", "window", "private"}
+    # --- Drawer kinds: skip merge, create directly ---
+    _DIRECT_DOMAINS = {"writing", "window", "unresolved"}
     if kind_domain and set(kind_domain) & _DIRECT_DOMAINS:
         bucket_id = await bucket_mgr.create(
             content=content,
@@ -3388,11 +3394,11 @@ async def pulse(include_archive: bool = False) -> str:
 
 @mcp.tool()
 async def wander(mode: str, query: str = "", limit: int = 12) -> str:
-    """抽屉漫游。mode=flotsam/archive/letter/writing/window/unresolved/inner/private。"""
+    """抽屉漫游。mode=flotsam/archive/letter/writing/window/unresolved/inner。"""
     mode = (mode or "").strip().lower()
-    valid_modes = {"flotsam", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "private", "trace"}
+    valid_modes = {"flotsam", "archive", "letter", "writing", "letter_jiajia", "window", "unresolved", "inner", "trace"}
     if mode not in valid_modes:
-        return "mode 必须是 flotsam / archive / letter / writing / letter_jiajia / window / unresolved / inner / private。全量关键词轨迹用 trace。"
+        return "mode 必须是 flotsam / archive / letter / writing / letter_jiajia / window / unresolved / inner。全量关键词轨迹用 trace。"
 
     if mode == "trace" and not (query or "").strip():
         return "trace 模式要带 query——这是按关键词捞全部类型的轨迹，不是随便漂(那个用 flotsam)。"
@@ -3435,8 +3441,6 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
         return any(term in haystack for term in q_terms)
 
     def visible(bucket: dict) -> bool:
-        if mode == "private":
-            return True
         return not _is_private_bucket(bucket, marks_by_bucket.get(bucket.get("id", ""), []))
 
     def is_settled(bucket: dict) -> bool:
@@ -3541,7 +3545,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
     if mode == "unresolved":
         selected = [
             b for b in buckets
-            if _mark_counts(marks_by_bucket.get(b.get("id", ""), []))["悬置"] > 0
+            if _is_unresolved_bucket(b, marks_by_bucket.get(b.get("id", ""), []))
         ]
         selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
         if not selected:
@@ -3557,7 +3561,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
         def _type_label(b: dict) -> str:
             meta = b.get("metadata", {})
             mark_rows = marks_by_bucket.get(b.get("id", ""), [])
-            unresolved = _mark_counts(mark_rows)["悬置"] > 0
+            unresolved = _is_unresolved_bucket(b, mark_rows)
             if str(meta.get("type", "")).lower() == "feel":
                 base = "feel"
             else:
@@ -3573,7 +3577,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
                     base = "window"
                 else:
                     base = "memory"
-            if unresolved and base == "memory":
+            if unresolved and base != "feel":
                 base = "unresolved"
             # 原本是letter/writing/window,但已经被认够次数晋升inner——
             # 两个标签都要看见,不能被_guess_wander_domain的优先级collapse掉
@@ -3619,18 +3623,7 @@ async def wander(mode: str, query: str = "", limit: int = 12) -> str:
             for b in selected
         )
 
-    selected = [
-        b for b in all_buckets
-        if matches_query(b)
-        and _is_private_bucket(b, marks_by_bucket.get(b.get("id", ""), []))
-    ]
-    selected.sort(key=lambda b: b.get("metadata", {}).get("created", ""))
-    if not selected:
-        return "私人抽屉是空的。"
-    return "=== Private Drawer / Nox Only ===\n" + "\n---\n".join(
-        _format_wander_entry(b, marks_by_bucket.get(b.get("id", ""), []), include_full_content=True)
-        for b in selected
-    )
+    return "mode 必须是 flotsam / archive / letter / writing / letter_jiajia / window / unresolved / inner。全量关键词轨迹用 trace。"
 
 
 @mcp.tool(name="trace")
@@ -3900,15 +3893,20 @@ async def api_buckets(request):
     if err: return err
     try:
         all_buckets = await bucket_mgr.list_all(include_archive=True)
+        marks_by_bucket = _load_all_marks()
         result = []
         for b in all_buckets:
             meta = b.get("metadata", {})
+            mark_rows = marks_by_bucket.get(b["id"], [])
+            mark_counts = _mark_counts(mark_rows)
             result.append({
                 "id": b["id"],
                 "name": meta.get("name", b["id"]),
                 "type": meta.get("type", "dynamic"),
                 "domain": meta.get("domain", []),
                 "tags": meta.get("tags", []),
+                "marks": {"认": mark_counts["认"], "不认": mark_counts["不认"], "悬置": mark_counts["悬置"]},
+                "unresolved": _is_unresolved_bucket(b, mark_rows),
                 "chord": meta.get("chord", ""),
                 "signal": meta.get("signal", ""),
                 "signal_hints": meta.get("signal_hints", {}),

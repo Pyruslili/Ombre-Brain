@@ -29,6 +29,8 @@ def test_wander_only_filter_checks_domain_and_tags(tmp_path, monkeypatch, test_c
     assert server._is_wander_only_bucket({"metadata": {"domain": [], "tags": ["letter_jiajia"]}})
     assert not server._is_wander_only_bucket({"metadata": {"domain": ["memory"], "tags": ["daily"]}})
     assert not server._is_wander_only_bucket({"metadata": {"domain": ["unresolved"], "tags": []}})
+    assert server._is_unresolved_bucket({"metadata": {"domain": ["unresolved"], "tags": []}})
+    assert server._is_unresolved_bucket({"metadata": {"domain": ["memory"], "tags": []}}, [{"mark": "悬置"}])
     assert server._breath_memory_candidates([
         {"id": "u1", "content": "悬而未决", "metadata": {"type": "dynamic", "domain": ["unresolved"], "tags": []}}
     ])[0]["id"] == "u1"

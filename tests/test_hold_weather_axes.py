@@ -21,6 +21,18 @@ def test_hold_tool_signature_stays_lean():
     assert "created_at" not in arg_names
 
 
+def test_hold_kind_help_exposes_unresolved_not_private():
+    tree = ast.parse(Path("server.py").read_text(encoding="utf-8"))
+    hold_node = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == "hold"
+    )
+    doc = ast.get_docstring(hold_node) or ""
+
+    assert "unresolved" in doc
+    assert "private" not in doc
+
+
 def test_breath_tool_signature_stays_zero_arg():
     tree = ast.parse(Path("server.py").read_text(encoding="utf-8"))
     breath_node = next(

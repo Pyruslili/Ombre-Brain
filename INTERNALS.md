@@ -97,7 +97,7 @@
 **`hold`** — 五种 kind：
 - `memory`：普通记忆，自动分析、合并或新建 dynamic 桶
 - `feel`：第一人称感受，直接存为 `feel` 类型桶；`feel=True` 旧参数兼容为 `kind=feel`
-- `writing` / `private` / `window`：直接建桶，不合并
+- `writing` / `unresolved` / `window`：直接建桶，不合并
 - `signal` 是轻量手感贴纸，只识别 `discernment/territorial/clutch/strain/charge` 和 `low/mid/high`，不要求模型写分析报告
 
 **`stir`** — 念头入口：
