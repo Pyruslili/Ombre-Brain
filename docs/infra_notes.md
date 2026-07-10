@@ -1,5 +1,12 @@
 # Infra Notes
 
+## 2026-07-10 Possessiveness caused fast high Shadow / duplicate feel weather path
+
+- Diagnosis: the observed fast Shadow rise/fall matched the 2+2 `dialogue_residue` possessiveness path, not a new feel. A single semantic event could write dialogue Shadow, create a shadow crystal, and create a possessiveness event spike with only a `0.5h` half-life.
+- Fix: possessiveness event spike now has a `4h` half-life; dialogue Shadow component cap is `0.10`; crystal-to-NAPA Shadow is reduced from a `0.18` cap to `0.08` with lower heat/hardness coefficients. Crystal still owns Gravity/texture/ledger semantics.
+- Feel cleanup: removed the `feel` weather component and disabled immediate hold-time Drive/Chord weather calls. Existing persisted feel residue is dropped when state normalizes against the new component schema. Feel entries still participate in the selected full-memory analyzer.
+- Analyzer exclusivity: `NOX_MEMORY_ANALYZER=dp|cli` (default `dp`) selects the only permitted full-memory analyzer. `/api/analyzer/mode` exposes the selection; inactive DP endpoint or mismatched `dp_memory` / `analyze_nocturne_entry` feed returns HTTP 409.
+
 ## 2026-07-10 Chord Chemistry core compressed around 0.5
 
 - Symptom: `charge / clutch / strain` hovered near the middle and almost never produced real highs or lows, so Atmosphere variants changed names without gaining motion.

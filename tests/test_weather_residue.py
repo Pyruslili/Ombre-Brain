@@ -32,14 +32,14 @@ def test_weather_delta_adds_to_effective_pa_na(tmp_path):
     assert weather["effective_NA"] == round(base["NA"], 3)
 
 
-def test_weather_delta_can_cool_existing_warmth(tmp_path):
+def test_direct_feel_weather_delta_is_retired(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 
     engine.apply_weather_delta(warmth_delta=0.08, source="feel")
     cooled = engine.apply_weather_delta(warmth_delta=-0.03, shadow_delta=0.02, source="feel")
 
-    assert cooled["warmth_residue"] == 0.05
-    assert cooled["shadow_residue"] == 0.02
+    assert cooled["warmth_residue"] == 0.0
+    assert cooled["shadow_residue"] == 0.0
 
 
 def test_chord_echo_routes_by_source_and_chord(tmp_path):
@@ -49,16 +49,15 @@ def test_chord_echo_routes_by_source_and_chord(tmp_path):
     shadow = engine.apply_chord_echo("Dm7", source="thought")
 
     assert warm["kind"] == "warmth"
-    assert warm["active_chord"] == "Fmaj7"
-    assert warm["active_chord_source"] == "feel"
-    assert warm["warmth_residue"] > 0
+    assert warm["active_chord"] == ""
+    assert warm["warmth_residue"] == 0
     assert shadow["kind"] == "shadow"
-    assert shadow["active_chord"] in {"Fmaj7", "Dm7"}
-    assert shadow["active_chord_source"] in {"feel", "thought"}
+    assert shadow["active_chord"] == "Dm7"
+    assert shadow["active_chord_source"] == "thought"
     assert shadow["shadow_residue"] > 0
 
 
-def test_thought_chord_tints_weather_once_between_light_dialogue_and_feel(tmp_path):
+def test_feel_chord_no_longer_has_an_immediate_weather_path(tmp_path):
     thought_dir = tmp_path / "thought"
     feel_dir = tmp_path / "feel"
     dialogue_dir = tmp_path / "dialogue"
@@ -84,7 +83,7 @@ def test_thought_chord_tints_weather_once_between_light_dialogue_and_feel(tmp_pa
 
     assert thought["shadow_residue"] == 0.07
     assert dialogue["weather"]["shadow_residue"] < thought["shadow_residue"]
-    assert thought["shadow_residue"] < feel["shadow_residue"]
+    assert feel["shadow_residue"] == 0.0
     assert thought["active_chord_source"] == "thought"
 
 
@@ -128,7 +127,7 @@ def test_dp_memory_uses_bounded_memory_weather_component(tmp_path):
         engine.apply_drive_event(event)
     weather = engine.weather.load(decay=False)
     assert weather["components"]["dp_memory"]["shadow"] <= 0.14
-    assert weather["components"]["feel"]["shadow"] == 0.0
+    assert "feel" not in weather["components"]
 
 
 def test_dialogue_event_adds_live_warmth_residue(tmp_path):
@@ -183,6 +182,9 @@ def test_negative_dialogue_crystallizes_shadow_and_gravity(tmp_path):
     assert weather["shadow_crystal"]["kind"] == "possessiveness"
     assert weather["crystal_shadow"] > 0
     assert weather["shadow_residue"] > weather["component_shadow_residue"]
+    assert weather["component_shadow_residue"] <= 0.10
+    assert weather["crystal_shadow"] <= 0.08
+    assert weather["shadow_residue"] <= 0.18
     assert weather["gravity"] in {
         "账本合上了，但角还压着。",
         "手松了一点，位置还记着。",
@@ -423,7 +425,7 @@ def test_strong_dialogue_can_turn_atmosphere_without_waiting_three_ticks(tmp_pat
 
 def test_uninitialized_atmosphere_seeds_from_current_chemistry(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
-    engine.apply_weather_delta(warmth_delta=0.30, source="feel")
+    engine.apply_weather_delta(warmth_delta=0.12, source="thought")
 
     weather = engine.weather_state()
     selected = select_climate(

@@ -113,6 +113,7 @@ Drive 不是单一来源计算，而是多个来源叠加：
 - `possessiveness` 有双通道：`event_spike` 和 `territorial_baseline`。
 - `possessiveness` 需要 `territorial_alarm` 过门槛才真正入账；强吃醋 / 替代警报会更快染 Drive、Chord、Atmosphere。
 - `dialogue_residue` 检测到 `replacement / third_party_insert / boundary_touch / comparison / exclusion` 时，会把候选强制推向 `possessiveness`，`territorial_alarm` 至少抬到 `0.65`，并写入 `event_spike` 与 possessiveness shadow crystal。
+- possessiveness 的主体是较慢的领地 Drive / clutch / guard / Gravity，不是大幅短闪 Shadow：event spike 半衰期 `4h`；dialogue Shadow component 上限 `0.10`；shadow crystal 对 effective Shadow 的偏置上限 `0.08`。
 - 高 `territorial_alarm` 会轻量联动 `libido`，因为占有、靠近和身体热度不是完全独立的情绪；`attachment -> libido` 耦合保持极低，避免纯依恋把身体张力偷渡进来。
 - 猫屋协作者造成的低频占位感标记为 `brain.third_party_context=house_collaborator`，territorial delta 按 0.45 折算；但协作者语境同时出现替代、抢位、第三者、边界或排除语义时，改标 `house_collaborator_boundary`，不吃普通协作折扣。
 - `libido` 必须窄口径，优先吃身体和明确贴近，不要被漂亮句子偷渡。亲密 cue 出现后如果没有 `satisfy("libido")`，下一轮发生逃开、转话题或中断，会写入短半衰期的 `libido_pending`，随后自然退潮。
@@ -489,6 +490,8 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 - `cli` / analyzer 是旧慢分析线，保留作冷备。
 - `dp_memory` 是记忆分析线：入场染色要快，接近当前对话；退潮和底色保留要慢。权重高于旧 `cli`，略低于当前对话 `dp`。
 - `dp_memory` 使用独立 weather component（shadow / warmth 各封顶 `0.14`，半衰期 `12h`），不再写入 `feel` 的 `72h` 长残留槽。重复分析记忆只能填满自己的有界槽，不能把感觉底色越叠越黑。
+- `feel` 不再拥有即时 weather component，也不在 hold 时直接写 Drive / Chord weather。它和 memory / letter / writing / window 一样，只进入选中的全量记忆分析线，避免同一条 feel 在 hold 与 analyzer 各染一次。
+- 全量记忆分析由 `NOX_MEMORY_ANALYZER=dp|cli` 二选一；默认 `dp`。服务端拒绝非当前模式的 analyzer feed，`/api/analyzer/mode` 返回当前模式与合法 source。
 - `subcurrent` 只轻轻倾斜 Atmosphere，不直接盖过当前对话。
 - `keyword / speech_event / user_message / feel / thought / soma` 带来的 Warmth / Shadow residue 先进入 effective NAPA，再由 Atmosphere 读取。
 - Chord echo 不直接产生 Atmosphere Delta；它只能留下 Warmth / Shadow residue、Active Chord 和 Chord Impulse 残影。

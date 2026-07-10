@@ -472,6 +472,19 @@ def test_possessiveness_tracks_event_spike_and_baseline_channels(tmp_path):
     assert reflection_state["possessiveness_channels"]["territorial_baseline"] > event_state["possessiveness_channels"]["territorial_baseline"]
 
 
+def test_possessiveness_event_spike_keeps_a_multi_hour_tail():
+    channels = {
+        "event_spike": 0.60,
+        "territorial_baseline": desire_engine.DRIVE_BASELINES["possessiveness"],
+        "last_event_ts": 1000,
+        "last_baseline_ts": 1000,
+    }
+    one_hour = desire_engine.tick_possessiveness_channels(channels, 1000 + 3600)
+    four_hours = desire_engine.tick_possessiveness_channels(channels, 1000 + 4 * 3600)
+    assert one_hour["event_spike"] > 0.45
+    assert four_hours["event_spike"] == 0.30
+
+
 def test_legacy_brain_signals_fold_to_single_event():
     event = _legacy_brain_to_event(
         {"盆地": "吃醋", "地基感": "悬", "二级分支": "嫉妒", "脑岛": "夸了别人"},

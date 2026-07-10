@@ -129,7 +129,7 @@ LIBIDO_PENDING_HALFLIFE_HOURS = 2.0
 LIBIDO_PENDING_ARM_WINDOW_SEC = 90 * 60
 LIBIDO_PENDING_MIN = 0.06
 LIBIDO_PENDING_MAX = 0.18
-POSSESSIVENESS_EVENT_HALFLIFE_HOURS = 0.5
+POSSESSIVENESS_EVENT_HALFLIFE_HOURS = 4.0
 POSSESSIVENESS_BASELINE_HALFLIFE_HOURS = 24.0
 
 
@@ -326,10 +326,9 @@ LONGING_FEELINGS = {
 # 独立持久化的PA/NA余波；只叠到展示，不反推drive。
 WEATHER_COMPONENTS = {
     "keyword": {"halflife_hours": 4.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
-    "dialogue": {"halflife_hours": 2.0, "warmth_cap": 0.18, "shadow_cap": 0.18},
+    "dialogue": {"halflife_hours": 2.0, "warmth_cap": 0.18, "shadow_cap": 0.10},
     "soma": {"halflife_hours": 0.75, "warmth_cap": 0.16, "shadow_cap": 0.16},
     "thought": {"halflife_hours": 8.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
-    "feel": {"halflife_hours": 72.0, "warmth_cap": 0.35, "shadow_cap": 0.35},
     # Memory DP is a weather tint, not a durable feeling.  Keeping it in the
     # feel bucket made every analyzed memory refresh the same 72-hour residue.
     "dp_memory": {"halflife_hours": 12.0, "warmth_cap": 0.14, "shadow_cap": 0.14},
@@ -337,9 +336,9 @@ WEATHER_COMPONENTS = {
 WEATHER_WARM_CHORDS = {"Dmaj7", "Amaj7", "Fmaj7", "Fmaj7#11", "Gmaj7"}
 WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim", "Bm7b5"}
 WEATHER_LIMINAL_CHORDS = {"C6", "Am7", "Gsus4"}
-WEATHER_CHORD_DELTAS = {"feel": 0.075, "soma": 0.08, "thought": 0.07}
-WEATHER_CHORD_IMPULSE_STRENGTH = {"feel": 0.72, "soma": 1.0, "thought": 0.72}
-WEATHER_CHORD_IMPULSE_HALFLIFE_SEC = {"feel": 12 * 3600, "soma": 45 * 60, "thought": 4 * 3600}
+WEATHER_CHORD_DELTAS = {"soma": 0.08, "thought": 0.07}
+WEATHER_CHORD_IMPULSE_STRENGTH = {"soma": 1.0, "thought": 0.72}
+WEATHER_CHORD_IMPULSE_HALFLIFE_SEC = {"soma": 45 * 60, "thought": 4 * 3600}
 WEATHER_ACTIVE_CHORD_THRESHOLD = 0.12
 WEATHER_MAX_CHORD_IMPULSES = 16
 WEATHER_SOOTHE_SHADOW_THRESHOLD = 0.08
@@ -496,7 +495,6 @@ DRIVE_EVENT_WEATHER_SOURCES = {
     "analyze_nocturne_entry",
     "dialogue_residue",
     "dp_memory",
-    "feel",
     "legacy_feed",
     "speech_event",
     "user_message",
@@ -1027,7 +1025,9 @@ def _shadow_crystal_readout(crystals: list | None) -> dict:
     if not items:
         return {"shadow": 0.0, "gravity": "", "active": None, "items": []}
     active = items[0]
-    shadow = _clamp(sum(x["heat"] * 0.75 + x["hardness"] * 0.20 for x in items), 0.0, 0.18)
+    # Crystals are primarily Gravity/texture and switch inertia. They only tint
+    # NAPA slightly; possessiveness must not become a second large Shadow tank.
+    shadow = _clamp(sum(x["heat"] * 0.32 + x["hardness"] * 0.10 for x in items), 0.0, 0.08)
     lines = WEATHER_NEGATIVE_CRYSTAL_GRAVITY.get(active["kind"], WEATHER_NEGATIVE_CRYSTAL_GRAVITY["stress"])
     seed = active["id"] or active["kind"]
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
@@ -2487,7 +2487,11 @@ class WeatherResidueStore:
         kind = weather_chord_kind(chord)
         if not kind:
             return self.load(now, decay=True)
-        source = source if source in ("feel", "soma", "thought") else "thought"
+        # Feel entries are analyzed once by the selected full-memory analyzer;
+        # holding a feel must not create a second immediate weather path.
+        if source == "feel":
+            return self.load(now, decay=True)
+        source = source if source in ("soma", "thought") else "thought"
         delta = WEATHER_CHORD_DELTAS[source]
         warmth_delta = delta if kind == "warmth" else (delta * 0.5 if kind == "liminal" else 0.0)
         shadow_delta = delta if kind == "shadow" else (delta * 0.5 if kind == "liminal" else 0.0)
@@ -4301,6 +4305,10 @@ class DesireEngine:
 
     def apply_weather_delta(self, warmth_delta: float = 0.0, shadow_delta: float = 0.0,
                             source: str = "keyword", soothe: bool = False) -> dict:
+        if str(source or "").strip() == "feel":
+            warmth_delta = 0.0
+            shadow_delta = 0.0
+            soothe = False
         state = self.weather.apply_delta(
             warmth_delta=warmth_delta,
             shadow_delta=shadow_delta,
@@ -4522,7 +4530,7 @@ class DesireEngine:
             + 0.140 * discernment
             + 0.095 * energy
             + (0.070 if primary in {"stress", "fatigue"} else 0.0)
-            + (0.085 * territorial_for_delta if primary == "possessiveness" else 0.0)
+            + (0.025 * territorial_for_delta if primary == "possessiveness" else 0.0)
             + (0.060 if grounding == "悬" else 0.0)
             + (0.090 if grounding == "空" else 0.0)
         ) * weather_scale

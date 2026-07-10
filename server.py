@@ -144,6 +144,10 @@ dehydrator = Dehydrator(config)                      # Dehydrator / 脱水器
 decay_engine = DecayEngine(config, bucket_mgr)       # Decay engine / 衰减引擎
 import_engine = ImportEngine(config, bucket_mgr, dehydrator, embedding_engine)
 BUCKETS_DIR = config["buckets_dir"]
+MEMORY_ANALYZER_MODE = str(os.environ.get("NOX_MEMORY_ANALYZER", "dp") or "dp").strip().lower()
+if MEMORY_ANALYZER_MODE not in {"dp", "cli"}:
+    logger.warning("Invalid NOX_MEMORY_ANALYZER=%r; falling back to dp", MEMORY_ANALYZER_MODE)
+    MEMORY_ANALYZER_MODE = "dp"
 catroom_store = CatroomStore(BUCKETS_DIR)
 room_store = RoomStore(BUCKETS_DIR)
 ROOM_TOPIC_TO_CAT = {
@@ -3089,7 +3093,6 @@ async def hold(
             signal_hints=signal_hints or None,
             drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, bucket_id)
         # --- background: don't block response on Gemini latency ---
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         suffix = f" signal_hints={signal_hints}" if signal_hints else ""
@@ -3132,7 +3135,6 @@ async def hold(
             signal_hints=signal_hints or None,
             drive_tags=drive_tags or None,
         )
-        _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, bucket_id)
         asyncio.ensure_future(embedding_engine.generate_and_store(bucket_id, content))
         return f"新建→{bucket_id} {','.join(final_domain)}"
 
@@ -3150,7 +3152,6 @@ async def hold(
         drive_tags=drive_tags or None,
     )
 
-    _apply_hold_weather(content, normalized_kind, chord, signal_hints, drive_tags, result_name)
     action = "合并→" if is_merged else "新建→"
     return f"{action}{result_name} {','.join(final_domain)}"
 
@@ -5624,6 +5625,19 @@ async def api_desire_feed(request):
     except Exception:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
 
+    requested_source = str(body.get("source") or "").strip()
+    requested_memory_mode = (
+        "dp" if requested_source == "dp_memory"
+        else "cli" if requested_source == "analyze_nocturne_entry"
+        else ""
+    )
+    if requested_memory_mode and requested_memory_mode != MEMORY_ANALYZER_MODE:
+        return JSONResponse({
+            "error": "inactive memory analyzer",
+            "active": MEMORY_ANALYZER_MODE,
+            "rejected_source": requested_source,
+        }, status_code=409)
+
     thoughts = body.get("thoughts", [])
 
     # --- 批量涌入节流 ---
@@ -5807,6 +5821,15 @@ async def api_soma_state(request):
                            headers={"Access-Control-Allow-Origin": "*"})
 
 
+@mcp.custom_route("/api/analyzer/mode", methods=["GET"])
+async def api_analyzer_mode(request):
+    from starlette.responses import JSONResponse
+    return JSONResponse({
+        "mode": MEMORY_ANALYZER_MODE,
+        "source": "dp_memory" if MEMORY_ANALYZER_MODE == "dp" else "analyze_nocturne_entry",
+    }, headers={"Access-Control-Allow-Origin": "*"})
+
+
 @mcp.custom_route("/api/analyzer/entries", methods=["GET"])
 async def api_analyzer_entries(request):
     """
@@ -5848,7 +5871,7 @@ async def api_analyzer_entries(request):
                 "domain": meta.get("domain", []),
                 "drive_tags": meta.get("drive_tags", {}),
                 "signal_hints": meta.get("signal_hints", {}),
-                "source": "analyze_nocturne_entry",
+                "source": "dp_memory" if MEMORY_ANALYZER_MODE == "dp" else "analyze_nocturne_entry",
                 "source_bucket": bid,
                 "source_type": entry_type,
                 "source_created": meta.get("created", ""),
@@ -5870,6 +5893,9 @@ async def api_analyzer_dp_memory(request):
     the same entry shape from /api/analyzer/entries plus the old CLI preference.
     """
     from starlette.responses import JSONResponse
+    if MEMORY_ANALYZER_MODE != "dp":
+        return JSONResponse({"error": "dp memory analyzer disabled", "active": MEMORY_ANALYZER_MODE},
+                           status_code=409, headers={"Access-Control-Allow-Origin": "*"})
     try:
         body = await request.json()
     except Exception:
