@@ -545,6 +545,7 @@ def _compact_desire_state(state: dict) -> dict:
             "strength": t.get("strength"),
             "source": t.get("source"),
             "text": _short_state_text(t.get("text"), 140),
+            "born_at": t.get("born_at"),
         }
 
     def _compact_event(e: dict) -> dict:
@@ -5996,13 +5997,18 @@ async def api_sanctum_summary(request):
                 if ts and ts > str(latest.get(kind) or ""):
                     latest[kind] = ts
 
-        # latent notes pool
+        # latent notes pool — 与 dashboard 对齐：draft + approved（不含 used / 过期）
         latent_count = 0
         try:
             data = _load_latent_notes()
             if _prune_expired_latent_notes(data):
                 _save_latent_notes(data)
-            latent_count = len(data.get("notes") or [])
+            notes = data.get("notes") or []
+            latent_count = sum(
+                1
+                for n in notes
+                if isinstance(n, dict) and str(n.get("status") or "") in {"draft", "approved"}
+            )
         except Exception:
             latent_count = 0
 
@@ -6028,6 +6034,48 @@ async def api_sanctum_summary(request):
             status_code=500,
             headers={"Access-Control-Allow-Origin": "*"},
         )
+
+
+@mcp.custom_route("/api/sanctum/thought-to-latent", methods=["POST"])
+async def api_sanctum_thought_to_latent(request):
+    """公开：Thought Pool → Latent Notes draft（与 dashboard copyThoughtToLatent 同链路）。"""
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    text = " ".join(str(body.get("dream_line") or body.get("text") or body.get("line") or "").split())
+    if not text:
+        return JSONResponse({"ok": False, "error": "text required"}, status_code=400,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    drive = str(body.get("drive") or body.get("drive_tag") or "").strip()
+    note_type = "outward" if drive in {"social", "curiosity"} else "inward"
+    if body.get("note_type"):
+        note_type = _normalize_latent_note_type(body.get("note_type"))
+    ts = _latent_note_ts()
+    note = {
+        "id": "latent_manual_" + secrets.token_hex(8),
+        "status": "draft",
+        "pinned": False,
+        "note_type": note_type,
+        "drive_tag": _normalize_latent_drive_tag(drive, note_type),
+        "source_bucket_id": "",
+        "source_kind": "thought_pool",
+        "source_title": str(body.get("source_title") or "Thought Pool").strip()[:80],
+        "source_created": "",
+        "source_fragment": text[:200],
+        "dream_line": text[:120],
+        "model": "sanctum",
+        "created_at": ts,
+        "updated_at": ts,
+        "source_tid": str(body.get("tid") or "").strip(),
+    }
+    data = _load_latent_notes()
+    data["notes"] = [note] + data.get("notes", [])
+    _touch_latent_note_data(data)
+    _save_latent_notes(data)
+    return JSONResponse({"ok": True, "note": note}, headers={"Access-Control-Allow-Origin": "*"})
 
 
 # =============================================================
