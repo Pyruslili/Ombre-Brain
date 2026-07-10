@@ -111,6 +111,24 @@ def test_dialogue_atmosphere_weight_leads_cli_underpaint():
     assert ATMOSPHERE_SOURCE_WEIGHTS["dp"] > ATMOSPHERE_SOURCE_WEIGHTS["dp_memory"]
 
 
+def test_dp_memory_uses_bounded_memory_weather_component(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    event = {
+        "schema_version": "drive_event_v2",
+        "source": "dp_memory",
+        "primary_drive": "stress",
+        "intensity": 1.0,
+        "confidence": 1.0,
+        "agency": 1.0,
+        "brain": {"source": "dp_memory", "tension_load": 1.0, "grounding": "悬"},
+    }
+    for _ in range(20):
+        engine.apply_drive_event(event)
+    weather = engine.weather.load(decay=False)
+    assert weather["components"]["dp_memory"]["shadow"] <= 0.14
+    assert weather["components"]["feel"]["shadow"] == 0.0
+
+
 def test_dialogue_event_adds_live_warmth_residue(tmp_path):
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
 
@@ -475,6 +493,30 @@ def test_rain_claims_mixed_warm_shadow_states():
 
     assert selected["label"] == "Rain"
     assert climate_transition_display(atmosphere) == "Warm Rain"
+
+
+def test_rain_display_uses_shadow_bands_instead_of_staying_warm_at_full_shadow():
+    core = {"charge": 0.49, "clutch": 0.60, "strain": 0.53}
+    route = {
+        "vector": "hover",
+        "scores": {"toward_jiajia": 0.20, "toward_house": 0.20, "outward": 0.12,
+                   "inward": 0.28, "guard": 0.22, "hover": 0.72},
+    }
+    texture = atmosphere_texture(core, route)
+
+    def display(shadow):
+        return climate_transition_display({
+            "core": core,
+            "route": route,
+            "texture": texture,
+            "readout": {"warmth": 0.92, "shadow": shadow},
+            "climate": {"current": "Rain", "candidate": "Rain"},
+        })
+
+    assert display(0.60) == "Warm Rain"
+    assert display(0.70) == "Warm Rain"
+    assert display(0.80) == "Heavy Rain"
+    assert display(0.96) == "Heavy Rain"
 
 
 def test_rain_does_not_replace_banked_heat_on_warm_shadow_clutch_inward_mix():

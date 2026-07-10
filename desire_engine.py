@@ -330,6 +330,9 @@ WEATHER_COMPONENTS = {
     "soma": {"halflife_hours": 0.75, "warmth_cap": 0.16, "shadow_cap": 0.16},
     "thought": {"halflife_hours": 8.0, "warmth_cap": 0.12, "shadow_cap": 0.12},
     "feel": {"halflife_hours": 72.0, "warmth_cap": 0.35, "shadow_cap": 0.35},
+    # Memory DP is a weather tint, not a durable feeling.  Keeping it in the
+    # feel bucket made every analyzed memory refresh the same 72-hour residue.
+    "dp_memory": {"halflife_hours": 12.0, "warmth_cap": 0.14, "shadow_cap": 0.14},
 }
 WEATHER_WARM_CHORDS = {"Dmaj7", "Amaj7", "Fmaj7", "Fmaj7#11", "Gmaj7"}
 WEATHER_SHADOW_CHORDS = {"Dm7", "Em7", "F#dim", "Bm7b5"}
@@ -1644,11 +1647,13 @@ def _weather_display_label(atmosphere: dict | None, label: str) -> str:
     warmth = _clamp(float(readout.get("warmth", charge) or charge))
     shadow = _clamp(float(readout.get("shadow", strain) or strain))
     if label == "Rain":
-        if shadow >= 0.62 and warmth <= 0.52:
+        # Warm Rain is the mixed middle band.  At extreme shadow the warmth is
+        # still present, but it no longer gets to cosmetically call the sky warm.
+        if shadow >= 0.78 or (shadow >= 0.62 and warmth <= 0.52):
             return "Heavy Rain"
         if warmth <= 0.42 and shadow >= 0.40:
             return "Cold Rain"
-        if warmth >= 0.56 and shadow >= 0.34 and inward <= 0.50 and guard_route <= 0.46:
+        if 0.34 <= shadow < 0.78 and warmth >= 0.56 and inward <= 0.50 and guard_route <= 0.46:
             return "Warm Rain"
         if clutch >= 0.42 and pull >= 0.32:
             return "Soft Rain"
@@ -4225,7 +4230,11 @@ class DesireEngine:
             soothe=soothe,
         )
         weather_source = str(source or "").strip()
-        atmosphere_source = "dp" if weather_source in {"keyword", "speech_event", "user_message"} else "cli"
+        atmosphere_source = (
+            "dp" if weather_source in {"keyword", "speech_event", "user_message", "dialogue"}
+            else "dp_memory" if weather_source == "dp_memory"
+            else "cli"
+        )
         try:
             weather_delta_size = max(abs(float(warmth_delta or 0.0)), abs(float(shadow_delta or 0.0)))
         except (TypeError, ValueError):
@@ -4389,7 +4398,11 @@ class DesireEngine:
             return {}
 
         source_weight = DRIVE_EVENT_SOURCE_WEIGHTS.get(source, 0.65)
-        weather_source = "dialogue" if source in WEATHER_DIALOGUE_SOURCES else WEATHER_EVENT_SOURCE
+        weather_source = (
+            "dialogue" if source in WEATHER_DIALOGUE_SOURCES
+            else "dp_memory" if source == "dp_memory"
+            else WEATHER_EVENT_SOURCE
+        )
         weather_scale = intensity * confidence * source_weight
         if weather_source == "dialogue":
             weather_scale *= 1.85

@@ -382,6 +382,7 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 - `Low Tide`：退潮、低能、空下来；`warmth / shadow / charge / clutch / toward` 都低。它不是负面，是低色彩空场。
 - `Overcast`：阴云盖住，但还没落下；`shadow` 中高、`warmth` 不高、`inward` 或 `strain` 中等、`charge` 不高。不要把 `warmth` 高 + `shadow` 高默认判成 Overcast。
 - `Rain`：阴影落下来，有湿度，有流动；`warmth` 中高、`shadow` 中高，`strain` 没压成 Pressure，`charge` 没炸成 Static / Storm，`clutch` 或 residue 中等。attachment 场景也可以落 `Warm Rain`。
+- `Warm Rain` 的显示带限定为 `shadow 0.34-0.77`；`shadow >= 0.78` 的 Rain 显示为 `Heavy Rain`，即使 warmth 仍高，也不再用“暖”遮住接近满值的阴影。
 - `Static`：电、噪、卡住；`charge` 高，`strain` 中高，`hover` 或 `clutch` 中高。
 - `Pressure`：压、绷、扣住；`shadow` 高、`strain` 高、`clutch` 高、`guard` 或 `inward` 高。没有高 `strain` 不要叫 Pressure。
 - `Storm`：高阴影 + 高能量 + 高绷紧；必须有 `charge / strain` 的风暴感，不是 `shadow` 高本身。
@@ -483,6 +484,7 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 - `dp` / dialogue 是 live weather vane，负责让天气跟对话风向转。
 - `cli` / analyzer 是旧慢分析线，保留作冷备。
 - `dp_memory` 是记忆分析线：入场染色要快，接近当前对话；退潮和底色保留要慢。权重高于旧 `cli`，略低于当前对话 `dp`。
+- `dp_memory` 使用独立 weather component（shadow / warmth 各封顶 `0.14`，半衰期 `12h`），不再写入 `feel` 的 `72h` 长残留槽。重复分析记忆只能填满自己的有界槽，不能把感觉底色越叠越黑。
 - `subcurrent` 只轻轻倾斜 Atmosphere，不直接盖过当前对话。
 - `keyword / speech_event / user_message / feel / thought / soma` 带来的 Warmth / Shadow residue 先进入 effective NAPA，再由 Atmosphere 读取。
 - Chord echo 不直接产生 Atmosphere Delta；它只能留下 Warmth / Shadow residue、Active Chord 和 Chord Impulse 残影。

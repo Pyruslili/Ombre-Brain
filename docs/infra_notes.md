@@ -1,5 +1,13 @@
 # Infra Notes
 
+## 2026-07-10 DP memory shadow accumulation / Warm Rain extreme-shadow display
+
+- Symptom: no active conflict, but Shadow kept rising; dashboard showed `warmth 0.92 / shadow 0.96` as `Warm Rain`.
+- Cause: non-dialogue `dp_memory` weather deltas fell through to the shared `feel` component (`shadow_cap=0.35`, `halflife=72h`). Repeated memory analysis therefore accumulated as if it were a durable feeling. Weather components and shadow crystals are additive, so the combined residue could reach `0.62` before base NA.
+- Fix: route `dp_memory` into its own bounded component (`cap=0.14`, `halflife=12h`) and preserve `dp_memory` as the Atmosphere source instead of collapsing it to `cli`.
+- Display fix: `Warm Rain` now occupies the mixed `shadow 0.34-0.77` band; Rain at `shadow >= 0.78` displays as `Heavy Rain` regardless of high warmth.
+- Reachability audit: a coarse full-grid sweep reaches all 12 base climates but only 28 display labels. Several documented variants remain effectively unreachable through the full selector because their parent climate loses first; treat that as a separate selector/variant audit rather than loosening every threshold blindly.
+
 ## 2026-07-08 Breath search retired; trace is literal-only
 
 - Symptom: `breath(query=...)` used keyword search, vector similarity, and random resurfacing, so sparse keyword searches could pull unrelated or already settled memories.
