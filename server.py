@@ -6072,10 +6072,72 @@ async def api_sanctum_thought_to_latent(request):
         "source_tid": str(body.get("tid") or "").strip(),
     }
     data = _load_latent_notes()
+    # 同一 tid 已在池里则直接返回，避免重复收藏
+    tid = str(body.get("tid") or "").strip()
+    if tid:
+        for existing in data.get("notes") or []:
+            if (
+                isinstance(existing, dict)
+                and str(existing.get("source_tid") or "") == tid
+                and str(existing.get("source_kind") or "") == "thought_pool"
+                and str(existing.get("status") or "") not in {"deleted", "used"}
+            ):
+                return JSONResponse(
+                    {"ok": True, "note": existing, "already": True},
+                    headers={"Access-Control-Allow-Origin": "*"},
+                )
     data["notes"] = [note] + data.get("notes", [])
     _touch_latent_note_data(data)
     _save_latent_notes(data)
     return JSONResponse({"ok": True, "note": note}, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/sanctum/thought-from-latent", methods=["POST"])
+async def api_sanctum_thought_from_latent(request):
+    """公开：取消 Thought Pool → Latent（按 note_id 或 source_tid 软删除）。"""
+    from starlette.responses import JSONResponse
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "Invalid JSON"}, status_code=400,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    note_id = str(body.get("note_id") or body.get("id") or "").strip()
+    tid = str(body.get("tid") or "").strip()
+    if not note_id and not tid:
+        return JSONResponse({"ok": False, "error": "note_id or tid required"}, status_code=400,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    data = _load_latent_notes()
+    notes = data.get("notes") or []
+    removed: list[dict] = []
+    ts = _latent_note_ts()
+    for note in notes:
+        if not isinstance(note, dict):
+            continue
+        if str(note.get("status") or "") in {"deleted"}:
+            continue
+        hit = False
+        if note_id and str(note.get("id") or "") == note_id:
+            hit = True
+        elif (
+            tid
+            and str(note.get("source_tid") or "") == tid
+            and str(note.get("source_kind") or "") == "thought_pool"
+        ):
+            hit = True
+        if hit:
+            note["status"] = "deleted"
+            note["deleted_at"] = ts
+            note["updated_at"] = ts
+            removed.append(note)
+    if not removed:
+        return JSONResponse({"ok": False, "error": "not found"}, status_code=404,
+                            headers={"Access-Control-Allow-Origin": "*"})
+    _touch_latent_note_data(data)
+    _save_latent_notes(data)
+    return JSONResponse(
+        {"ok": True, "removed": len(removed), "notes": removed},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 # =============================================================
