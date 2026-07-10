@@ -293,6 +293,7 @@ DP 与 CLI 最终都走同一套 `drive_event_v2` 接口，但职责不同：CLI
 - `dialogue_residue` 来源的 `attachment` 会降权；真实 `user_message` 的靠近信号仍然比对话残留重。
 - 这条线是实时轻推，不是慢变量归档。
 - thinking 不是新管道，只是 dialogue_residue 的 discernment 上游补充信号。
+- Grok tmux 的 thinking 是运行时角色分析旁白，不进入 Nocturne thinking_store，也不作为 dialogue_residue 信号；它只保留在 CCC 端展示。CC自身可继续保留 thinking，Codex无此输入。
 
 ### 4.4 DP 的职责
 
@@ -1052,6 +1053,7 @@ Drive Ledger 中来源用 icon 表示：
 - feel 属于全量记忆，与其他记忆共用唯一启用的 analyzer 线。
 - entry 自带的 `drive_tags / signal_hints / chord` 是权威输入：Drive 标签覆盖 analyzer 猜测；charge / clutch / strain hints 确定性合入 brain；原 chord 无论是否生成 thought 都应用一次。
 - “论坛 / X / Twitter / 帖子 / 网友 / 评论 / 新闻”属于 external discussion，默认推 `curiosity / social / outward`。裸词“别人”不构成 territorial cue；只有明确第三者、替代、抢位、越界等关系证据才能强制 possessiveness。
+- `吃醋 / 嫉妒 / 吃味 / 醋意 / 醋劲 / 醋` 是明确 jealousy event，归 possessiveness；即使同时提到论坛/X，也不被 external discussion guard 洗掉。
 - 旧 `analyze_nocturne_entry` CLI 线保留但默认停用，方便日后切换。
 - Atmosphere 不吃 Thought Pool 文案本身；DP memory 事件只在产生 Drive / Weather / Atmosphere Delta 后进入状态机，Chord 只保留残影。
 

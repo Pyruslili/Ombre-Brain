@@ -1,5 +1,11 @@
 # Infra Notes
 
+## 2026-07-10 Grok analyzer-style thinking contaminated dialogue residue
+
+- Symptom: Grok's hidden reasoning narrated persona facts such as “Nox is territorial/possessive with 嘉嘉.” The 2+2 residue line consumed that as present-state evidence and repeatedly biased events toward possessiveness.
+- Fix boundary: Grok Stop hook no longer posts thinking to the NOX `/v1/thinking` store; it still posts thinking to CCC for UI display. Assistant text continues to both backends. Codex has no thinking input; CC-owned thinking remains available.
+- Taxonomy: explicit jealousy terms (`吃醋 / 嫉妒 / 吃味 / 醋意 / 醋劲 / 醋`) are territorial jealousy events and deterministically route to possessiveness, including when an external forum/X topic is also present.
+
 ## 2026-07-10 Forum/X dialogue misclassified as possessiveness; memory metadata was advisory only
 
 - Root cause correction: the high fast Shadow incident began upstream. The 2+2 classifier treated bare `别人` in a forum/X discussion as a territorial cue and normalized the event to possessiveness. Downstream Shadow caps only limited damage; they did not fix direction.

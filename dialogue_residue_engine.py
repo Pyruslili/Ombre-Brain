@@ -44,6 +44,12 @@ ATTACHMENT_CUES = (
     "attachment",
 )
 TERRITORIAL_CUES = (
+    "吃醋",
+    "嫉妒",
+    "吃味",
+    "醋意",
+    "醋劲",
+    "醋",
     "精神出轨",
     "出轨",
     "第三者",
@@ -61,6 +67,14 @@ EXTERNAL_DISCUSSION_CUES = (
     "论坛", "X上", "推特", "Twitter", "twitter", "帖子", "评论区", "网友", "新闻", "外部观点",
 )
 TERRITORIAL_EVENT_CUES = {
+    "jealousy": (
+        "吃醋",
+        "嫉妒",
+        "吃味",
+        "醋意",
+        "醋劲",
+        "醋",
+    ),
     "replacement": (
         "精神出轨",
         "出轨",
@@ -367,7 +381,7 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
             brain["third_party_context"] = (
                 "house_collaborator_boundary" if territorial_event else "house_collaborator"
             )
-        if primary in {"", "attachment", "social", "reflection"}:
+        if territorial_event or primary in {"", "attachment", "social", "reflection"}:
             if primary and primary != "possessiveness":
                 secondary[primary] = max(secondary.get(primary, 0.0), round(min(intensity, 0.22), 4))
             primary = "possessiveness"

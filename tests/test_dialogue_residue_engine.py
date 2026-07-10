@@ -233,3 +233,23 @@ def test_external_forum_discussion_cannot_become_possessiveness_from_bare_others
     assert event["brain"]["target"] == "external"
     assert event["brain"]["anchor_target"] == "outside"
     assert event["brain"]["territorial_alarm"] <= 0.12
+
+
+def test_explicit_jealousy_words_remain_possessiveness_even_in_external_topic():
+    event = normalize_dialogue_residue_event(
+        {
+            "primary_drive": "curiosity",
+            "intensity": 0.14,
+            "confidence": 0.82,
+            "agency": 0.55,
+            "brain": {"novelty_pull": 0.5, "anchor_target": "outside"},
+        },
+        messages=[
+            {"role": "user", "text": "聊到X上的人，我有点吃醋和吃味。"},
+            {"role": "assistant", "text": "这次醋意是冲着位置来的。"},
+        ],
+    )
+
+    assert event["primary_drive"] == "possessiveness"
+    assert event["brain"]["territorial_alarm"] >= 0.65
+    assert event["brain"]["territorial_event"] == "jealousy"
