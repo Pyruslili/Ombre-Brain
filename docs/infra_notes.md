@@ -1,5 +1,14 @@
 # Infra Notes
 
+## 2026-07-10 Chord Chemistry core compressed around 0.5
+
+- Symptom: `charge / clutch / strain` hovered near the middle and almost never produced real highs or lows, so Atmosphere variants changed names without gaining motion.
+- Cause: event core was allowed to raise baseline only and mixed at `30%`; live DP then entered persistent Atmosphere through a second EMA. Low-force events could not lower core, while strong events were averaged twice.
+- Fix (first knife): keep Drive-derived baseline realtime, convert event core into a signed pulse around per-axis neutral anchors, add it directly to baseline, and decay the pulse by wall time. Dialogue / user-message pulse half-life is `35min`; memory remains slower at `4h`.
+- Live DP core now bypasses the second Atmosphere EMA. Non-live sources retain blending.
+- Diagnostics: weather output includes `chemistry_baseline_core_raw` and `chemistry_event_pulse`; Atmosphere `last_delta` keeps the same raw baseline / pulse data. Use observed production values to calibrate later P10 / P50 / P90 stretching—do not invent percentile constants before samples exist.
+- Scope boundary: this change does not alter climate label thresholds or Warmth / Shadow aggregation. The symmetric bounded residue rewrite remains the second knife.
+
 ## 2026-07-10 Atmosphere dead variants / Clear and Warm Rain dominance
 
 - Symptom: the same `Clear` / `Warm Rain` labels repeated while documented variants existed but rarely or never surfaced.

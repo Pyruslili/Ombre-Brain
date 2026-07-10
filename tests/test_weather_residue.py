@@ -1,3 +1,5 @@
+import pytest
+
 from desire_engine import (
     ATMOSPHERE_SOURCE_WEIGHTS,
     CLIMATE_LABELS,
@@ -1010,6 +1012,65 @@ def test_drive_event_brain_tints_chord_chemistry_without_changing_chord():
     assert chemistry["route"]["vector"] == "outward"
     assert chemistry["event_tint"]["source"] == "dialogue_residue"
     assert chemistry["situation"] in {"scout", "spark"}
+
+
+def test_event_core_is_a_signed_pulse_with_real_highs_and_lows():
+    drives = {**DRIVE_BASELINES, "curiosity": 0.48, "fatigue": 0.12}
+    baseline = chord_chemistry_snapshot(drives, now=1000)
+    quiet = chord_event_tint_from_drive_events([{
+        "ts": 1000,
+        "source": "dialogue_residue",
+        "suppressed": False,
+        "brain": {"release_pressure": 0.0, "energy_cost": 0.8, "grounding": "实"},
+    }])
+    active = chord_event_tint_from_drive_events([{
+        "ts": 1000,
+        "source": "dialogue_residue",
+        "suppressed": False,
+        "brain": {"release_pressure": 1.0, "novelty_pull": 1.0, "expression_pressure": 1.0, "body_heat": 1.0},
+    }])
+    quiet_core = chord_chemistry_snapshot(drives, event_tint=quiet, now=1000)
+    active_core = chord_chemistry_snapshot(drives, event_tint=active, now=1000)
+
+    assert quiet_core["core"]["charge"] < baseline["core"]["charge"]
+    assert quiet_core["event_pulse"]["core"]["charge"] < 0
+    assert active_core["core"]["charge"] >= 0.75
+    assert active_core["event_pulse"]["core"]["charge"] > 0
+
+
+def test_dialogue_core_pulse_decays_without_smoothing_baseline():
+    drives = {**DRIVE_BASELINES, "curiosity": 0.48, "fatigue": 0.12}
+    tint = chord_event_tint_from_drive_events([{
+        "ts": 1000,
+        "source": "dialogue_residue",
+        "suppressed": False,
+        "brain": {"release_pressure": 1.0, "novelty_pull": 1.0, "expression_pressure": 1.0},
+    }])
+    fresh = chord_chemistry_snapshot(drives, event_tint=tint, now=1000)
+    half_life_later = chord_chemistry_snapshot(drives, event_tint=tint, now=1000 + 35 * 60)
+    baseline = chord_chemistry_snapshot(drives, now=1000)
+
+    fresh_delta = fresh["core"]["charge"] - baseline["core"]["charge"]
+    later_delta = half_life_later["core"]["charge"] - baseline["core"]["charge"]
+    assert half_life_later["event_pulse"]["factor"] == pytest.approx(0.5, abs=0.001)
+    assert 0 < later_delta < fresh_delta
+
+
+def test_live_dp_core_is_not_ema_smoothed_twice(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    engine.weather.apply_atmosphere_delta({
+        "source": "dp", "influence": 0.6,
+        "core": {"charge": 0.20, "clutch": 0.20, "strain": 0.20},
+        "route": {"vector": "hover", "scores": {"hover": 0.72}},
+        "readout": {"warmth": 0.30, "shadow": 0.20},
+    }, now=1000)
+    changed = engine.weather.apply_atmosphere_delta({
+        "source": "dp", "influence": 0.2,
+        "core": {"charge": 0.88, "clutch": 0.76, "strain": 0.82},
+        "route": {"vector": "guard", "scores": {"guard": 0.72}},
+        "readout": {"warmth": 0.30, "shadow": 0.70},
+    }, now=1001)
+    assert changed["core"] == {"charge": 0.88, "clutch": 0.76, "strain": 0.82}
 
 
 def test_drive_event_tint_ignores_retired_speech_event_source():

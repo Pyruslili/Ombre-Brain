@@ -407,6 +407,22 @@ ATMOSPHERE_ROUTE_KEYS = (
     "hover",
 )
 
+# Event force is a short signed overlay, not another slow state. Baseline
+# percentile stretching waits for production samples; these anchors only mark
+# an event's neutral/no-force point.
+CORE_EVENT_NEUTRAL = {"charge": 0.34, "clutch": 0.32, "strain": 0.30}
+CORE_EVENT_PULSE_SCALE = 0.88
+CORE_EVENT_PULSE_CAP = 0.36
+CORE_EVENT_PULSE_HALFLIFE_SEC = {
+    "dialogue_residue": 35 * 60,
+    "user_message": 35 * 60,
+    "soma": 25 * 60,
+    "thought": 90 * 60,
+    "dp_memory": 4 * 3600,
+    "analyze_nocturne_entry": 4 * 3600,
+}
+CORE_EVENT_PULSE_DEFAULT_HALFLIFE_SEC = 60 * 60
+
 # ─── 悲恸引擎常量 ──────────────────────────────────────────────────────────────
 # 三层：抗议→绝望→疏离
 GRIEF_PROTEST_TICKS = 6            # 抗议层持续多少tick没有嘉嘉输入信号→跌绝望
@@ -1307,6 +1323,7 @@ def chord_event_tint_from_drive_events(events: list | None) -> dict:
         "source": event.get("source", ""),
         "event_label": event.get("event_label", ""),
         "ledger_id": event.get("id"),
+        "created_at": float(event.get("ts") or time.time()),
         "brain": {
             "release_pressure": round(release, 3),
             "anchor_target": anchor,
@@ -1416,17 +1433,25 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
     event_tint = event_tint if isinstance(event_tint, dict) else {}
     event_core = event_tint.get("core") if isinstance(event_tint.get("core"), dict) else {}
     event_route = event_tint.get("route") if isinstance(event_tint.get("route"), dict) else {}
+    event_pulse = {key: 0.0 for key in ("charge", "clutch", "strain")}
+    pulse_factor = 0.0
     if event_core:
-        event_weight = 0.30
+        source = str(event_tint.get("source") or "").strip()
+        created_at = float(event_tint.get("created_at") or now or time.time())
+        pulse_now = float(now if now is not None else time.time())
+        age = max(0.0, pulse_now - created_at)
+        half_life = CORE_EVENT_PULSE_HALFLIFE_SEC.get(source, CORE_EVENT_PULSE_DEFAULT_HALFLIFE_SEC)
+        pulse_factor = _time_decay_factor(age, half_life / 3600.0)
         for key in ("charge", "clutch", "strain"):
             baseline_value = baseline_core.get(key, 0.0)
-            event_value = float(event_core.get(key, 0.0) or 0.0)
-            if event_value <= baseline_value:
-                core[key] = baseline_value
-                continue
-            core[key] = round(_clamp(
-                baseline_value * (1.0 - event_weight) + event_value * event_weight
-            ), 3)
+            event_value = float(event_core.get(key, CORE_EVENT_NEUTRAL[key]) or 0.0)
+            pulse = _clamp(
+                (event_value - CORE_EVENT_NEUTRAL[key]) * CORE_EVENT_PULSE_SCALE * pulse_factor,
+                -CORE_EVENT_PULSE_CAP,
+                CORE_EVENT_PULSE_CAP,
+            )
+            event_pulse[key] = round(pulse, 3)
+            core[key] = round(_clamp(baseline_value + pulse), 3)
     if event_route:
         event_vector = str(event_route.get("vector") or "").strip()
         event_scores = event_route.get("scores") if isinstance(event_route.get("scores"), dict) else {}
@@ -1481,6 +1506,13 @@ def chord_chemistry_snapshot(drives: dict, warmth: float = 0.0, shadow: float = 
         "situation": situation,
         "gravity_pool": gravity_pool,
         "baseline": {"core": baseline_core, "route": baseline_route},
+        "baseline_core_raw": baseline_core,
+        "event_pulse": {
+            "core": event_pulse,
+            "factor": round(pulse_factor, 3),
+            "source": event_tint.get("source", ""),
+            "created_at": event_tint.get("created_at"),
+        },
         "event_tint": event_tint,
         "derived_texture": derived,
         "derived": derived,
@@ -1954,6 +1986,8 @@ def atmosphere_delta_from_chemistry(source: str, chemistry: dict,
         "confidence": round(_clamp(float(confidence or 0.0)), 3),
         "influence": round(influence, 3),
         "core": normalized_core,
+        "baseline_core_raw": chemistry.get("baseline_core_raw", {}),
+        "event_pulse": chemistry.get("event_pulse", {}),
         "route": normalized_route,
         "readout": _atmosphere_readout(chemistry.get("readout"), normalized_core),
         "texture": texture,
@@ -2263,6 +2297,8 @@ class WeatherResidueStore:
                     "source": delta.get("source", ""),
                     "influence": round(influence, 3),
                     "candidate": selected["label"],
+                    "baseline_core_raw": delta.get("baseline_core_raw", {}),
+                    "event_pulse": delta.get("event_pulse", {}),
                 },
             }
             state["atmosphere"] = atmosphere
@@ -2271,10 +2307,18 @@ class WeatherResidueStore:
             return atmosphere
         old_core = atmosphere["core"]
         incoming_core = delta.get("core") if isinstance(delta.get("core"), dict) else {}
-        atmosphere["core"] = {
-            key: round(_clamp(old_core.get(key, 0.0) * (1.0 - influence) + float(incoming_core.get(key, 0.0) or 0.0) * influence), 3)
-            for key in ("charge", "clutch", "strain")
-        }
+        if delta.get("source") == "dp":
+            # The chemistry core already contains baseline + decaying signed
+            # event pulse. A second EMA here used to erase both peaks and lows.
+            atmosphere["core"] = {
+                key: round(_clamp(float(incoming_core.get(key, old_core.get(key, 0.0)) or 0.0)), 3)
+                for key in ("charge", "clutch", "strain")
+            }
+        else:
+            atmosphere["core"] = {
+                key: round(_clamp(old_core.get(key, 0.0) * (1.0 - influence) + float(incoming_core.get(key, 0.0) or 0.0) * influence), 3)
+                for key in ("charge", "clutch", "strain")
+            }
 
         old_scores = _route_scores(atmosphere.get("route"))
         incoming_route = delta.get("route") if isinstance(delta.get("route"), dict) else {}
@@ -2365,6 +2409,8 @@ class WeatherResidueStore:
             "influence": round(influence, 3),
             "previous": previous,
             "candidate": candidate,
+            "baseline_core_raw": delta.get("baseline_core_raw", {}),
+            "event_pulse": delta.get("event_pulse", {}),
         }
         state["atmosphere"] = atmosphere
         state["updated_at"] = now
@@ -4218,6 +4264,8 @@ class DesireEngine:
             "current_chord": current_weather_chord(effective_pa, effective_na),
             "chord_chemistry": chemistry,
             "chemistry_core": chemistry["core"],
+            "chemistry_baseline_core_raw": chemistry.get("baseline_core_raw", {}),
+            "chemistry_event_pulse": chemistry.get("event_pulse", {}),
             "chemistry_route": chemistry["route"],
             "chord_situation": chemistry["situation"],
             "gravity_pool": chemistry["gravity_pool"],

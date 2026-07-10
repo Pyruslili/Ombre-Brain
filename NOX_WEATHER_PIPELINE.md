@@ -356,6 +356,8 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 
 - NAPA `warmth / shadow` 是 Atmosphere 的主要底色输入。
 - chemistry `charge / clutch / strain / inward / guard / hover / toward` 是形态分流输入。
+- `charge / clutch / strain` 分成实时 Drive baseline 与短时 signed event pulse。baseline 不再额外做时间平滑；pulse 可正可负，并按来源独立衰减（当前 dialogue / user message 半衰期 `35min`）。最终 core 直接是 `baseline + pulse`。
+- live `dp` core 进入 Atmosphere 时不再做第二遍 EMA；Chemistry 已完成 baseline 与 pulse 合成，再平均一次会同时抹掉高点和低点。输出保留 `baseline_core_raw` 与 `event_pulse`，供真实 P10 / P50 / P90 校准。
 - Chord 是当前状态的音乐化转译 / 残影，不是主判定源；只允许作为 residue / flavor / tie-breaker，不能把机制词从 Chord 侧漏进 Atmosphere。
 - 变体不再只是父天气胜出后的换皮。明确的语义 fit 会给所属父天气一个小幅资格加成：低电量内收可推 `Quiet Rain`，守门阴影可推 `Watchful Overcast`，低电量回屋可推 `Quiet Shelter`。加成只帮助接近边界的父天气过线，不覆盖 Storm / Pressure / Black Tide 的硬 gate。
 
