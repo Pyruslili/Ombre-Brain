@@ -5948,7 +5948,88 @@ async def api_feels_public(request):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500,
                            headers={"Access-Control-Allow-Origin": "*"})
-    
+
+
+@mcp.custom_route("/api/sanctum/summary", methods=["GET"])
+async def api_sanctum_summary(request):
+    """公开：Sanctum 首页计数（总桶 / latent notes / letter / writing 最新日期）。无需 auth。"""
+    from starlette.responses import JSONResponse
+
+    def _bucket_kind(bucket: dict) -> str:
+        meta = bucket.get("metadata") if isinstance(bucket.get("metadata"), dict) else {}
+        domains = meta.get("domain") or []
+        if isinstance(domains, str):
+            domains = [domains]
+        tags = meta.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        labels = {str(x).lower() for x in list(domains) + list(tags) if x}
+        btype = str(meta.get("type") or "").lower()
+        if btype == "feel" or "feel" in labels:
+            return "feel"
+        if "letter_jiajia" in labels or "letter" in labels or btype in {"letter", "letter_jiajia"}:
+            return "letter"
+        if "writing" in labels or btype == "writing":
+            return "writing"
+        if "window" in labels or btype == "window":
+            return "window"
+        return "memory"
+
+    def _created(bucket: dict) -> str:
+        meta = bucket.get("metadata") if isinstance(bucket.get("metadata"), dict) else {}
+        return str(meta.get("updated") or meta.get("created") or bucket.get("created") or "")
+
+    try:
+        all_buckets = await bucket_mgr.list_all(include_archive=True)
+        tallies = {"memory": 0, "letter": 0, "writing": 0, "feel": 0, "window": 0, "other": 0}
+        latest = {"letter": "", "writing": ""}
+        for b in all_buckets:
+            if not isinstance(b, dict):
+                continue
+            kind = _bucket_kind(b)
+            if kind not in tallies:
+                tallies["other"] += 1
+            else:
+                tallies[kind] += 1
+            if kind in ("letter", "writing"):
+                ts = _created(b)
+                if ts and ts > str(latest.get(kind) or ""):
+                    latest[kind] = ts
+
+        # latent notes pool
+        latent_count = 0
+        try:
+            data = _load_latent_notes()
+            if _prune_expired_latent_notes(data):
+                _save_latent_notes(data)
+            latent_count = len(data.get("notes") or [])
+        except Exception:
+            latent_count = 0
+
+        total_memories = (
+            tallies["memory"] + tallies["letter"] + tallies["writing"]
+            + tallies["feel"] + tallies["window"] + tallies["other"]
+        )
+        return JSONResponse(
+            {
+                "ok": True,
+                "memories": total_memories,
+                "latent_notes": latent_count,
+                "feels": tallies["feel"],
+                "letters": {"count": tallies["letter"], "latest": latest["letter"]},
+                "writing": {"count": tallies["writing"], "latest": latest["writing"]},
+                "breakdown": tallies,
+            },
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": str(e)},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+
 # =============================================================
 # /api/status — system status for Dashboard settings tab
 # /api/status — Dashboard 设置页用系统状态
