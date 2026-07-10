@@ -519,6 +519,53 @@ def test_rain_display_uses_shadow_bands_instead_of_staying_warm_at_full_shadow()
     assert display(0.96) == "Heavy Rain"
 
 
+def test_semantic_variant_fits_can_help_their_weather_family_surface():
+    cases = (
+        (
+            "Quiet Drift",
+            {"charge": 0.10, "clutch": 0.30, "strain": 0.10},
+            {"warmth": 0.10, "shadow": 0.10},
+            {"vector": "inward", "scores": {"toward_jiajia": 0.15, "toward_house": 0.18, "outward": 0.10, "inward": 0.62, "guard": 0.18, "hover": 0.50}},
+        ),
+        (
+            "Quiet Rain",
+            {"charge": 0.10, "clutch": 0.90, "strain": 0.10},
+            {"warmth": 0.40, "shadow": 0.40},
+            {"vector": "inward", "scores": {"toward_jiajia": 0.15, "toward_house": 0.18, "outward": 0.10, "inward": 0.62, "guard": 0.18, "hover": 0.50}},
+        ),
+        (
+            "Quiet Shelter",
+            {"charge": 0.10, "clutch": 0.20, "strain": 0.50},
+            {"warmth": 0.10, "shadow": 0.10},
+            {"vector": "toward_house", "scores": {"toward_jiajia": 0.25, "toward_house": 0.72, "outward": 0.10, "inward": 0.42, "guard": 0.38, "hover": 0.20}},
+        ),
+        (
+            "Watchful Overcast",
+            {"charge": 0.10, "clutch": 0.30, "strain": 0.20},
+            {"warmth": 0.10, "shadow": 0.40},
+            {"vector": "toward_house", "scores": {"toward_jiajia": 0.25, "toward_house": 0.72, "outward": 0.10, "inward": 0.42, "guard": 0.38, "hover": 0.20}},
+        ),
+    )
+    for expected, core, readout, route in cases:
+        texture = atmosphere_texture(core, route)
+        selected = select_climate(core, route, texture, readout)
+        atmosphere = {
+            "core": core,
+            "route": route,
+            "texture": texture,
+            "readout": readout,
+            "climate": {"current": selected["label"], "candidate": selected["label"]},
+        }
+        assert climate_transition_display(atmosphere) == expected
+
+
+def test_clear_is_not_allowed_to_cover_mid_shadow_or_strain():
+    route = {"vector": "toward_jiajia", "scores": {"toward_jiajia": 0.72}}
+    core = {"charge": 0.48, "clutch": 0.32, "strain": 0.44}
+    selected = select_climate(core, route, atmosphere_texture(core, route), {"warmth": 0.72, "shadow": 0.38})
+    assert selected["label"] != "Clear"
+
+
 def test_rain_does_not_replace_banked_heat_on_warm_shadow_clutch_inward_mix():
     core = {"charge": 0.72, "clutch": 0.58, "strain": 0.41}
     route = {

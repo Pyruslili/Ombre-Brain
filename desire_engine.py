@@ -1522,9 +1522,11 @@ def _atmosphere_readout(readout: dict | None, core: dict | None) -> dict:
     readout = readout if isinstance(readout, dict) else {}
     charge = _clamp(float(core.get("charge", 0.0) or 0.0))
     strain = _clamp(float(core.get("strain", 0.0) or 0.0))
+    warmth_raw = readout["warmth"] if "warmth" in readout and readout["warmth"] is not None else charge
+    shadow_raw = readout["shadow"] if "shadow" in readout and readout["shadow"] is not None else strain
     return {
-        "warmth": _clamp(float(readout.get("warmth", charge) or charge)),
-        "shadow": _clamp(float(readout.get("shadow", strain) or strain)),
+        "warmth": _clamp(float(warmth_raw)),
+        "shadow": _clamp(float(shadow_raw)),
     }
 
 
@@ -1564,9 +1566,9 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
     storm_gate = shadow >= 0.70 and charge >= 0.58 and strain >= 0.58
     scores_out = {
         "Clear": round(_clamp(
-            0.42 * warmth
+            0.36 * warmth
             + 0.18 * charge
-            + 0.22 * toward
+            + 0.16 * toward
             + 0.18 * (1.0 - strain)
             + 0.12 * (1.0 - clutch)
             - 0.34 * shadow
@@ -1611,15 +1613,39 @@ def climate_scores(core: dict | None, route: dict | None, texture: dict | None =
         "Banked Heat": round(_clamp(0.36 * warmth + 0.24 * clutch + 0.22 * inward + 0.16 * shadow + 0.10 * pull - 0.24 * max(0.0, strain - 0.58) - 0.10 * hover), 3),
         "Black Tide": round(_clamp(0.40 * shadow + 0.22 * inward + 0.18 * (1.0 - charge) + 0.12 * (1.0 - warmth) + 0.08 * (1.0 - guard_route) - 0.26 * strain), 3),
     }
+    quiet_rain_fit = (
+        0.32 <= shadow <= 0.72
+        and warmth <= 0.54
+        and charge <= 0.46
+        and strain < 0.58
+        and max(inward, hover) >= 0.34
+    )
+    watchful_overcast_fit = (
+        shadow >= 0.40 and warmth <= 0.60 and charge <= 0.56
+        and guard_route >= 0.36 and strain < 0.64
+    )
+    quiet_shelter_fit = (
+        scores["toward_house"] >= 0.44 and inward >= 0.30
+        and 0.28 <= warmth <= 0.50 and charge <= 0.40
+        and clutch >= 0.38 and strain < 0.58
+    )
+    if quiet_rain_fit:
+        scores_out["Rain"] = round(_clamp(scores_out["Rain"] + 0.08), 3)
+    if watchful_overcast_fit:
+        scores_out["Overcast"] = round(_clamp(scores_out["Overcast"] + 0.10), 3)
+    if quiet_shelter_fit:
+        scores_out["Shelter"] = round(_clamp(scores_out["Shelter"] + 0.12), 3)
     if shadow >= ATMOSPHERE_SHADOW_CLEAR_GUARD:
         scores_out["Clear"] = min(scores_out["Clear"], 0.24)
+    elif shadow >= 0.34 or strain >= 0.42:
+        scores_out["Clear"] = min(scores_out["Clear"], 0.34)
     if not black_tide_gate:
         scores_out["Black Tide"] = min(scores_out["Black Tide"], 0.20)
     if not storm_gate:
         scores_out["Storm"] = min(scores_out["Storm"], 0.34)
     if strain < 0.48:
         scores_out["Pressure"] = min(scores_out["Pressure"], 0.32)
-    if not (scores["toward_house"] >= 0.44 and clutch >= 0.42 and guard >= 0.34 and warmth >= 0.46 and strain < 0.62):
+    if not quiet_shelter_fit and not (scores["toward_house"] >= 0.44 and clutch >= 0.42 and guard >= 0.34 and warmth >= 0.46 and strain < 0.62):
         scores_out["Shelter"] = min(scores_out["Shelter"], 0.38)
     if not (warmth >= 0.58 and shadow >= 0.40 and clutch >= 0.52 and inward >= 0.52 and strain < 0.62):
         scores_out["Banked Heat"] = min(scores_out["Banked Heat"], 0.40)
@@ -1644,27 +1670,27 @@ def _weather_display_label(atmosphere: dict | None, label: str) -> str:
     hover = _clamp(float(texture.get("drift", 0.0) or 0.0))
     pull = _clamp(float(texture.get("pull", 0.0) or 0.0))
     spark = _clamp(float(texture.get("spark", 0.0) or 0.0))
-    warmth = _clamp(float(readout.get("warmth", charge) or charge))
-    shadow = _clamp(float(readout.get("shadow", strain) or strain))
+    warmth = _clamp(float(readout["warmth"] if "warmth" in readout and readout["warmth"] is not None else charge))
+    shadow = _clamp(float(readout["shadow"] if "shadow" in readout and readout["shadow"] is not None else strain))
     if label == "Rain":
         # Warm Rain is the mixed middle band.  At extreme shadow the warmth is
         # still present, but it no longer gets to cosmetically call the sky warm.
         if shadow >= 0.78 or (shadow >= 0.62 and warmth <= 0.52):
             return "Heavy Rain"
+        if warmth <= 0.54 and charge <= 0.46 and strain < 0.58 and (inward >= 0.34 or hover >= 0.36):
+            return "Quiet Rain"
         if warmth <= 0.42 and shadow >= 0.40:
             return "Cold Rain"
-        if 0.34 <= shadow < 0.78 and warmth >= 0.56 and inward <= 0.50 and guard_route <= 0.46:
+        if 0.38 <= shadow < 0.72 and warmth >= 0.56 and 0.24 <= strain <= 0.54 and charge <= 0.68 and clutch < 0.66 and inward < 0.46 and guard_route < 0.47:
             return "Warm Rain"
         if clutch >= 0.42 and pull >= 0.32:
             return "Soft Rain"
-        if warmth <= 0.44 and (inward >= 0.34 or hover >= 0.36):
-            return "Quiet Rain"
         return str(climate.get("rain_label") or "Rain").strip() or "Rain"
     if label == "Overcast":
+        if guard_route >= 0.36 and clutch >= 0.28 and shadow >= 0.40 and strain < 0.64:
+            return "Watchful Overcast"
         if shadow >= 0.56 and (strain >= 0.34 or clutch >= 0.34):
             return "Heavy Overcast"
-        if guard_route >= 0.34 and clutch >= 0.28:
-            return "Watchful Overcast"
         if warmth <= 0.42 and shadow >= 0.42:
             return "Cold Overcast"
         if warmth >= 0.54 and shadow >= 0.30:
@@ -1680,6 +1706,10 @@ def _weather_display_label(atmosphere: dict | None, label: str) -> str:
         if warmth >= 0.44 and shadow <= 0.36:
             return "Warm Afterglow"
         return "Afterglow"
+    if label == "Drift":
+        if charge <= 0.34 and clutch <= 0.34 and strain <= 0.34 and (inward >= 0.28 or hover >= 0.40):
+            return "Quiet Drift"
+        return "Drift"
     if label == "Static":
         if warmth >= 0.54 and shadow <= 0.30:
             return "Bright Static"
@@ -1697,10 +1727,10 @@ def _weather_display_label(atmosphere: dict | None, label: str) -> str:
             return "Heavy Storm"
         return "Storm"
     if label == "Shelter":
+        if warmth <= 0.50 and charge <= 0.40 and inward >= 0.30:
+            return "Quiet Shelter"
         if guard_route >= 0.36 and clutch >= 0.42:
             return "Watchful Shelter"
-        if warmth <= 0.40 and inward >= 0.30:
-            return "Quiet Shelter"
         if clutch >= 0.40 and warmth >= 0.46:
             return "Warm Shelter"
         return "Soft Shelter"

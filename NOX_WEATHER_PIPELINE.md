@@ -357,6 +357,7 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 - NAPA `warmth / shadow` 是 Atmosphere 的主要底色输入。
 - chemistry `charge / clutch / strain / inward / guard / hover / toward` 是形态分流输入。
 - Chord 是当前状态的音乐化转译 / 残影，不是主判定源；只允许作为 residue / flavor / tie-breaker，不能把机制词从 Chord 侧漏进 Atmosphere。
+- 变体不再只是父天气胜出后的换皮。明确的语义 fit 会给所属父天气一个小幅资格加成：低电量内收可推 `Quiet Rain`，守门阴影可推 `Watchful Overcast`，低电量回屋可推 `Quiet Shelter`。加成只帮助接近边界的父天气过线，不覆盖 Storm / Pressure / Black Tide 的硬 gate。
 
 底色粗分：
 
@@ -377,6 +378,7 @@ Atmosphere 的职责是给当前状态一个可慢慢染色的底色，不是给
 主词边界：
 
 - `Clear`：轻、亮、无遮挡；`shadow >= 0.55` 时不允许外显 `Clear`，包括 transition_from。
+- `Clear` 收窄：`shadow >= 0.34` 或 `strain >= 0.42` 时父天气分数封顶，避免中阴影 / 中绷紧仍被高 warmth 吸回晴天。
 - `Afterglow`：事件后的余光；`warmth` 高、`shadow` 低到中低、`toward / residue` 明显、`strain` 低。
 - `Drift`：漂、散、低抓握；`charge` 低到中、`clutch` 低、`strain` 低、`hover` 中高。
 - `Low Tide`：退潮、低能、空下来；`warmth / shadow / charge / clutch / toward` 都低。它不是负面，是低色彩空场。

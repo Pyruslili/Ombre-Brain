@@ -1,5 +1,14 @@
 # Infra Notes
 
+## 2026-07-10 Atmosphere dead variants / Clear and Warm Rain dominance
+
+- Symptom: the same `Clear` / `Warm Rain` labels repeated while documented variants existed but rarely or never surfaced.
+- Cause: selection was strictly parent-first and variants were only renamed after the winning parent was fixed. Variant-specific evidence therefore had no vote in whether `Rain`, `Overcast`, `Shelter`, or `Drift` reached the display layer.
+- Fix: semantic variant fits now add a bounded family qualification bonus for quiet rain, watchful overcast, and quiet shelter; `Quiet Drift` has an explicit display rule. Variant precedence was adjusted so quiet/watchful semantics are not swallowed by generic cold/heavy variants.
+- Dominance tuning: narrowed `Clear` scoring and capped it at mid shadow/strain; narrowed `Warm Rain` by shadow, strain, charge, clutch, inward, and guard instead of letting warmth alone claim the label.
+- Zero-value bug: Atmosphere readout used `value or fallback`, so valid `warmth=0` / `shadow=0` values were replaced by charge/strain. Readout and display now distinguish zero from missing.
+- Regression coverage proves `Quiet Drift`, `Quiet Rain`, `Quiet Shelter`, and `Watchful Overcast` through the full family selector, not by calling the label formatter directly.
+
 ## 2026-07-10 DP memory shadow accumulation / Warm Rain extreme-shadow display
 
 - Symptom: no active conflict, but Shadow kept rising; dashboard showed `warmth 0.92 / shadow 0.96` as `Warm Rain`.
