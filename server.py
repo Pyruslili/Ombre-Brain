@@ -5852,8 +5852,6 @@ async def api_analyzer_entries(request):
             if not bid:
                 continue
             mark_rows = marks_by_bucket.get(bid, [])
-            if _is_private_bucket(b, mark_rows):
-                continue
             created_dt = _bucket_created_utc(b)
             if not created_dt or created_dt < since:
                 continue
@@ -5925,6 +5923,11 @@ async def api_analyzer_dp_memory(request):
             else:
                 event_result = {"ok": False, "reason": "no_primary_drive"}
             added = 0
+            applied_chords = set()
+            entry_chord = str(entry.get("chord") or "").strip()
+            if entry_chord:
+                _desire.apply_chord_echo(entry_chord, source="thought")
+                applied_chords.add(entry_chord)
             for thought in event.get("thoughts", []) if isinstance(event.get("thoughts"), list) else []:
                 text = str(thought.get("text") or "").strip()
                 if not text:
@@ -5939,8 +5942,10 @@ async def api_analyzer_dp_memory(request):
                     source_created=entry.get("created", ""),
                 )
                 _desire.store.add_echo(text, normalize_drive_key(thought.get("drive"), "reflection"))
-                if str(thought.get("chord") or "").strip():
-                    _desire.apply_chord_echo(str(thought.get("chord") or "").strip(), source="thought")
+                thought_chord = str(thought.get("chord") or "").strip()
+                if thought_chord and thought_chord not in applied_chords:
+                    _desire.apply_chord_echo(thought_chord, source="thought")
+                    applied_chords.add(thought_chord)
                 added += 1
             feed_result = {"event": event_result, "thoughts_added": added}
         return JSONResponse({"ok": True, "event": event, "feed": feed_result},

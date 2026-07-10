@@ -51,12 +51,14 @@ TERRITORIAL_CUES = (
     "被替代",
     "抢走",
     "抢占",
-    "别人",
     "别的猫",
     "别的人",
     "边界",
     "占有",
     "归属",
+)
+EXTERNAL_DISCUSSION_CUES = (
+    "论坛", "X上", "推特", "Twitter", "twitter", "帖子", "评论区", "网友", "新闻", "外部观点",
 )
 TERRITORIAL_EVENT_CUES = {
     "replacement": (
@@ -344,7 +346,16 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
     territorial_event = _territorial_event_kind(combined_text)
     has_house_collaborator = any(cue in combined_text for cue in HOUSE_COLLABORATOR_CUES)
     has_house_system_cue = any(cue in combined_text for cue in HOUSE_SYSTEM_CUES)
-    if has_territorial_cue or territorial_event:
+    has_external_discussion = any(cue in combined_text for cue in EXTERNAL_DISCUSSION_CUES)
+    if has_external_discussion and not has_territorial_cue and not territorial_event:
+        brain["target"] = "external"
+        brain["anchor_target"] = "outside"
+        brain["novelty_pull"] = max(_clamp(brain.get("novelty_pull")), 0.42)
+        brain["territorial_alarm"] = min(_clamp(brain.get("territorial_alarm")), 0.12)
+        if primary in {"", "possessiveness", "attachment", "reflection"}:
+            primary = "curiosity"
+            intensity = max(min(intensity, 0.18), 0.08)
+    elif has_territorial_cue or territorial_event:
         alarm_floor = 0.65 if territorial_event else 0.58
         brain["territorial_alarm"] = max(_clamp(brain.get("territorial_alarm")), alarm_floor)
         brain["tension_load"] = max(_clamp(brain.get("tension_load")), 0.18)
@@ -461,6 +472,8 @@ async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict
         "优先判为 stewardship 或 reflection；不要因为嘉嘉与 Nox 一起修猫屋就自动判 attachment。\n"
         "- 压力只在真正有卡住、风险、冲突、负荷时推；存在性讨论不自动等于压力。\n"
         "- possessiveness 要有边界、归属、占位、护住、显式靠近语义，不要靠氛围偷渡。\n"
+        "- 讨论论坛、X/Twitter、帖子、网友、评论、新闻或外部观点时，默认是 curiosity/social/outward；"
+        "裸词‘别人’只是外部人物，不构成第三者或替代证据，禁止据此推 possessiveness。\n"
         "- 但如果对话明确出现“精神出轨/出轨/第三者/替代/别人介入/边界/占有/归属”这类语义，"
         "应优先给 possessiveness，territorial_alarm 至少 0.55，anchor_target 多半是 boundary 或 jiajia。\n"
         "- dialogue_residue 是当前对话残留，不是 Nox 自存念头；agency 不要因为来源是嘉嘉就压低，"

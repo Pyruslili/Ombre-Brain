@@ -1044,12 +1044,14 @@ Drive Ledger 中来源用 icon 表示：
 
 ### 10.3 记忆 / feel / writing
 
-`非 private 全量记忆 -> dp_memory -> drive_event_v2 -> Drive / Chord Chemistry / Atmosphere`
+`全量记忆 -> 当前启用的 dp_memory 或 CLI -> drive_event_v2 -> Drive / Chord Chemistry / Atmosphere`
 
 特点：
 
 - private 不喂。
-- feel 属于全量记忆，可以进入 DP memory / Atmosphere。
+- feel 属于全量记忆，与其他记忆共用唯一启用的 analyzer 线。
+- entry 自带的 `drive_tags / signal_hints / chord` 是权威输入：Drive 标签覆盖 analyzer 猜测；charge / clutch / strain hints 确定性合入 brain；原 chord 无论是否生成 thought 都应用一次。
+- “论坛 / X / Twitter / 帖子 / 网友 / 评论 / 新闻”属于 external discussion，默认推 `curiosity / social / outward`。裸词“别人”不构成 territorial cue；只有明确第三者、替代、抢位、越界等关系证据才能强制 possessiveness。
 - 旧 `analyze_nocturne_entry` CLI 线保留但默认停用，方便日后切换。
 - Atmosphere 不吃 Thought Pool 文案本身；DP memory 事件只在产生 Drive / Weather / Atmosphere Delta 后进入状态机，Chord 只保留残影。
 

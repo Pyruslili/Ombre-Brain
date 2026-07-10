@@ -1,5 +1,13 @@
 # Infra Notes
 
+## 2026-07-10 Forum/X dialogue misclassified as possessiveness; memory metadata was advisory only
+
+- Root cause correction: the high fast Shadow incident began upstream. The 2+2 classifier treated bare `别人` in a forum/X discussion as a territorial cue and normalized the event to possessiveness. Downstream Shadow caps only limited damage; they did not fix direction.
+- Fix: removed bare `别人` from territorial cues and added deterministic external-discussion routing. Forum/X/Twitter/posts/netizens/comments/news route to external/outside with curiosity unless explicit replacement/third-party/boundary evidence exists.
+- Full-memory contract: entry `drive_tags` now override analyzer drive guesses; stored charge/clutch/strain hints are deterministically merged into event brain; the entry chord is applied once even when DP emits no thought.
+- Timing: removing hold-time weather means memory effects begin when the selected full-memory analyzer processes the entry, not synchronously when hold returns. Once processed, Drive/Chord/Atmosphere are all fed in the same post-feed operation.
+- Private buckets no longer exist. Removed the legacy private exclusion from `/api/analyzer/entries`; the full-memory analyzer now uses the actual complete entry set.
+
 ## 2026-07-10 Possessiveness caused fast high Shadow / duplicate feel weather path
 
 - Diagnosis: the observed fast Shadow rise/fall matched the 2+2 `dialogue_residue` possessiveness path, not a new feel. A single semantic event could write dialogue Shadow, create a shadow crystal, and create a possessiveness event spike with only a `0.5h` half-life.

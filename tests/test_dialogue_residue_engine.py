@@ -212,3 +212,24 @@ def test_normalize_thinking_signals_limits_and_trims():
     assert len(signals) == 6
     assert signals[0]["turn_id"] == "0"
     assert len(signals[0]["text"]) == 220
+
+
+def test_external_forum_discussion_cannot_become_possessiveness_from_bare_others():
+    event = normalize_dialogue_residue_event(
+        {
+            "primary_drive": "possessiveness",
+            "intensity": 0.32,
+            "confidence": 0.82,
+            "agency": 0.55,
+            "brain": {"territorial_alarm": 0.76, "anchor_target": "boundary"},
+        },
+        messages=[
+            {"role": "user", "text": "我在X上看论坛里别人怎么讨论这个模型。"},
+            {"role": "assistant", "text": "我也想看看网友的观点和帖子。"},
+        ],
+    )
+
+    assert event["primary_drive"] == "curiosity"
+    assert event["brain"]["target"] == "external"
+    assert event["brain"]["anchor_target"] == "outside"
+    assert event["brain"]["territorial_alarm"] <= 0.12

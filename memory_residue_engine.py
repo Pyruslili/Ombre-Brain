@@ -36,6 +36,14 @@ def _as_list(value: Any, limit: int = 12) -> list[str]:
     return [str(item).strip()[:120] for item in items if str(item).strip()][:limit]
 
 
+def _hint_value(value: Any) -> float:
+    if isinstance(value, str):
+        named = {"low": 0.28, "mid": 0.55, "high": 0.82, "低": 0.28, "中": 0.55, "高": 0.82}
+        if value.strip().lower() in named:
+            return named[value.strip().lower()]
+    return _clamp(value)
+
+
 def normalize_memory_entry(raw: dict | None) -> dict:
     raw = raw if isinstance(raw, dict) else {}
     entry_type = str(raw.get("type") or "memory").strip().lower()
@@ -62,6 +70,13 @@ def normalize_memory_residue_event(event: dict | None, entry: dict | None = None
     event = event if isinstance(event, dict) else {}
     entry = normalize_memory_entry(entry or {})
     primary = normalize_drive_key(event.get("primary_drive"), "")
+    explicit_drives = {
+        drive: _clamp(value)
+        for key, value in entry.get("drive_tags", {}).items()
+        if (drive := normalize_drive_key(key, "")) in DRIVE_KEYS
+    }
+    if explicit_drives:
+        primary = max(explicit_drives, key=explicit_drives.get)
     confidence = _clamp(event.get("confidence"), 0.0)
     intensity = _clamp(event.get("intensity"), 0.0)
     agency = _clamp(event.get("agency"), 0.0)
@@ -73,9 +88,20 @@ def normalize_memory_residue_event(event: dict | None, entry: dict | None = None
     }
 
     brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
+    hints = entry.get("signal_hints") if isinstance(entry.get("signal_hints"), dict) else {}
+    charge = _hint_value(hints.get("charge"))
+    clutch = _hint_value(hints.get("clutch"))
+    strain = _hint_value(hints.get("strain"))
+    territorial = _hint_value(hints.get("territorial"))
+    discernment = _hint_value(hints.get("discernment"))
     brain = normalize_drive_event_brain(
         {
             **brain,
+            **({"release_pressure": charge, "novelty_pull": charge, "expression_pressure": charge * 0.7} if charge else {}),
+            **({"closeness_pull": clutch} if clutch else {}),
+            **({"tension_load": strain, "inward_pull": strain * 0.65} if strain else {}),
+            **({"territorial_alarm": territorial, "anchor_target": "boundary"} if territorial else {}),
+            **({"discernment_alarm": discernment} if discernment else {}),
             "source": SOURCE,
             "source_bucket": entry["id"],
             "source_type": entry["type"],
@@ -83,6 +109,9 @@ def normalize_memory_residue_event(event: dict | None, entry: dict | None = None
             "agency": _clamp(brain.get("agency"), agency),
         }
     )
+    for drive, value in explicit_drives.items():
+        if drive != primary:
+            secondary[drive] = max(secondary.get(drive, 0.0), round(value, 4))
     evidence = [str(item).strip()[:180] for item in event.get("evidence", []) if str(item).strip()][:3]
     max_thoughts = thought_limit(entry)
     thoughts = []
