@@ -519,7 +519,7 @@ def _undercurrent_state(state: dict) -> dict:
                 "drive": t.get("drive"),
                 "kind": t.get("kind"),
                 "strength": t.get("strength"),
-                "text": _short_state_text(t.get("text"), 180),
+                "text": str(t.get("text") or "").strip().replace("\n", " "),
             }
             for i, t in enumerate(thoughts[1:8])
             if str(t.get("text") or "").strip()
@@ -548,7 +548,7 @@ def _compact_desire_state(state: dict) -> dict:
             "kind": t.get("kind"),
             "strength": t.get("strength"),
             "source": t.get("source"),
-            "text": _short_state_text(t.get("text"), 140),
+            "text": str(t.get("text") or "").strip().replace("\n", " "),
             "born_at": t.get("born_at"),
         }
 
@@ -1681,8 +1681,8 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
             "source_wander_mode": source.get("wander_mode"),
             "source_marks": source.get("marks", {}),
             "source_outward_score": source.get("outward_score", 0),
-            "source_fragment": source_fragment[:180],
-            "dream_line": dream_line[:120],
+            "source_fragment": source_fragment,
+            "dream_line": dream_line,
             "model": model,
             "created_at": ts,
             "updated_at": ts,
@@ -5366,8 +5366,8 @@ async def api_latent_notes_create(request):
         "source_kind": _normalize_latent_source_kind(body.get("source_kind")),
         "source_title": str(body.get("source_title") or "手动便签").strip()[:80],
         "source_created": "",
-        "source_fragment": str(body.get("source_fragment") or dream_line).strip()[:200],
-        "dream_line": dream_line[:120],
+        "source_fragment": str(body.get("source_fragment") or dream_line).strip(),
+        "dream_line": dream_line,
         "model": "manual",
         "created_at": ts,
         "updated_at": ts,
@@ -5401,7 +5401,7 @@ async def api_latent_notes_update(request):
         if not dream_line:
             return JSONResponse({"ok": False, "error": "dream_line required"}, status_code=400,
                                 headers={"Access-Control-Allow-Origin": "*"})
-        note["dream_line"] = dream_line[:120]
+        note["dream_line"] = dream_line
     if "note_type" in body:
         note["note_type"] = _normalize_latent_note_type(body.get("note_type"))
         if "drive_tag" not in body:
@@ -6095,8 +6095,8 @@ async def api_sanctum_thought_to_latent(request):
         "source_kind": "thought_pool",
         "source_title": str(body.get("source_title") or "Thought Pool").strip()[:80],
         "source_created": "",
-        "source_fragment": text[:200],
-        "dream_line": text[:120],
+        "source_fragment": text,
+        "dream_line": text,
         "model": "sanctum",
         "created_at": ts,
         "updated_at": ts,
@@ -6113,6 +6113,11 @@ async def api_sanctum_thought_to_latent(request):
                 and str(existing.get("source_kind") or "") == "thought_pool"
                 and str(existing.get("status") or "") not in {"deleted", "used"}
             ):
+                existing["dream_line"] = text
+                existing["source_fragment"] = text
+                existing["updated_at"] = ts
+                _touch_latent_note_data(data)
+                _save_latent_notes(data)
                 return JSONResponse(
                     {"ok": True, "note": existing, "already": True},
                     headers={"Access-Control-Allow-Origin": "*"},

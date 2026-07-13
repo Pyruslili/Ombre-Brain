@@ -85,3 +85,19 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
     assert undercurrent["Chemistry"]["Vector"] == "toward_house"
     assert undercurrent["Thought Pool"][0]["index"] == 2
     assert undercurrent["Thought Pool"][0]["text"] == "thought 1"
+
+
+def test_thought_pool_keeps_full_text_in_compact_readouts():
+    long_text = "现场留下的骨头" * 80
+    state = {
+        "thoughts": [
+            {"tid": "newest", "drive": "curiosity", "kind": "flit", "strength": 0.8, "text": "top"},
+            {"tid": "long", "drive": "curiosity", "kind": "flit", "strength": 0.7, "text": long_text},
+        ]
+    }
+
+    compact = _compact_desire_state(state)
+    undercurrent = _undercurrent_state(state)
+
+    assert compact["thoughts"][1]["text"] == long_text
+    assert undercurrent["Thought Pool"][0]["text"] == long_text
