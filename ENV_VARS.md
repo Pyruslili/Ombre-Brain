@@ -15,6 +15,9 @@
 | `OMBRE_MODEL` | 否 | — | `OMBRE_DEHYDRATION_MODEL` 的别名（前者优先） |
 | `OMBRE_EMBEDDING_MODEL` | 否 | `gemini-embedding-001` | 向量嵌入模型名（覆盖 `embedding.model`） |
 | `OMBRE_EMBEDDING_BASE_URL` | 否 | — | 向量嵌入的 API Base URL（覆盖 `embedding.base_url`；留空则复用脱水配置） |
+| `OMBRE_RHYTHM_TOKEN` / `RHYTHM_TOKEN` | 否 | — | Rhythm 写入/推送鉴权（`POST /api/rhythm/event` · `POST /api/rhythm/push`）。未设置则开放写入（仅建议本机调试） |
+| `BARK_KEY` | 否 | — | Bark device key；也可写在 `~/.bark_device_key`。`rhythm.push` / 心跳主动弹窗用 |
+| `BARK_ICON_URL` | 否 | — | Bark 通知图标 URL（可选） |
 
 ## 说明
 

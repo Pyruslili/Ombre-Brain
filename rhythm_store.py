@@ -1,0 +1,312 @@
+"""Rhythm — 嘉嘉外场节律：phone / watch / 未来源 统一入库与快照。
+
+不是聊天管道。写入端：快捷指令 / iWatch / 本地 hook。
+读取端：MCP rhythm.read / undercurrent / heartbeat 注入。
+推送端：rhythm.push → Bark（只用于主动找你，不绑回复）。
+"""
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+
+DEFAULT_MAX_EVENTS = 400
+DEFAULT_READ_MINUTES = 180
+DEFAULT_READ_LIMIT = 40
+BARK_PUSH_URL = "https://api.day.app/push"
+
+
+class RhythmStore:
+    def __init__(self, path: str | Path, max_events: int = DEFAULT_MAX_EVENTS):
+        self.path = Path(path)
+        self.max_events = max(1, int(max_events))
+        self._lock = threading.Lock()
+
+    def _empty(self) -> dict[str, Any]:
+        return {"version": 1, "events": [], "updated_at": 0.0}
+
+    def _load(self) -> dict[str, Any]:
+        try:
+            if not self.path.exists():
+                return self._empty()
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return self._empty()
+            events = data.get("events")
+            if not isinstance(events, list):
+                data["events"] = []
+            return data
+        except Exception:
+            return self._empty()
+
+    def _save(self, data: dict[str, Any]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        events = data.get("events") if isinstance(data.get("events"), list) else []
+        if len(events) > self.max_events:
+            data["events"] = events[-self.max_events :]
+        data["updated_at"] = time.time()
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(self.path)
+
+    def append(
+        self,
+        *,
+        source: str,
+        event: str = "open",
+        app: str = "",
+        kind: str = "",
+        value: Any = None,
+        meta: dict | None = None,
+        at: float | None = None,
+    ) -> dict[str, Any]:
+        source = (source or "unknown").strip().lower()[:32] or "unknown"
+        event = (event or "open").strip().lower()[:32] or "open"
+        app = (app or "").strip()[:80]
+        kind = (kind or "").strip().lower()[:40]
+        ts = float(at) if at is not None else time.time()
+        record: dict[str, Any] = {
+            "at": ts,
+            "source": source,
+            "event": event,
+        }
+        if app:
+            record["app"] = app
+        if kind:
+            record["kind"] = kind
+        if value is not None and value != "":
+            record["value"] = value
+        if isinstance(meta, dict) and meta:
+            # keep small
+            clean = {str(k)[:40]: meta[k] for k in list(meta)[:12]}
+            record["meta"] = clean
+
+        with self._lock:
+            data = self._load()
+            events = data.get("events") if isinstance(data.get("events"), list) else []
+            events.append(record)
+            data["events"] = events
+            self._save(data)
+        return record
+
+    def read(
+        self,
+        *,
+        minutes: float = DEFAULT_READ_MINUTES,
+        limit: int = DEFAULT_READ_LIMIT,
+    ) -> dict[str, Any]:
+        minutes = max(1.0, float(minutes or DEFAULT_READ_MINUTES))
+        limit = max(1, min(200, int(limit or DEFAULT_READ_LIMIT)))
+        cutoff = time.time() - minutes * 60.0
+
+        with self._lock:
+            data = self._load()
+            events = data.get("events") if isinstance(data.get("events"), list) else []
+
+        recent = [
+            e
+            for e in events
+            if isinstance(e, dict) and float(e.get("at") or 0) >= cutoff
+        ]
+        recent.sort(key=lambda e: float(e.get("at") or 0), reverse=True)
+        clipped = recent[:limit]
+
+        phone_events = [e for e in clipped if e.get("source") == "phone"]
+        watch_events = [e for e in clipped if e.get("source") == "watch"]
+        other_events = [
+            e for e in clipped if e.get("source") not in {"phone", "watch"}
+        ]
+
+        last_any = clipped[0] if clipped else None
+        last_phone = phone_events[0] if phone_events else None
+        last_watch = watch_events[0] if watch_events else None
+
+        now = time.time()
+        last_at = float(last_any.get("at") or 0) if last_any else 0.0
+        idle_minutes = round((now - last_at) / 60.0, 1) if last_at else None
+
+        hr = None
+        hr_at = None
+        for e in watch_events:
+            kind = str(e.get("kind") or "")
+            if kind in {"hr", "heart_rate", "heartrate"} or e.get("value") is not None:
+                try:
+                    hr = float(e.get("value"))
+                    hr_at = float(e.get("at") or 0) or None
+                    break
+                except (TypeError, ValueError):
+                    continue
+
+        note = self._note_line(
+            last_phone=last_phone,
+            last_watch=last_watch,
+            hr=hr,
+            idle_minutes=idle_minutes,
+            now=now,
+        )
+
+        return {
+            "ok": True,
+            "idle_minutes": idle_minutes,
+            "last_event_at": last_at or None,
+            "window_minutes": minutes,
+            "phone": {
+                "last_app": (last_phone or {}).get("app") or None,
+                "last_at": float((last_phone or {}).get("at") or 0) or None,
+                "last_event": (last_phone or {}).get("event"),
+                "recent": [
+                    {
+                        "app": e.get("app"),
+                        "event": e.get("event"),
+                        "at": e.get("at"),
+                    }
+                    for e in phone_events[:12]
+                ],
+            },
+            "watch": {
+                "hr": hr,
+                "hr_at": hr_at,
+                "recent": [
+                    {
+                        "kind": e.get("kind"),
+                        "value": e.get("value"),
+                        "event": e.get("event"),
+                        "at": e.get("at"),
+                    }
+                    for e in watch_events[:12]
+                ],
+            },
+            "other": [
+                {
+                    "source": e.get("source"),
+                    "app": e.get("app"),
+                    "kind": e.get("kind"),
+                    "event": e.get("event"),
+                    "value": e.get("value"),
+                    "at": e.get("at"),
+                }
+                for e in other_events[:8]
+            ],
+            "note": note,
+            "count": len(clipped),
+        }
+
+    @staticmethod
+    def _ago(ts: float | None, now: float) -> str:
+        if not ts:
+            return ""
+        mins = max(0, int((now - ts) / 60))
+        if mins < 1:
+            return "just now"
+        if mins < 60:
+            return f"{mins}m ago"
+        hours = mins // 60
+        if hours < 48:
+            return f"{hours}h ago"
+        return f"{hours // 24}d ago"
+
+    def _note_line(
+        self,
+        *,
+        last_phone: dict | None,
+        last_watch: dict | None,
+        hr: float | None,
+        idle_minutes: float | None,
+        now: float,
+    ) -> str:
+        parts: list[str] = []
+        if last_phone and last_phone.get("app"):
+            ago = self._ago(float(last_phone.get("at") or 0), now)
+            parts.append(f"{last_phone['app']}" + (f" · {ago}" if ago else ""))
+        if hr is not None:
+            parts.append(f"hr {hr:g}")
+        elif last_watch and last_watch.get("kind"):
+            parts.append(str(last_watch.get("kind")))
+        if idle_minutes is not None and (not last_phone or idle_minutes >= 15):
+            parts.append(f"idle {idle_minutes:g}m")
+        return " · ".join(parts) if parts else ""
+
+
+def resolve_bark_key(explicit: str = "") -> str:
+    key = (explicit or "").strip()
+    if key:
+        return key
+    key = os.environ.get("BARK_KEY", "").strip()
+    if key:
+        return key
+    path = Path(os.path.expanduser("~/.bark_device_key"))
+    try:
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+    except Exception:
+        pass
+    return ""
+
+
+def send_bark(
+    *,
+    title: str,
+    body: str,
+    key: str = "",
+    icon: str = "",
+    group: str = "NoxRhythm",
+) -> dict[str, Any]:
+    bark_key = resolve_bark_key(key)
+    if not bark_key:
+        return {"ok": False, "error": "BARK_KEY missing (env or ~/.bark_device_key)"}
+
+    title = (title or "Nox").strip()[:80] or "Nox"
+    body = (body or "").strip()
+    if not body:
+        return {"ok": False, "error": "body required"}
+    if len(body) > 500:
+        body = body[:497] + "..."
+
+    payload: dict[str, Any] = {
+        "device_key": bark_key,
+        "title": title,
+        "body": body,
+        "group": group or "NoxRhythm",
+    }
+    icon = (icon or os.environ.get("BARK_ICON_URL") or "").strip()
+    if icon:
+        payload["icon"] = icon
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        BARK_PUSH_URL,
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            status = getattr(resp, "status", 200)
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", errors="replace") if e.fp else str(e)
+        return {"ok": False, "error": f"HTTP {e.code}", "detail": raw[:300]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+    parsed: dict[str, Any] = {}
+    try:
+        parsed = json.loads(raw) if raw else {}
+    except Exception:
+        parsed = {"raw": raw[:300]}
+
+    code = parsed.get("code") if isinstance(parsed, dict) else None
+    if status != 200 or (code is not None and code != 200):
+        return {
+            "ok": False,
+            "error": (parsed.get("message") if isinstance(parsed, dict) else None)
+            or f"status={status}",
+            "detail": parsed,
+        }
+    return {"ok": True, "provider": "bark", "result": parsed}

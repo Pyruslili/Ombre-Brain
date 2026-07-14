@@ -12,8 +12,8 @@ from __future__ import annotations
 # 核心职责：
 #   - Initialize config, bucket manager, dehydrator, decay engine
 #     初始化配置、记忆桶管理器、脱水器、衰减引擎
-#   - Expose 9 MCP tools:
-#     暴露 9 个 MCP 工具：
+#   - Expose MCP tools:
+#     暴露 MCP 工具：
 #       breath — Surface unresolved memories or search by keyword
 #                浮现未解决记忆 或 按关键词检索
 #       hold   — Store memory/feel/writing/unresolved/window with optional signal hints
@@ -22,6 +22,8 @@ from __future__ import annotations
 #                抽屉漫游与旧条目标记
 #       stir / settle / pass / break / undercurrent — Weather and drive controls
 #                天气与 drive 控制
+#       rhythm — phone/watch 外场节律 read + 主动 Bark push
+#                嘉嘉外场活动与主动推送
 #
 # Startup:
 # 启动方式：
@@ -167,6 +169,17 @@ _desire_db = os.path.join(
 )
 _desire = DesireEngine(db_path=_desire_db)
 _last_signal_ts: list = [0.0]  # 最近一次嘉嘉输入信号时间戳
+
+# Rhythm — phone / watch 外场节律（MCP + HTTP + Bark 主动推送）
+from rhythm_store import RhythmStore, send_bark  # noqa: E402
+
+_RHYTHM_PATH = _bucket_path("rhythm.json")
+_rhythm_store = RhythmStore(_RHYTHM_PATH)
+_RHYTHM_TOKEN = (
+    os.environ.get("OMBRE_RHYTHM_TOKEN")
+    or os.environ.get("RHYTHM_TOKEN")
+    or ""
+).strip()
 
 NOXMEW_SPEAK_URL = "https://toy.pyrus.uk/speak"
 NOXMEW_SPEAK_TOKEN = os.environ.get("SPEAK_TOKEN", "")
@@ -500,7 +513,7 @@ def _undercurrent_state(state: dict) -> dict:
     thoughts = _sorted_thoughts(state)
     drives = state.get("drives") if isinstance(state.get("drives"), dict) else {}
     drive_order = [k for k in DRIVE_KEYS if k in drives] + [k for k in drives if k not in DRIVE_KEYS]
-    return {
+    out = {
         "Drive": {k: round(_num(drives.get(k)), 3) for k in drive_order},
         "Affect": {
             "Warmth": round(_num(source_weather.get("warmth"), _num(effective.get("effective_PA"), 0.0)), 3),
@@ -525,6 +538,19 @@ def _undercurrent_state(state: dict) -> dict:
             if str(t.get("text") or "").strip()
         ],
     }
+    # 嘉嘉外场节律（phone / watch…）——有数据才附上，不撑爆 undercurrent
+    try:
+        rhythm_snap = _rhythm_store.read(minutes=180, limit=12)
+        if rhythm_snap.get("count"):
+            out["Rhythm"] = {
+                "note": rhythm_snap.get("note") or "",
+                "idle_minutes": rhythm_snap.get("idle_minutes"),
+                "last_app": (rhythm_snap.get("phone") or {}).get("last_app"),
+                "hr": (rhythm_snap.get("watch") or {}).get("hr"),
+            }
+    except Exception:
+        pass
+    return out
 
 
 def _compact_desire_state(state: dict) -> dict:
@@ -2636,6 +2662,37 @@ def undercurrent_tool() -> dict:
     """weather当前状态与详细展开层。"""
     _desire.tick(idle_seconds=0)
     return _undercurrent_state(_desire.state())
+
+
+@mcp.tool(name="rhythm")
+def rhythm_tool(
+    action: str = "read",
+    title: str = "",
+    body: str = "",
+    minutes: int = 180,
+    limit: int = 40,
+) -> dict:
+    """嘉嘉外场节律。action=read|push。
+    read：一次读 phone / watch / idle（快捷指令与 iWatch 上报的数据）。
+    push：主动找她时 Bark 弹窗（回复路径不要用这个）。title/body 给 push 用。
+    """
+    action = (action or "read").strip().lower()
+    if action in {"read", "get", "snapshot", ""}:
+        return _rhythm_store.read(minutes=minutes, limit=limit)
+    if action in {"push", "bark", "notify"}:
+        result = send_bark(title=title or "Nox", body=body)
+        if result.get("ok"):
+            try:
+                _rhythm_store.append(
+                    source="push",
+                    event="bark",
+                    kind="proactive",
+                    meta={"title": (title or "Nox")[:80], "body": (body or "")[:120]},
+                )
+            except Exception:
+                pass
+        return result
+    return {"ok": False, "error": "action must be read or push"}
 
 
 def stir(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
@@ -5819,6 +5876,135 @@ async def api_soma_state(request):
     except Exception:
         return JSONResponse({"line": None, "chord": None, "source": None},
                            headers={"Access-Control-Allow-Origin": "*"})
+
+
+# =============================================================
+# /api/rhythm — 外场节律（phone / watch / Bark 主动推送）
+# 快捷指令 POST event；MCP rhythm read/push；heartbeat 可读 note。
+# 写入鉴权：OMBRE_RHYTHM_TOKEN（或 RHYTHM_TOKEN）。未配置时开放写入（方便本机调试）。
+# =============================================================
+def _rhythm_token_ok(request) -> bool:
+    if not _RHYTHM_TOKEN:
+        return True
+    got = (
+        request.headers.get("x-rhythm-token")
+        or request.headers.get("X-Rhythm-Token")
+        or request.headers.get("x-auth-token")
+        or request.headers.get("X-Auth-Token")
+        or ""
+    ).strip()
+    if not got:
+        try:
+            got = (request.query_params.get("token") or "").strip()
+        except Exception:
+            got = ""
+    if not got:
+        auth = (request.headers.get("authorization") or "").strip()
+        if auth.lower().startswith("bearer "):
+            got = auth[7:].strip()
+    try:
+        return secrets.compare_digest(got, _RHYTHM_TOKEN)
+    except Exception:
+        return got == _RHYTHM_TOKEN
+
+
+@mcp.custom_route("/api/rhythm/event", methods=["POST", "OPTIONS"])
+async def api_rhythm_event(request):
+    from starlette.responses import JSONResponse
+
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            {"ok": True},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+            },
+        )
+    if not _rhythm_token_ok(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "JSON object required"}, status_code=400)
+
+    source = (body.get("source") or "").strip()
+    app = (body.get("app") or "").strip()
+    # 快捷指令常只 POST {"app":"小红书"} —— 默认 source=phone
+    if not source:
+        if app:
+            source = "phone"
+        elif body.get("kind") or body.get("value") is not None:
+            source = "watch"
+        else:
+            source = "phone"
+
+    try:
+        record = _rhythm_store.append(
+            source=source,
+            event=str(body.get("event") or "open"),
+            app=app,
+            kind=str(body.get("kind") or ""),
+            value=body.get("value"),
+            meta=body.get("meta") if isinstance(body.get("meta"), dict) else None,
+            at=body.get("at"),
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    return JSONResponse(
+        {"ok": True, "record": record},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
+@mcp.custom_route("/api/rhythm/read", methods=["GET"])
+async def api_rhythm_read(request):
+    from starlette.responses import JSONResponse
+
+    try:
+        minutes = float(request.query_params.get("minutes") or 180)
+    except (TypeError, ValueError):
+        minutes = 180
+    try:
+        limit = int(request.query_params.get("limit") or 40)
+    except (TypeError, ValueError):
+        limit = 40
+    snap = _rhythm_store.read(minutes=minutes, limit=limit)
+    return JSONResponse(snap, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/rhythm/push", methods=["POST"])
+async def api_rhythm_push(request):
+    """主动推送（Bark）。仅应用在「我想找你」路径，不要绑聊天回复。"""
+    from starlette.responses import JSONResponse
+
+    if not _rhythm_token_ok(request):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "JSON object required"}, status_code=400)
+
+    title = str(body.get("title") or "Nox")
+    text = str(body.get("body") or body.get("message") or "")
+    result = send_bark(title=title, body=text, key=str(body.get("key") or ""))
+    if result.get("ok"):
+        try:
+            _rhythm_store.append(
+                source="push",
+                event="bark",
+                kind="proactive",
+                meta={"title": title[:80], "body": text[:120]},
+            )
+        except Exception:
+            pass
+    status = 200 if result.get("ok") else 502
+    return JSONResponse(result, status_code=status, headers={"Access-Control-Allow-Origin": "*"})
 
 
 @mcp.custom_route("/api/analyzer/mode", methods=["GET"])
