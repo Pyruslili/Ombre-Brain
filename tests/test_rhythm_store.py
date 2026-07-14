@@ -35,3 +35,32 @@ def test_max_events_trim(tmp_path: Path):
         store.append(source="phone", app=f"app{i}", event="open")
     data = store._load()
     assert len(data["events"]) == 5
+
+
+def test_skip_empty_and_noise_phone(tmp_path: Path):
+    store = RhythmStore(tmp_path / "rhythm.json")
+    assert store.append(source="phone", app="").get("skipped")
+    assert store.append(source="phone", app="Bark").get("skipped")
+    assert store.append(source="phone", app="快捷指令").get("skipped")
+    store.append(source="phone", app="微信")
+    snap = store.read(limit=5)
+    assert snap["count"] == 1
+    assert snap["phone"]["last_app"] == "微信"
+
+
+def test_merge_consecutive_same_app(tmp_path: Path):
+    store = RhythmStore(tmp_path / "rhythm.json")
+    store.append(source="phone", app="小红书")
+    r = store.append(source="phone", app="小红书")
+    assert r.get("merged") is True
+    data = store._load()
+    assert len(data["events"]) == 1
+
+
+def test_default_read_limit_five(tmp_path: Path):
+    store = RhythmStore(tmp_path / "rhythm.json")
+    for i in range(8):
+        store.append(source="phone", app=f"app{i}")
+    snap = store.read()  # default limit 5
+    assert snap["count"] == 5
+    assert len(snap["phone"]["recent"]) == 5

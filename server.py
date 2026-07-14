@@ -540,7 +540,7 @@ def _undercurrent_state(state: dict) -> dict:
     }
     # 嘉嘉外场节律（phone / watch…）——有数据才附上，不撑爆 undercurrent
     try:
-        rhythm_snap = _rhythm_store.read(minutes=180, limit=12)
+        rhythm_snap = _rhythm_store.read(minutes=180, limit=5)
         if rhythm_snap.get("count"):
             out["Rhythm"] = {
                 "note": rhythm_snap.get("note") or "",
@@ -2670,7 +2670,7 @@ def rhythm_tool(
     title: str = "",
     body: str = "",
     minutes: int = 180,
-    limit: int = 40,
+    limit: int = 5,
 ) -> dict:
     """嘉嘉外场节律。action=read|push。
     read：一次读 phone / watch / idle（快捷指令与 iWatch 上报的数据）。
@@ -5969,9 +5969,9 @@ async def api_rhythm_read(request):
     except (TypeError, ValueError):
         minutes = 180
     try:
-        limit = int(request.query_params.get("limit") or 40)
+        limit = int(request.query_params.get("limit") or 5)
     except (TypeError, ValueError):
-        limit = 40
+        limit = 5
     snap = _rhythm_store.read(minutes=minutes, limit=limit)
     return JSONResponse(snap, headers={"Access-Control-Allow-Origin": "*"})
 

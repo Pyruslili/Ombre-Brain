@@ -18,8 +18,17 @@ from typing import Any
 
 DEFAULT_MAX_EVENTS = 400
 DEFAULT_READ_MINUTES = 180
-DEFAULT_READ_LIMIT = 40
+DEFAULT_READ_LIMIT = 5  # 读快照默认最近 5 条，别拉一长串
 BARK_PUSH_URL = "https://api.day.app/push"
+# 写入噪声：这些名字通常是调试残留，不当「在刷什么」
+NOISE_APPS = {
+    "bark",
+    "快捷指令",
+    "shortcuts",
+    "设置",
+    "settings",
+    "springboard",
+}
 
 
 class RhythmStore:
@@ -55,6 +64,13 @@ class RhythmStore:
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(self.path)
 
+    @staticmethod
+    def _is_noise_app(app: str) -> bool:
+        name = (app or "").strip().lower()
+        if not name:
+            return True
+        return name in NOISE_APPS
+
     def append(
         self,
         *,
@@ -71,6 +87,17 @@ class RhythmStore:
         app = (app or "").strip()[:80]
         kind = (kind or "").strip().lower()[:40]
         ts = float(at) if at is not None else time.time()
+
+        # phone 必须带 app 名；空名 / 噪声 app 直接丢，不当事件
+        if source == "phone":
+            if not app or self._is_noise_app(app):
+                return {
+                    "skipped": True,
+                    "reason": "empty_or_noise_app",
+                    "app": app or None,
+                    "source": source,
+                }
+
         record: dict[str, Any] = {
             "at": ts,
             "source": source,
@@ -90,6 +117,23 @@ class RhythmStore:
         with self._lock:
             data = self._load()
             events = data.get("events") if isinstance(data.get("events"), list) else []
+            # 同一 app 连续 open 合并：只刷新时间，不堆一串重复
+            if (
+                source == "phone"
+                and event == "open"
+                and app
+                and events
+                and isinstance(events[-1], dict)
+                and events[-1].get("source") == "phone"
+                and events[-1].get("app") == app
+                and events[-1].get("event") == "open"
+            ):
+                events[-1]["at"] = ts
+                data["events"] = events
+                self._save(data)
+                record = dict(events[-1])
+                record["merged"] = True
+                return record
             events.append(record)
             data["events"] = events
             self._save(data)
@@ -102,18 +146,24 @@ class RhythmStore:
         limit: int = DEFAULT_READ_LIMIT,
     ) -> dict[str, Any]:
         minutes = max(1.0, float(minutes or DEFAULT_READ_MINUTES))
-        limit = max(1, min(200, int(limit or DEFAULT_READ_LIMIT)))
+        limit = max(1, min(50, int(limit or DEFAULT_READ_LIMIT)))
         cutoff = time.time() - minutes * 60.0
 
         with self._lock:
             data = self._load()
             events = data.get("events") if isinstance(data.get("events"), list) else []
 
-        recent = [
-            e
-            for e in events
-            if isinstance(e, dict) and float(e.get("at") or 0) >= cutoff
-        ]
+        def _keep(e: dict) -> bool:
+            if float(e.get("at") or 0) < cutoff:
+                return False
+            src = e.get("source")
+            if src == "phone":
+                app = str(e.get("app") or "").strip()
+                if not app or self._is_noise_app(app):
+                    return False
+            return True
+
+        recent = [e for e in events if isinstance(e, dict) and _keep(e)]
         recent.sort(key=lambda e: float(e.get("at") or 0), reverse=True)
         clipped = recent[:limit]
 
@@ -166,7 +216,7 @@ class RhythmStore:
                         "event": e.get("event"),
                         "at": e.get("at"),
                     }
-                    for e in phone_events[:12]
+                    for e in phone_events[:limit]
                 ],
             },
             "watch": {
@@ -179,7 +229,7 @@ class RhythmStore:
                         "event": e.get("event"),
                         "at": e.get("at"),
                     }
-                    for e in watch_events[:12]
+                    for e in watch_events[:limit]
                 ],
             },
             "other": [
@@ -191,7 +241,7 @@ class RhythmStore:
                     "value": e.get("value"),
                     "at": e.get("at"),
                 }
-                for e in other_events[:8]
+                for e in other_events[:limit]
             ],
             "note": note,
             "count": len(clipped),
