@@ -5396,6 +5396,77 @@ async def api_latent_notes(request):
     )
 
 
+@mcp.custom_route("/api/sanctum/reverie", methods=["GET"])
+async def api_sanctum_reverie(request):
+    """公开：Reverie 页数据 — Dream Veil + Latent Notes（只读）。"""
+    from starlette.responses import JSONResponse
+    import json as _json
+    import os as _os
+
+    status = (request.query_params.get("status") or "").strip()
+    try:
+        limit = int(request.query_params.get("limit") or 80)
+    except ValueError:
+        limit = 80
+    limit = max(1, min(limit, 200))
+
+    # Dream
+    dream_text = ""
+    dream_ts = 0
+    try:
+        dream_path = _bucket_path("latest_dream.json")
+        if _os.path.exists(dream_path):
+            with open(dream_path, encoding="utf-8") as f:
+                data = _json.load(f)
+            dream_text = str(data.get("dream") or "")
+            dream_ts = data.get("ts") or 0
+    except Exception:
+        pass
+
+    # Latent notes
+    notes: list = []
+    counts = {"draft": 0, "approved": 0, "used": 0}
+    try:
+        pool = _load_latent_notes()
+        if _prune_expired_latent_notes(pool):
+            _save_latent_notes(pool)
+        all_notes = list(pool.get("notes") or [])
+        for n in all_notes:
+            if not isinstance(n, dict):
+                continue
+            st = str(n.get("status") or "draft")
+            if st in counts:
+                counts[st] += 1
+        filtered = all_notes
+        if status:
+            filtered = [n for n in all_notes if isinstance(n, dict) and n.get("status") == status]
+        filtered = sorted(filtered, key=lambda n: str(n.get("created_at", "")), reverse=True)
+        filtered = sorted(filtered, key=lambda n: not bool(n.get("pinned")))
+        notes = filtered[:limit]
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": str(e)},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "dream": {
+                "text": dream_text,
+                "ts": dream_ts,
+            },
+            "latent_notes": {
+                "count": len(notes),
+                "counts": counts,
+                "notes": notes,
+            },
+        },
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
 @mcp.custom_route("/api/latent-notes", methods=["POST"])
 async def api_latent_notes_create(request):
     """手动添加一条潜意识便签草稿。"""
