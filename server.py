@@ -6168,6 +6168,179 @@ async def api_feels_public(request):
                            headers={"Access-Control-Allow-Origin": "*"})
 
 
+@mcp.custom_route("/api/sanctum/traces", methods=["GET"])
+async def api_sanctum_traces(request):
+    """公开：Sanctum Memories / Trace 列表（与 dashboard Traces 同结构）。无需 auth。
+
+    Query:
+      filter — all|memory|feel|letter|writing|window|pinned|unresolved|digested|inner|archived
+      q — 可选关键词（name / preview / tags / domain）
+      limit — 默认 200，最大 1000
+    """
+    from starlette.responses import JSONResponse
+
+    def _facets(meta: dict) -> set[str]:
+        domains = meta.get("domain") or []
+        if isinstance(domains, str):
+            domains = [domains]
+        tags = meta.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        labels = {str(x).lower() for x in list(domains) + list(tags) if x}
+        btype = str(meta.get("type") or "").lower()
+        if btype:
+            labels.add(btype)
+        return labels
+
+    def _kind(meta: dict) -> str:
+        labels = _facets(meta)
+        btype = str(meta.get("type") or "").lower()
+        if btype == "feel" or "feel" in labels:
+            return "feel"
+        if "letter_jiajia" in labels or "letter" in labels or btype in {"letter", "letter_jiajia"}:
+            return "letter"
+        if "writing" in labels or btype == "writing":
+            return "writing"
+        if "window" in labels or btype == "window":
+            return "window"
+        if "inner" in labels or btype == "inner":
+            return "inner"
+        if btype == "archived":
+            return "archived"
+        return "memory"
+
+    try:
+        qs = request.query_params
+        filt = (qs.get("filter") or "all").strip().lower()
+        q = (qs.get("q") or "").strip().lower()
+        try:
+            limit = max(1, min(int(qs.get("limit") or 200), 1000))
+        except Exception:
+            limit = 200
+
+        all_buckets = await bucket_mgr.list_all(include_archive=True)
+        rows: list[dict] = []
+        for b in all_buckets:
+            if not isinstance(b, dict):
+                continue
+            meta = b.get("metadata") if isinstance(b.get("metadata"), dict) else {}
+            kind = _kind(meta)
+            preview = strip_wikilinks(b.get("content", "") or "")[:200]
+            row = {
+                "id": b.get("id"),
+                "name": meta.get("name") or b.get("id") or "",
+                "type": meta.get("type") or "dynamic",
+                "kind": kind,
+                "domain": meta.get("domain") or [],
+                "tags": meta.get("tags") or [],
+                "chord": meta.get("chord") or "",
+                "pinned": bool(meta.get("pinned")),
+                "resolved": bool(meta.get("resolved")),
+                "digested": bool(meta.get("digested")),
+                "unresolved": bool(meta.get("unresolved")) if "unresolved" in meta else False,
+                "created": meta.get("created") or "",
+                "last_active": meta.get("last_active") or meta.get("updated") or meta.get("created") or "",
+                "content_preview": preview,
+                "importance": meta.get("importance", 5),
+            }
+            # filter
+            labels = _facets(meta)
+            if filt == "all":
+                if row["digested"] or row["resolved"]:
+                    continue
+            elif filt == "pinned":
+                if not row["pinned"]:
+                    continue
+            elif filt == "feel":
+                if kind != "feel":
+                    continue
+            elif filt == "letter":
+                if kind != "letter":
+                    continue
+            elif filt == "writing":
+                if kind != "writing":
+                    continue
+            elif filt == "window":
+                if kind != "window":
+                    continue
+            elif filt == "inner":
+                if kind != "inner" and "inner" not in labels:
+                    continue
+            elif filt == "memory":
+                if kind != "memory":
+                    continue
+            elif filt == "digested":
+                if not (row["digested"] or row["resolved"]):
+                    continue
+            elif filt == "archived":
+                if kind != "archived" and str(meta.get("type") or "") != "archived":
+                    continue
+            elif filt == "unresolved":
+                if not row["unresolved"] and "unresolved" not in labels:
+                    continue
+            if q:
+                hay = " ".join(
+                    [
+                        str(row["name"]),
+                        str(row["content_preview"]),
+                        " ".join(str(x) for x in (row["tags"] or [])),
+                        " ".join(str(x) for x in (row["domain"] or [])),
+                        str(row["chord"]),
+                    ]
+                ).lower()
+                if q not in hay:
+                    continue
+            rows.append(row)
+
+        # timeline: pinned 置顶，其余按 created 倒序（与 dashboard Traces 一致）
+        pinned = [r for r in rows if r.get("pinned")]
+        rest = [r for r in rows if not r.get("pinned")]
+        pinned.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
+        rest.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
+        rows = (pinned + rest)[:limit]
+        return JSONResponse(
+            {"ok": True, "records": rows, "count": len(rows)},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": str(e)},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+
+@mcp.custom_route("/api/sanctum/traces/{trace_id}", methods=["GET"])
+async def api_sanctum_trace_detail(request):
+    """公开：单条 Trace 全文（Sanctum Memories 二级详情）。"""
+    from starlette.responses import JSONResponse
+    try:
+        trace_id = request.path_params.get("trace_id") or ""
+        bucket = await bucket_mgr.get(trace_id)
+        if not bucket:
+            return JSONResponse(
+                {"ok": False, "error": "not found"},
+                status_code=404,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+        meta = bucket.get("metadata") if isinstance(bucket.get("metadata"), dict) else {}
+        return JSONResponse(
+            {
+                "ok": True,
+                "id": bucket.get("id"),
+                "metadata": meta,
+                "content": strip_wikilinks(bucket.get("content", "") or ""),
+            },
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": str(e)},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+
 @mcp.custom_route("/api/sanctum/summary", methods=["GET"])
 async def api_sanctum_summary(request):
     """公开：Sanctum 首页计数（总桶 / latent notes / letter / writing 最新日期）。无需 auth。"""
