@@ -6341,6 +6341,82 @@ async def api_sanctum_trace_detail(request):
         )
 
 
+@mcp.custom_route("/api/sanctum/breath", methods=["GET"])
+async def api_sanctum_breath(request):
+    """公开：模拟 Breath 浮现条目（钉选 + 高权重未解决 + feel），默认 top 20。"""
+    from starlette.responses import JSONResponse
+    try:
+        try:
+            limit = max(1, min(int(request.query_params.get("limit") or 20), 40))
+        except Exception:
+            limit = 20
+        all_buckets = await bucket_mgr.list_all(include_archive=False)
+        pinned = []
+        scored = []
+        feels = []
+        for b in all_buckets:
+            if not isinstance(b, dict):
+                continue
+            meta = b.get("metadata") if isinstance(b.get("metadata"), dict) else {}
+            btype = str(meta.get("type") or "").lower()
+            if btype in {"breath", "dream"}:
+                continue
+            preview = strip_wikilinks(b.get("content", "") or "")[:280]
+            row = {
+                "id": b.get("id"),
+                "name": meta.get("name") or b.get("id") or "",
+                "type": btype or "dynamic",
+                "kind": "feel" if btype == "feel" else ("pinned" if (meta.get("pinned") or meta.get("protected")) else "memory"),
+                "pinned": bool(meta.get("pinned") or meta.get("protected")),
+                "created": meta.get("created") or "",
+                "content_preview": preview,
+                "score": float(decay_engine.calculate_score(meta) or 0),
+                "section": "pinned" if (meta.get("pinned") or meta.get("protected")) else ("feel" if btype == "feel" else "memory"),
+            }
+            if row["pinned"]:
+                pinned.append(row)
+            elif btype == "feel":
+                if not meta.get("resolved") and not meta.get("digested"):
+                    feels.append(row)
+            elif btype not in {"permanent", "archived"}:
+                if not meta.get("resolved") and not meta.get("digested"):
+                    # 排除 letter/writing 等 wander-only 若可检测
+                    domains = meta.get("domain") or []
+                    if isinstance(domains, str):
+                        domains = [domains]
+                    tags = meta.get("tags") or []
+                    if isinstance(tags, str):
+                        tags = [tags]
+                    labels = {str(x).lower() for x in list(domains) + list(tags) if x}
+                    if not labels.intersection({"letter", "letter_jiajia", "writing", "window", "private"}):
+                        scored.append(row)
+
+        pinned.sort(key=lambda r: str(r.get("created") or ""), reverse=True)
+        scored.sort(key=lambda r: float(r.get("score") or 0), reverse=True)
+        feels.sort(key=lambda r: float(r.get("score") or 0), reverse=True)
+
+        # 模拟 breath：钉选全收 + memory 前 N + feel 若干，合计不超过 limit
+        mem_take = min(12, max(0, limit - len(pinned)))
+        feel_take = min(8, max(0, limit - len(pinned) - mem_take))
+        records = pinned[:limit] + scored[:mem_take] + feels[:feel_take]
+        records = records[:limit]
+        return JSONResponse(
+            {
+                "ok": True,
+                "records": records,
+                "count": len(records),
+                "note": "simulated breath surface · top by weight",
+            },
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": str(e)},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+
 @mcp.custom_route("/api/sanctum/traces/{trace_id}/update", methods=["POST"])
 async def api_sanctum_trace_update(request):
     """公开：Sanctum 详情操作（编辑 / 降权 / 沉底 / 消化）— 限字段。"""
