@@ -324,7 +324,21 @@ def send_bark(
         "body": body,
         "group": group or "NoxRhythm",
     }
-    icon = (icon or os.environ.get("BARK_ICON_URL") or "").strip()
+    if not icon:
+        icon = (os.environ.get("BARK_ICON_URL") or "").strip()
+    if not icon:
+        try:
+            p = Path(os.path.expanduser("~/.config/nox/bark_icon_url"))
+            if p.exists():
+                icon = p.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+        except Exception:
+            icon = ""
+    # 默认 Nox 黑猫（GH raw）；可被 BARK_ICON_URL / ~/.config/nox/bark_icon_url 覆盖
+    if not icon:
+        icon = (
+            "https://raw.githubusercontent.com/Pyruslili/Ombre-Brain/"
+            "main/docs/assets/nox-bark-icon.png"
+        )
     if icon:
         payload["icon"] = icon
 
