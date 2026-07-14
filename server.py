@@ -6341,6 +6341,99 @@ async def api_sanctum_trace_detail(request):
         )
 
 
+@mcp.custom_route("/api/sanctum/traces/{trace_id}/update", methods=["POST"])
+async def api_sanctum_trace_update(request):
+    """公开：Sanctum 详情操作（编辑 / 降权 / 沉底 / 消化）— 限字段。"""
+    from starlette.responses import JSONResponse
+    try:
+        trace_id = request.path_params.get("trace_id") or ""
+        try:
+            body = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"ok": False, "error": "Invalid JSON"},
+                status_code=400,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+        if not isinstance(body, dict):
+            return JSONResponse(
+                {"ok": False, "error": "body must be object"},
+                status_code=400,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+        bucket = await bucket_mgr.get(trace_id)
+        if not bucket:
+            return JSONResponse(
+                {"ok": False, "error": "not found"},
+                status_code=404,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+        kwargs: dict = {}
+        if "content" in body and isinstance(body["content"], str):
+            kwargs["content"] = body["content"]
+        if "name" in body and isinstance(body["name"], str):
+            kwargs["name"] = body["name"].strip() or None
+        if "resolved" in body:
+            kwargs["resolved"] = bool(body["resolved"])
+        if "digested" in body:
+            kwargs["digested"] = bool(body["digested"])
+        if "importance" in body:
+            try:
+                kwargs["importance"] = max(1, min(10, int(body["importance"])))
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    {"ok": False, "error": "importance 1-10"},
+                    status_code=400,
+                    headers={"Access-Control-Allow-Origin": "*"},
+                )
+        if "activation_count" in body:
+            try:
+                kwargs["activation_count"] = max(1, min(999, int(body["activation_count"])))
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    {"ok": False, "error": "activation_count invalid"},
+                    status_code=400,
+                    headers={"Access-Control-Allow-Origin": "*"},
+                )
+        if "arousal" in body:
+            try:
+                kwargs["arousal"] = max(0.0, min(1.0, float(body["arousal"])))
+            except (TypeError, ValueError):
+                return JSONResponse(
+                    {"ok": False, "error": "arousal 0-1"},
+                    status_code=400,
+                    headers={"Access-Control-Allow-Origin": "*"},
+                )
+        if body.get("preserve_last_active"):
+            kwargs["_preserve_last_active"] = True
+        if not kwargs:
+            return JSONResponse(
+                {"ok": False, "error": "nothing to update"},
+                status_code=400,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+        # drop None name
+        if kwargs.get("name") is None:
+            kwargs.pop("name", None)
+        updated = await bucket_mgr.update(trace_id, **kwargs)
+        if not updated:
+            return JSONResponse(
+                {"ok": False, "error": "update failed"},
+                status_code=500,
+                headers={"Access-Control-Allow-Origin": "*"},
+            )
+        return JSONResponse(
+            {"ok": True, "id": trace_id},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        return JSONResponse(
+            {"ok": False, "error": str(e)},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+
+
 @mcp.custom_route("/api/sanctum/summary", methods=["GET"])
 async def api_sanctum_summary(request):
     """公开：Sanctum 首页计数（总桶 / latent notes / letter / writing 最新日期）。无需 auth。"""
