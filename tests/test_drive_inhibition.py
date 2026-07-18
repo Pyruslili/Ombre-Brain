@@ -24,6 +24,9 @@ from desire_engine import (
     refuse_intent,
     satisfy,
     pulse_attachment_nonlinear,
+    drive_activation,
+    effective_drive_activation,
+    pick_intent,
     _feature_value,
     GriefState,
     LEGACY_RETURN_RUMINATION_PREFIX,
@@ -32,6 +35,45 @@ from desire_engine import (
 
 def _baseline_drives():
     return dict(DRIVE_BASELINES)
+
+
+def test_activation_uses_each_drive_own_baseline():
+    assert drive_activation("curiosity", DRIVE_BASELINES["curiosity"]) == 0.0
+    assert drive_activation("possessiveness", DRIVE_BASELINES["possessiveness"]) == 0.0
+    assert drive_activation("possessiveness", 0.50) > drive_activation("attachment", 0.50)
+    assert effective_drive_activation("stewardship", 0.60, 0.25) < drive_activation("stewardship", 0.60)
+
+
+def test_intent_threshold_uses_activation_not_raw_value():
+    drives = _baseline_drives()
+    drives["stewardship"] = 0.52  # activation 0.40 before fatigue
+    state = DriveState(drives=drives)
+
+    intent = pick_intent(state, refractory={})
+
+    assert intent is not None
+    assert intent["drive_key"] == "stewardship"
+    assert intent["score"] >= 0.55
+
+
+def test_delta_coupling_scales_with_actual_tick_movement():
+    state = DriveState(drives=_baseline_drives(), last_ts=1000.0)
+
+    ticked = tick_drives(state, now_ts=2800.0, idle_seconds=1800)
+
+    # curiosity drift is only +0.001, so reflection coupling is about 0.04 *
+    # 0.001 rather than the old unconditional +0.04 jump.
+    assert 0.0 < ticked.drives["reflection"] - DRIVE_BASELINES["reflection"] < 0.001
+
+
+def test_level_coupling_and_damping_are_nearly_tick_rate_invariant():
+    drives = {**DRIVE_BASELINES, "stress": 0.50}
+    one_hour = tick_drives(DriveState(drives=drives, last_ts=1000.0), now_ts=4600.0)
+    two_halves = tick_drives(DriveState(drives=drives, last_ts=1000.0), now_ts=2800.0)
+    two_halves = tick_drives(two_halves, now_ts=4600.0)
+
+    assert abs(one_hour.drives["attachment"] - two_halves.drives["attachment"]) < 0.002
+    assert abs(one_hour.drives["stress"] - two_halves.drives["stress"]) < 0.002
 
 
 def test_refuse_lowers_target_drive_but_less_than_satisfy():

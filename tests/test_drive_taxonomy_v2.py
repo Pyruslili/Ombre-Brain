@@ -50,9 +50,36 @@ def test_state_includes_effective_drives(tmp_path):
     state = engine.state()
     assert "effective_drives" in state
     assert set(state["effective_drives"]).issuperset(set(state["drives"]))
+    assert set(state["drive_activations"]).issuperset(set(state["drives"]))
+    assert set(state["effective_activations"]).issuperset(set(state["drives"]))
     assert "drive_outputs" in state
     assert state["drive_outputs"]["attachment"]["mode"] == "slow"
     assert "confidence" in state["drive_outputs"]["reflection"]
+
+
+def test_dialogue_event_keeps_small_filled_features_out_of_long_term_drives(tmp_path):
+    engine = DesireEngine(str(tmp_path / "desire.db"))
+    result = engine.apply_drive_event({
+        "schema_version": "drive_event_v2",
+        "source": "dialogue_residue",
+        "primary_drive": "attachment",
+        "intensity": 0.18,
+        "confidence": 0.72,
+        "agency": 0.5,
+        "event_label": "ordinary_affection",
+        "brain": {
+            "source": "dialogue_residue",
+            "closeness_pull": 0.35,
+            "inward_pull": 0.15,
+            "expression_pressure": 0.20,
+            "energy_cost": 0.18,
+            "tension_load": 0.05,
+            "grounding": "实",
+        },
+    })
+
+    assert set(result["applied"]) == {"attachment"}
+    assert result["applied"]["attachment"]["raw_delta"] > 0
 
 
 def test_attachment_coupling_barely_moves_libido(tmp_path):

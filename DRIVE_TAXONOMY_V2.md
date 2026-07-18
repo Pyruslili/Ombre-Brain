@@ -68,8 +68,13 @@ an extra taxonomic layer. Implementations may store it under
 render it as `留痕` only when `archive_candidate=true`.
 
 The state API also exposes `drive_outputs`, a normalized readout where each
-drive has `value`, `effective_value`, `confidence`, `source`, `mode`, and
-`reason`. `possessiveness` includes `event_spike` and `territorial_baseline`;
+drive has raw `value`, raw `effective_value`, baseline-normalized `activation`,
+`effective_activation`, `confidence`, `source`, `mode`, and `reason`.
+Top-level `drive_activations` / `effective_activations` use
+`sqrt(clamp((raw - baseline) / (1 - baseline)))`, with local fatigue applied
+only after baseline normalization. Intent selection compares effective
+activation against `0.55`; raw values remain persistence/debug fields.
+`possessiveness` includes `event_spike` and `territorial_baseline`;
 `attachment` includes `rebound` while a return-after-absence rebound is active.
 
 `territorial_alarm` is gated. If it is below `0.55`, `possessiveness` is not

@@ -566,6 +566,10 @@ def _undercurrent_state(state: dict) -> dict:
     drive_order = [k for k in DRIVE_KEYS if k in drives] + [k for k in drives if k not in DRIVE_KEYS]
     out = {
         "Drive": {k: round(_num(drives.get(k)), 3) for k in drive_order},
+        "Activation": {
+            k: round(_num((state.get("effective_activations") or {}).get(k)), 3)
+            for k in drive_order
+        },
         "Affect": {
             "Warmth": round(_num(source_weather.get("warmth"), _num(effective.get("effective_PA"), 0.0)), 3),
             "Shadow": round(abs(_num(source_weather.get("shadow"), _num(effective.get("effective_NA"), 0.0))), 3),
@@ -677,6 +681,8 @@ def _compact_desire_state(state: dict) -> dict:
     return {
         "drives": state.get("drives", {}),
         "effective_drives": state.get("effective_drives", {}),
+        "drive_activations": state.get("drive_activations", {}),
+        "effective_activations": state.get("effective_activations", {}),
         "local_fatigue": state.get("local_fatigue", {}),
         "drive_outputs": state.get("drive_outputs", {}),
         "discernment": state.get("discernment", {}),

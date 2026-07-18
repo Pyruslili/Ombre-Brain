@@ -221,7 +221,10 @@ def normalize_libido_pending(value: dict | None) -> dict:
     data["updated_at"] = float(data.get("updated_at", 0.0) or 0.0)
     return data
 
-INTENT_THRESHOLD = 0.55
+INTENT_ACTIVATION_THRESHOLD = 0.55
+# Compatibility name for older imports; Intent now compares baseline-normalized
+# effective activation, not heterogeneous raw Drive magnitudes.
+INTENT_THRESHOLD = INTENT_ACTIVATION_THRESHOLD
 # 全局fatigue只在极高时强制rest（软压制已经接管大部分情况）
 FATIGUE_HARD_GATE = 0.90
 
@@ -474,21 +477,26 @@ DRIVE_EVENT_SCHEMA = "drive_event_v2"
 DRIVE_EVENT_AGENCY_GATE = 0.35
 DRIVE_EVENT_CONFIDENCE_FLOOR = 0.20
 DRIVE_EVENT_SECONDARY_SCALE = 0.45
+DRIVE_EVENT_PRIMARY_FOCUS_GAIN = 1.35
+DRIVE_EVENT_PRIMARY_FEATURE_GAIN = 0.35
+DRIVE_EVENT_SECONDARY_GATE = 0.25
+DRIVE_EVENT_NONPRIMARY_FEATURE_GATE = 0.45
+DRIVE_EVENT_NONPRIMARY_MIN_DELTA = 0.003
 POSSESSIVENESS_TERRITORIAL_GATE = 0.55
 HOUSE_COLLABORATOR_TERRITORIAL_SCALE = 0.45
 DP_MEMORY_HOLD_SIGNAL_DISCOUNT = 0.55
 DP_MEMORY_HOLD_SIGNAL_WINDOW_SEC = 6 * 3600
 
 DRIVE_EVENT_BASE_DELTA = {
-    "attachment": 0.16,
-    "libido": 0.13,
-    "possessiveness": 0.15,
-    "reflection": 0.13,
-    "stewardship": 0.13,
-    "curiosity": 0.12,
-    "social": 0.12,
-    "fatigue": 0.12,
-    "stress": 0.13,
+    "attachment": 0.22,
+    "libido": 0.19,
+    "possessiveness": 0.21,
+    "reflection": 0.19,
+    "stewardship": 0.19,
+    "curiosity": 0.18,
+    "social": 0.18,
+    "fatigue": 0.18,
+    "stress": 0.19,
 }
 
 DRIVE_EVENT_WEATHER_SOURCES = {
@@ -806,6 +814,37 @@ def compute_local_fatigue(global_fatigue: float) -> dict:
 def effective_score(drive_val: float, local_fat: float) -> float:
     """有效分 = drive值 × (1 - 局部疲劳)"""
     return drive_val * (1.0 - local_fat)
+
+
+def drive_activation(drive_key: str, drive_val: float) -> float:
+    """Normalize pressure above baseline with a perceptual sqrt response.
+
+    Linear headroom made even decisive events look permanently half-asleep.
+    Sqrt keeps baseline at zero and full saturation at one while separating
+    ordinary (roughly 0.15-0.40) from decisive (0.50+) activation.
+    """
+    drive_key = normalize_drive_key(drive_key, drive_key)
+    baseline = DRIVE_BASELINES.get(drive_key, 0.0)
+    headroom = max(1e-9, 1.0 - baseline)
+    linear = _clamp((float(drive_val or 0.0) - baseline) / headroom)
+    return math.sqrt(linear)
+
+
+def effective_drive_activation(drive_key: str, drive_val: float, local_fat: float) -> float:
+    """Fatigue suppresses active pressure, never the Drive's resting baseline."""
+    return _clamp(drive_activation(drive_key, drive_val) * (1.0 - _clamp(local_fat)))
+
+
+def drive_activation_snapshot(drives: dict, local_fatigue: dict | None = None) -> dict:
+    drives = normalize_drive_values(drives)
+    fatigue = local_fatigue or {}
+    return {
+        key: round(
+            effective_drive_activation(key, drives[key], float(fatigue.get(key, 0.0) or 0.0)),
+            3,
+        )
+        for key in DRIVE_KEYS
+    }
 
 
 def effective_drive_snapshot(drives: dict, local_fatigue: dict) -> dict:
@@ -2822,15 +2861,20 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0,
         target = _clamp(rebound["baseline"] + rebound["overshoot"])
         new_drives["attachment"] = max(new_drives["attachment"], target)
 
+    elapsed = now_ts - float(state.last_ts or 0.0)
+    tick_scale = _clamp(elapsed / 1800.0, 0.25, 4.0) if elapsed > 0 else 1.0
     for src, tgt, coeff, mode in COUPLING:
         if mode == "level":
-            delta = coeff * (new_drives[src] - DRIVE_BASELINES[src])
+            delta = coeff * (new_drives[src] - DRIVE_BASELINES[src]) * tick_scale
         else:
-            delta = coeff if new_drives[src] > prev[src] else 0.0
+            # Delta coupling follows the size of the source movement. The old
+            # constant jump made +0.001 and +0.5 produce the same downstream hit.
+            delta = coeff * max(0.0, new_drives[src] - prev[src])
         new_drives[tgt] = _clamp(new_drives[tgt] + delta)
 
     for k in DRIVE_KEYS:
-        rate = drive_damping_rate(k)
+        base_rate = drive_damping_rate(k)
+        rate = 1.0 - math.pow(1.0 - base_rate, tick_scale)
         new_drives[k] = _clamp(new_drives[k] + rate * (DRIVE_BASELINES[k] - new_drives[k]))
     new_drives, _idle_return = apply_attachment_idle_return(
         new_drives,
@@ -3030,9 +3074,9 @@ def pick_intent(state: DriveState, refractory: dict,
             continue
         if refractory.get(k, 0) > 0:
             continue
-        raw = state.drives.get(k, 0.0)
+        raw = state.drives.get(k, DRIVE_BASELINES[k])
         local_fat = state.local_fatigue.get(k, 0.0)
-        eff = effective_score(raw, local_fat)
+        eff = effective_drive_activation(k, raw, local_fat)
         # 刚被拒绝过→有效分打折
         if k in recently_refused:
             eff = max(0.0, eff - intent_penalties.get(k, REFUSAL_PENALTY))
@@ -3049,7 +3093,7 @@ def pick_intent(state: DriveState, refractory: dict,
 
     raw_val = state.drives.get(best_key, 0.0)
     local_fat = state.local_fatigue.get(best_key, 0.0)
-    eff_before_penalty = effective_score(raw_val, local_fat)
+    eff_before_penalty = effective_drive_activation(best_key, raw_val, local_fat)
     penalty_note = f"，-{round(intent_penalties.get(best_key, REFUSAL_PENALTY), 3)} pass/refuse折扣" if best_key in recently_refused else ""
 
     return {
@@ -3059,7 +3103,7 @@ def pick_intent(state: DriveState, refractory: dict,
         "raw_drive": round(raw_val, 3),
         "local_fatigue": round(local_fat, 3),
         "recently_refused": best_key in recently_refused,
-        "reason": f"有效分最高（raw {round(raw_val,2)} × (1-{round(local_fat,2)}) = {round(eff_before_penalty,2)}{penalty_note}，最终{round(best_score,2)}）",
+        "reason": f"激活度最高（raw {round(raw_val,2)} / baseline {DRIVE_BASELINES[best_key]:.2f}，fatigue {round(local_fat,2)} → {round(eff_before_penalty,2)}{penalty_note}，最终{round(best_score,2)}）",
     }
 
 
@@ -3458,6 +3502,12 @@ def drive_outputs_snapshot(state: DriveState, events: list[dict] | None = None) 
             "drive": drive,
             "value": round(drives.get(drive, DRIVE_BASELINES[drive]), 3),
             "effective_value": round(effective_score(
+                drives.get(drive, DRIVE_BASELINES[drive]),
+                float(local_fatigue.get(drive, 0.0) or 0.0),
+            ), 3),
+            "activation": round(drive_activation(drive, drives.get(drive, DRIVE_BASELINES[drive])), 3),
+            "effective_activation": round(effective_drive_activation(
+                drive,
                 drives.get(drive, DRIVE_BASELINES[drive]),
                 float(local_fatigue.get(drive, 0.0) or 0.0),
             ), 3),
@@ -4784,19 +4834,38 @@ class DesireEngine:
             if source == "dialogue_residue" and primary == "attachment":
                 closeness = _feature_value(brain, "closeness_pull")
                 primary_scale *= 0.45 if closeness < 0.45 else 0.70
-            proposed[primary] = DRIVE_EVENT_BASE_DELTA[primary] * intensity * confidence * drive_source_weight * primary_scale
+            primary_features = [
+                territorial_delta_value(brain) if feature == "territorial_alarm" else _feature_value(brain, feature)
+                for feature, (drive_key, _weight, _threshold) in DRIVE_EVENT_BRAIN_FEATURES.items()
+                if drive_key == primary
+            ]
+            feature_strength = max(primary_features, default=0.0)
+            proposed[primary] = (
+                DRIVE_EVENT_BASE_DELTA[primary]
+                * intensity
+                * confidence
+                * drive_source_weight
+                * primary_scale
+                * DRIVE_EVENT_PRIMARY_FOCUS_GAIN
+                * (1.0 + DRIVE_EVENT_PRIMARY_FEATURE_GAIN * feature_strength)
+            )
         for key, value in secondary.items():
             drive_key = normalize_drive_key(key)
             if not drive_key or drive_key == primary:
                 continue
-            proposed[drive_key] = proposed.get(drive_key, 0.0) + (
+            value = _clamp(value)
+            if value < DRIVE_EVENT_SECONDARY_GATE:
+                continue
+            contribution = (
                 DRIVE_EVENT_BASE_DELTA[drive_key]
                 * intensity
                 * confidence
                 * drive_source_weight
-                * _clamp(value)
+                * value
                 * DRIVE_EVENT_SECONDARY_SCALE
             )
+            if contribution >= DRIVE_EVENT_NONPRIMARY_MIN_DELTA:
+                proposed[drive_key] = proposed.get(drive_key, 0.0) + contribution
 
         for feature, (drive_key, weight, threshold) in DRIVE_EVENT_BRAIN_FEATURES.items():
             value = _feature_value(brain, feature)
@@ -4807,29 +4876,32 @@ class DesireEngine:
                 value = min(value, 0.18)
             elif reflective_self_inquiry and feature == "closeness_pull":
                 value = min(value, 0.10)
-            if value <= 0 or gate_value < threshold:
+            if drive_key == primary:
                 continue
-            proposed[drive_key] = proposed.get(drive_key, 0.0) + (
-                DRIVE_EVENT_BASE_DELTA[drive_key] * value * confidence * drive_source_weight * weight
+            feature_gate = max(threshold, DRIVE_EVENT_NONPRIMARY_FEATURE_GATE)
+            if value <= 0 or gate_value < feature_gate:
+                continue
+            contribution = (
+                DRIVE_EVENT_BASE_DELTA[drive_key]
+                * value
+                * intensity
+                * confidence
+                * drive_source_weight
+                * weight
+                * 0.65
             )
+            if contribution >= DRIVE_EVENT_NONPRIMARY_MIN_DELTA:
+                proposed[drive_key] = proposed.get(drive_key, 0.0) + contribution
 
         territorial = _feature_value(brain, "territorial_alarm")
         territorial_for_delta = territorial_delta_value(brain)
         if primary == "possessiveness" and territorial >= POSSESSIVENESS_TERRITORIAL_GATE:
-            proposed["possessiveness"] = proposed.get("possessiveness", 0.0) + (
-                DRIVE_EVENT_BASE_DELTA["possessiveness"]
-                * territorial_for_delta
-                * intensity
-                * confidence
-                * drive_source_weight
-                * 0.55
-            )
             heat = max(
                 _feature_value(brain, "body_heat"),
                 _feature_value(brain, "closeness_pull"),
                 territorial_for_delta * 0.55,
             )
-            proposed["libido"] = proposed.get("libido", 0.0) + (
+            libido_contribution = (
                 DRIVE_EVENT_BASE_DELTA["libido"]
                 * heat
                 * intensity
@@ -4837,19 +4909,20 @@ class DesireEngine:
                 * drive_source_weight
                 * 0.34
             )
+            if heat >= 0.40 and libido_contribution >= DRIVE_EVENT_NONPRIMARY_MIN_DELTA:
+                proposed["libido"] = proposed.get("libido", 0.0) + libido_contribution
 
-        grounding = str(brain.get("grounding") or "").strip()
-        if grounding == "悬":
-            if reflective_self_inquiry:
-                if _feature_value(brain, "tension_load") >= 0.65:
-                    proposed["stress"] = proposed.get("stress", 0.0) + 0.010 * confidence * drive_source_weight
-            else:
-                proposed["stress"] = proposed.get("stress", 0.0) + 0.025 * confidence * drive_source_weight
-            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * drive_source_weight
-        elif grounding == "空":
-            proposed["stress"] = proposed.get("stress", 0.0) + 0.035 * confidence * drive_source_weight
-            proposed["attachment"] = proposed.get("attachment", 0.0) + 0.020 * confidence * drive_source_weight
-            proposed["reflection"] = proposed.get("reflection", 0.0) + 0.015 * confidence * drive_source_weight
+        # One event may have explicit side effects, but they must not outweigh
+        # its semantic center. Scale the side budget rather than spraying tiny
+        # deltas across every feature the analyzer happened to fill.
+        if primary in proposed:
+            side_keys = [key for key in proposed if key != primary]
+            side_total = sum(proposed[key] for key in side_keys)
+            side_budget = proposed[primary] * 0.65
+            if side_total > side_budget > 0:
+                side_scale = side_budget / side_total
+                for key in side_keys:
+                    proposed[key] *= side_scale
 
         if "possessiveness" in proposed and territorial < POSSESSIVENESS_TERRITORIAL_GATE:
             if primary == "possessiveness":
@@ -5059,10 +5132,14 @@ class DesireEngine:
         rhythm = self.store.load_rhythm()
         fatigue = state.drives.get("fatigue", 0.0)
         effective_drives = effective_drive_snapshot(state.drives, state.local_fatigue)
+        drive_activations = drive_activation_snapshot(state.drives)
+        effective_activations = drive_activation_snapshot(state.drives, state.local_fatigue)
         drive_events = self.store.recent_drive_events(12)
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "effective_drives": effective_drives,
+            "drive_activations": drive_activations,
+            "effective_activations": effective_activations,
             "drive_outputs": drive_outputs_snapshot(state, drive_events),
             "discernment": _latest_discernment_from_events(drive_events),
             "possessiveness_channels": {
@@ -5118,10 +5195,14 @@ class DesireEngine:
         rhythm = self.store.load_rhythm()
         fatigue = state.drives.get("fatigue", 0.0)
         effective_drives = effective_drive_snapshot(state.drives, state.local_fatigue)
+        drive_activations = drive_activation_snapshot(state.drives)
+        effective_activations = drive_activation_snapshot(state.drives, state.local_fatigue)
         drive_events = self.store.recent_drive_events(12)
         return {
             "drives": {k: round(v, 3) for k, v in state.drives.items()},
             "effective_drives": effective_drives,
+            "drive_activations": drive_activations,
+            "effective_activations": effective_activations,
             "drive_outputs": drive_outputs_snapshot(state, drive_events),
             "discernment": _latest_discernment_from_events(drive_events),
             "possessiveness_channels": {

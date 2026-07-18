@@ -3308,7 +3308,10 @@ async function loadDesire(button) {
     const d = await r.json();
 
     const driveEntries = Object.entries(d.drives || {});
-    const topDrive = [...driveEntries].sort((a, b) => finiteNumber(b[1]) - finiteNumber(a[1]))[0] || ['—', 0];
+    const driveActivations = d.drive_activations || {};
+    const effectiveActivations = d.effective_activations || {};
+    const activationEntries = driveEntries.map(([key]) => [key, finiteNumber(effectiveActivations[key] ?? driveActivations[key])]);
+    const topDrive = [...activationEntries].sort((a, b) => finiteNumber(b[1]) - finiteNumber(a[1]))[0] || ['—', 0];
     const effectiveDrives = d.effective_drives || {};
     const driveOutputs = d.drive_outputs || {};
     const thoughts = [...(d.thoughts || [])].sort((a, b) => finiteNumber(b.born_at) - finiteNumber(a.born_at));
@@ -3353,14 +3356,18 @@ async function loadDesire(button) {
     drivesEl.innerHTML = driveEntries.map(([k, v]) => {
       const lf = d.local_fatigue?.[k] || 0;
       const eff = finiteNumber(effectiveDrives[k], Math.max(0, v * (1 - lf)));
+      const activation = finiteNumber(driveActivations[k]);
+      const effectiveActivation = finiteNumber(effectiveActivations[k], activation * (1 - lf));
       const output = driveOutputs[k] || {};
       output.channels = d.possessiveness_channels || {};
-      const pct = Math.round(v * 100);
-      const effPct = Math.round(eff * 100);
+      const pct = Math.round(activation * 100);
+      const effPct = Math.round(effectiveActivation * 100);
       const isHigh = k === topDrive[0];
       const detail = buildDriveDetailPanel(k, {
         ...output,
         effective_value: eff,
+        activation,
+        effective_activation: effectiveActivation,
       }, driveHistory[k] || [], output.source || '', lf);
       return `<div class="drive-row${isHigh ? ' high' : ''}">
         <div class="drive-name">${esc(DRIVE_LABELS[k] || k)}<small>${esc(k)}</small></div>
@@ -3368,7 +3375,7 @@ async function loadDesire(button) {
         <div class="drive-value">
           <span class="drive-value-main">${pct}%</span>
           <span class="drive-value-side">
-            <small>eff ${effPct}%</small>
+            <small>raw ${finiteNumber(v).toFixed(2)} · eff ${finiteNumber(eff).toFixed(2)}</small>
             <small>fatigue ${lf > 0 ? '−' + Math.round(lf * 100) + '%' : '0%'}</small>
           </span>
         </div>
@@ -3587,9 +3594,11 @@ function buildDriveDetailPanel(key, output, history = [], sourceHint = '', fatig
   const source = driveSourceLabel(output?.source || sourceHint, output?.source_type || '');
   const mode = String(output?.mode || '').trim();
   const eff = Number.isFinite(Number(output?.effective_value)) ? Number(output.effective_value).toFixed(2) : '';
+  const activation = Number.isFinite(Number(output?.effective_activation)) ? Math.round(Number(output.effective_activation) * 100) : null;
   if (source) chips.push(driveSourceChip(output?.source || sourceHint, output?.source_type || ''));
   if (mode) chips.push(`<span class="drive-summary-chip neutral"><strong>mode</strong> ${esc(mode)}</span>`);
-  if (eff) chips.push(`<span class="drive-summary-chip neutral"><strong>eff</strong> ${eff}</span>`);
+  if (activation !== null) chips.push(`<span class="drive-summary-chip positive"><strong>act</strong> ${activation}%</span>`);
+  if (eff) chips.push(`<span class="drive-summary-chip neutral"><strong>raw eff</strong> ${eff}</span>`);
   if (Number.isFinite(Number(fatigue)) && Number(fatigue) > 0) {
     chips.push(`<span class="drive-summary-chip neutral"><strong>fat</strong> −${Math.round(Number(fatigue) * 100)}%</span>`);
   }

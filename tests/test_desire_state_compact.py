@@ -17,6 +17,8 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
     state = {
         "drives": {"attachment": 0.4, "stress": 0.2},
         "effective_drives": {"attachment": 0.38, "stress": 0.19},
+        "drive_activations": {"attachment": 0.143, "stress": 0.059},
+        "effective_activations": {"attachment": 0.139, "stress": 0.055},
         "local_fatigue": {"attachment": 0.01},
         "drive_outputs": {"attachment": {"mode": "slow"}},
         "pulse_weather": {
@@ -81,6 +83,7 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
     assert "source_stack" not in compact["drive_events"][0]["brain"]
     assert "source_stack" not in compact["pulse_weather"]
     assert compact["weather_panel"]["atmosphere"] == "Overcast"
+    assert compact["effective_activations"]["attachment"] == 0.139
     assert compact["weather_panel"]["chord"] == "Gmaj7→Fmaj7"
     assert compact["weather_panel"]["gravity"] == "重心往屋里坠，手还没松。"
     assert compact["weather_panel"]["now_playing"] == "Light Song - haruka nakamura"
@@ -98,6 +101,7 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
 
     undercurrent = _undercurrent_state(state)
     assert undercurrent["Drive"] == {"attachment": 0.4, "stress": 0.2}
+    assert undercurrent["Activation"] == {"attachment": 0.139, "stress": 0.055}
     assert undercurrent["Affect"] == {"Warmth": 0.61, "Shadow": 0.22, "Longing": 0.0}
     assert undercurrent["Chemistry"]["Vector"] == "toward_house"
     assert undercurrent["Thought Pool"][0]["index"] == 2
