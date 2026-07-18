@@ -1,8 +1,16 @@
+import time
+
 import pytest
 
 pytest.importorskip("mcp.server.fastmcp")
 
-from server import _compact_desire_state, _undercurrent_state, _weather_panel_lines
+from server import (
+    _compact_desire_state,
+    _gravity_is_decisive,
+    _undercurrent_state,
+    _undertow_snapshot,
+    _weather_panel_lines,
+)
 
 
 def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
@@ -28,6 +36,7 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
             "base_shadow": 0.20,
             "current_chord": "Fmaj7#11",
             "gravity": "重心往屋里坠，手还没松。",
+            "gravity_decisive": True,
             "chemistry_core": {"depth": 0.7},
             "chemistry_route": {"pull": 0.6, "vector": "toward_house"},
             "gravity_pool": "pull",
@@ -36,7 +45,14 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
         },
         "now_playing": {"title": "Light Song", "artist": "haruka nakamura"},
         "thoughts": [
-            {"tid": str(i), "drive": "attachment", "kind": "flit", "strength": 0.4, "text": f"thought {i}"}
+            {
+                "tid": str(i),
+                "drive": "attachment",
+                "kind": "flit",
+                "strength": 0.4,
+                "text": f"thought {i}",
+                "born_at": time.time() - i,
+            }
             for i in range(12)
         ],
         "drive_events": [
@@ -69,6 +85,7 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
     assert compact["weather_panel"]["gravity"] == "重心往屋里坠，手还没松。"
     assert compact["weather_panel"]["now_playing"] == "Light Song - haruka nakamura"
     assert _weather_panel_lines(compact["weather_panel"])[-1] == "♪ On Air：Light Song - haruka nakamura"
+    assert not any(line.startswith("Warmth/Shadow") for line in _weather_panel_lines(compact["weather_panel"]))
     assert compact["pulse_weather"]["warmth_residue"] == 0.04
     assert compact["pulse_weather"]["shadow_residue"] == 0.02
     assert compact["pulse_weather"]["crystal_shadow"] == 0.01
@@ -85,6 +102,31 @@ def test_compact_desire_state_keeps_hook_fields_without_full_internal_state():
     assert undercurrent["Chemistry"]["Vector"] == "toward_house"
     assert undercurrent["Thought Pool"][0]["index"] == 2
     assert undercurrent["Thought Pool"][0]["text"] == "thought 1"
+
+
+def test_undertow_compares_pressure_above_each_own_baseline():
+    drive, pressure, raw = _undertow_snapshot(
+        {
+            "drives": {"attachment": 0.482, "stewardship": 0.453, "fatigue": 0.9},
+            "intent": None,
+        }
+    )
+
+    assert drive == "stewardship"
+    assert pressure == 0.253
+    assert raw == 0.453
+
+
+def test_gravity_requires_non_hover_route_with_clear_margin():
+    assert not _gravity_is_decisive(
+        {"chord_chemistry": {"route": {"vector": "hover", "scores": {"hover": 0.51, "toward_house": 0.44}}}}
+    )
+    assert not _gravity_is_decisive(
+        {"chord_chemistry": {"route": {"vector": "toward_house", "scores": {"toward_house": 0.51, "hover": 0.46}}}}
+    )
+    assert _gravity_is_decisive(
+        {"chord_chemistry": {"route": {"vector": "toward_house", "scores": {"toward_house": 0.70, "hover": 0.46}}}}
+    )
 
 
 def test_thought_pool_keeps_full_text_in_compact_readouts():

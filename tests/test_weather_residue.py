@@ -15,6 +15,7 @@ from desire_engine import (
     climate_transition_display,
     current_weather_chord,
     normalize_atmosphere_state,
+    _route_scores,
     pa_na_snapshot,
     select_climate,
 )
@@ -30,6 +31,14 @@ def test_weather_delta_adds_to_effective_pa_na(tmp_path):
     assert result["warmth_residue"] == 0.05
     assert weather["effective_PA"] == round(base["PA"] + 0.05, 3)
     assert weather["effective_NA"] == round(base["NA"], 3)
+
+
+def test_route_label_does_not_amplify_a_narrow_score_lead():
+    scores = _route_scores(
+        {"vector": "hover", "scores": {"hover": 0.508, "toward_house": 0.445}}
+    )
+
+    assert scores["hover"] == 0.508
 
 
 def test_direct_feel_weather_delta_is_retired(tmp_path):
@@ -526,7 +535,7 @@ def test_rain_display_uses_shadow_bands_instead_of_staying_warm_at_full_shadow()
 def test_semantic_variant_fits_can_help_their_weather_family_surface():
     cases = (
         (
-            "Quiet Drift",
+            "Low Tide",
             {"charge": 0.10, "clutch": 0.30, "strain": 0.10},
             {"warmth": 0.10, "shadow": 0.10},
             {"vector": "inward", "scores": {"toward_jiajia": 0.15, "toward_house": 0.18, "outward": 0.10, "inward": 0.62, "guard": 0.18, "hover": 0.50}},

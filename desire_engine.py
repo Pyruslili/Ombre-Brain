@@ -1525,9 +1525,9 @@ def _route_scores(route: dict | None) -> dict:
     route = route if isinstance(route, dict) else {}
     raw_scores = route.get("scores") if isinstance(route.get("scores"), dict) else {}
     scores = {key: _clamp(float(raw_scores.get(key, 0.0) or 0.0)) for key in ATMOSPHERE_ROUTE_KEYS}
-    vector = str(route.get("vector") or "").strip()
-    if vector in scores:
-        scores[vector] = max(scores[vector], 0.72)
+    # `vector` is the label of the current winner, not additional evidence.
+    # Raising that score here used to turn a narrow lead into a categorical
+    # 0.72 route and made Atmosphere much more certain than Chemistry was.
     if not any(scores.values()):
         scores["hover"] = 0.72
     return scores

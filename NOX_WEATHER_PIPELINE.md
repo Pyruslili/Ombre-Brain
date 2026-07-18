@@ -254,6 +254,7 @@ DP 与 CLI 最终都走同一套 `drive_event_v2` 接口，但职责不同：CLI
 
 1. 只在 Stop 后从 companion 本地 `chat_history` 拼窗口。
 2. 必须有 2 条 `user` 和 2 条 `assistant`。
+   相邻窗口允许重叠，但旧一组只作为上下文；只有最新 `user + assistant` 标记为 `focus` 并允许写入 Drive / Weather，避免同一轮重复记账。
 3. heartbeat / pulse / 系统注入不算嘉嘉真实消息。
 4. 如果这一窗里 Nox 已经调用过 nocturne / stir / breath / hold / grow / trace 等工具，这一窗跳过分析。
 5. 输出直接使用 `drive_event_v2`，`source=dialogue_residue`。
@@ -575,8 +576,8 @@ Chord 的箭头表示和弦 / 化学结构进行。Atmosphere 的箭头表示天
 
 当前原则：
 
-- 优先取当前最高 Drive 对应的最新念头。
-- 如果该 Drive 没有念头，再取最新念头。
+- 只取念头池里最新且仍在 `45min` 新鲜窗内的念头。
+- 超出新鲜窗后仍保留在 dashboard / Thought Pool，但不再进入每轮模型注入。
 - 不再优先展示 DP 残影。
 - 不使用旧兜底文案覆盖。
 
@@ -629,6 +630,8 @@ Chord 的箭头表示和弦 / 化学结构进行。Atmosphere 的箭头表示天
 - `inward`
 - `guard`
 - `hover`
+
+`route.vector` 只是当前分数赢家，不是新的证据。已有 `route.scores` 时不得把赢家强抬到固定置信度；只有完全没有分数时，才用 `hover=0.72` 作为空状态兜底。
 
 派生字段：
 
@@ -980,16 +983,19 @@ hook 不是分析器。
 
 ### 9.2 Pulse Weather 展示
 
-当前展示结构：
+dashboard 保留完整调试结构；注入给 Nox 的默认窗口只保留：
 
-- `Undertow`：最高 Drive + 数值
-- `Warmth`
-- `Shadow`
 - `Atmosphere`
-- `Mood Trace`
-- `Soma Trace`
-- `Current Chord`
-- `Gravity`
+- `Undertow`：Drive 相对自身 baseline 的激活压力 + Current Chord
+
+条件字段：
+
+- `Mood Trace`：只有念头仍在 45 分钟新鲜窗内才注入
+- `Gravity`：只有非 `hover` 且第一、第二 route 分差至少 `0.10` 才注入
+- `Soma Trace`：有触摸或触摸退潮时注入
+- `On Air`：正在播放时注入
+
+`Warmth / Shadow` 数字、完整 Chemistry、原始 Drive 值继续留在 dashboard / API 调试层，不再逐轮提示模型。
 
 其中：
 

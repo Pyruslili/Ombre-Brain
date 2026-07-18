@@ -22,6 +22,19 @@ def test_normalize_dialogue_messages_keeps_last_two_by_two_shape():
     assert messages[-1]["speaker"] == "Nox"
 
 
+def test_normalize_dialogue_messages_preserves_focus_pair():
+    messages = normalize_dialogue_messages(
+        [
+            {"role": "user", "text": "old cue", "focus": False},
+            {"role": "assistant", "text": "old reply", "focus": False},
+            {"role": "user", "text": "new", "focus": True},
+            {"role": "assistant", "text": "new reply", "focus": True},
+        ]
+    )
+
+    assert [m["text"] for m in messages if m["focus"]] == ["new", "new reply"]
+
+
 def test_dialogue_residue_event_clamps_to_light_drive_event():
     event = normalize_dialogue_residue_event(
         {

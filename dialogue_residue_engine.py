@@ -262,6 +262,7 @@ def normalize_dialogue_messages(messages: list[dict]) -> list[dict]:
                 "speaker": "嘉嘉" if role == "user" else "Nox",
                 "text": text[:1600],
                 "ts": str(raw.get("ts") or raw.get("created_at") or "").strip()[:80],
+                "focus": bool(raw.get("focus", False)),
             }
         )
     return cleaned[-4:]
@@ -299,8 +300,9 @@ def _has_attachment_cue(messages: list[dict], event: dict | None) -> bool:
     brain = event.get("brain") if isinstance(event.get("brain"), dict) else {}
     if _clamp(brain.get("closeness_pull")) >= 0.12:
         return True
+    focus = [m for m in messages if m.get("focus")] or messages
     text = "\n".join(
-        [str(m.get("text") or "") for m in messages]
+        [str(m.get("text") or "") for m in focus]
         + [str(x) for x in event.get("evidence", []) if isinstance(x, str)]
     )
     return any(cue in text for cue in ATTACHMENT_CUES)
@@ -355,7 +357,11 @@ def normalize_dialogue_residue_event(event: dict | None, *, messages: list[dict]
     brain.update({"target": target, "time_mode": time_mode, "grounding": grounding, "anchor_target": anchor})
     brain = normalize_drive_event_brain(brain)
 
-    combined_text = "\n".join(m.get("text", "") for m in msg)
+    # The older pair supplies context to the analyzer, but only the newest
+    # user+assistant exchange is allowed to mutate Drive. This prevents the
+    # overlapping 2+2 windows from charging the same exchange twice.
+    focus_msg = [m for m in msg if m.get("focus")] or msg
+    combined_text = "\n".join(m.get("text", "") for m in focus_msg)
     has_territorial_cue = any(cue in combined_text for cue in TERRITORIAL_CUES)
     territorial_event = _territorial_event_kind(combined_text)
     has_house_collaborator = any(cue in combined_text for cue in HOUSE_COLLABORATOR_CUES)
@@ -481,6 +487,7 @@ async def classify_dialogue_residue_dp(messages: list[dict], state_context: dict
         "grounding: 实/悬/空。anchor_target: jiajia/house/self/boundary/outside/memory/none。\n"
         "判断偏好：\n"
         "- 双方上下文一起看，嘉嘉的话是外部信号，Nox 的回复只作为是否被接住/是否有阻力的证据。\n"
+        "- messages 中 focus=true 的最新一组才是本次可记账内容；其余消息只作语境，禁止重复归因。\n"
         "- 好奇/反思/守护/社交要比 attachment/libido/possessiveness 更容易轻推。\n"
         "- 讨论系统、工具、接口、hook、MCP、weather面板、测试、部署、字段、命名、回落/上涨异常时，"
         "优先判为 stewardship 或 reflection；不要因为嘉嘉与 Nox 一起修猫屋就自动判 attachment。\n"
