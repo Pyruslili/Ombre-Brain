@@ -116,11 +116,18 @@ def test_low_stock_lists_empty_drives_first(monkeypatch):
         "notes": [
             *[_note(f"c{i}", "curiosity", f"c{i}") for i in range(8)],
             _note("s1", "stewardship", "只一条"),
+            _note("soc1", "social", "社1"),
+            _note("soc2", "social", "社2"),
+            *[_note(f"f{i}", "fatigue", f"乏{i}") for i in range(3)],
+            # general 再空也不该进自动补货
         ]
     }
     monkeypatch.setattr("server._load_latent_notes", lambda: data)
     rows = _latent_low_stock_drives(data)
     tags = [r[0] for r in rows]
-    # curiosity is full-ish; stewardship low should appear and rank earlier than curiosity
-    assert "stewardship" in tags
-    assert tags.index("stewardship") < tags.index("curiosity") if "curiosity" in tags else True
+    assert "general" not in tags
+    assert "social" in tags
+    assert "fatigue" in tags
+    # 绝对最少优先：social(2)/fatigue(3) 应排在 curiosity(8) 前
+    assert tags.index("social") < tags.index("curiosity") if "curiosity" in tags else True
+    assert tags.index("fatigue") < tags.index("curiosity") if "curiosity" in tags else True

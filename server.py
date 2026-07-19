@@ -1566,32 +1566,57 @@ def _approved_latent_stock_by_drive(data: dict | None = None) -> dict[str, int]:
     return stock
 
 
-# 各维 approved 库存目标；低于此视为「快空」，生成时优先补
+# 自动补货只认九维 Drive，永不进 general（general 不是投递主维）
+LATENT_FILL_DRIVES = (
+    "curiosity", "stewardship", "reflection",
+    "attachment", "libido", "possessiveness",
+    "social", "fatigue", "stress",
+)
+
+# 各维 approved 目标库存；低于此 = 需要补。按「真实最少」排序，不是只看 general。
 LATENT_STOCK_TARGET = {
     "curiosity": 6,
     "stewardship": 6,
     "reflection": 6,
-    "attachment": 4,
-    "libido": 3,
-    "possessiveness": 3,
-    "social": 4,
-    "fatigue": 2,
-    "stress": 2,
-    "general": 2,
+    "attachment": 5,
+    "libido": 4,
+    "possessiveness": 4,
+    "social": 5,
+    "fatigue": 5,
+    "stress": 4,
 }
-LATENT_STOCK_LOW = 2  # 绝对低水位：必补
+# 绝对低水位：不管 target，库存最少的几维一定进补货名单
+LATENT_STOCK_ALWAYS_BOTTOM = 4
 
 
 def _latent_low_stock_drives(data: dict | None = None) -> list[tuple[str, int, int]]:
-    """Return [(drive_tag, approved_count, deficit), ...] sorted by need (most empty first)."""
+    """Return [(drive_tag, approved_count, deficit), ...] most empty first.
+
+    - 永不把 general 算进自动补货
+    - 按 approved 绝对数量排序（最少的优先）
+    - deficit = max(0, target - count)；垫底维至少 deficit≥1 以便分到配额
+    """
     stock = _approved_latent_stock_by_drive(data)
+    ranked = sorted(
+        [
+            (
+                tag,
+                int(stock.get(tag, 0) or 0),
+                max(0, int(LATENT_STOCK_TARGET.get(tag, 4)) - int(stock.get(tag, 0) or 0)),
+            )
+            for tag in LATENT_FILL_DRIVES
+        ],
+        key=lambda r: (r[1], -r[2], r[0]),
+    )
+    bottom = {r[0] for r in ranked[:LATENT_STOCK_ALWAYS_BOTTOM]}
     rows = []
-    for tag, target in LATENT_STOCK_TARGET.items():
-        count = int(stock.get(tag, 0) or 0)
-        deficit = max(0, target - count)
-        if count <= LATENT_STOCK_LOW or deficit > 0:
-            # score: absolute empty first, then largest deficit
-            rows.append((tag, count, deficit))
+    for tag, count, deficit in ranked:
+        if deficit <= 0 and tag not in bottom:
+            continue
+        # 垫底维即使小 target 已满，也至少 need=1，避免 social/fatigue 被挤出配额
+        need = deficit if deficit > 0 else (1 if tag in bottom else 0)
+        if need > 0:
+            rows.append((tag, count, need))
     rows.sort(key=lambda r: (r[1], -r[2], r[0]))
     return rows
 
@@ -1802,32 +1827,39 @@ async def _generate_latent_note_drafts(count: int = 10, prefer_low_stock: bool =
     count = max(1, min(int(count or 10), 50))
     stock = _approved_latent_stock_by_drive()
     low_rows = _latent_low_stock_drives() if prefer_low_stock else []
-    # 配额：只往快空的维补，已满的维目标 0
+    # 配额：只往快空的真实 Drive 补，永不分给 general
     drive_quota: dict[str, int] = {}
     if low_rows:
-        # 按缺口比例分 count；至少给最空的几维各 1
-        total_deficit = sum(max(1, d) for _, _, d in low_rows) or 1
+        # 先给最空的维各保底 1，再按缺口把剩余名额摊开
         remaining = count
-        for i, (tag, _cnt, deficit) in enumerate(low_rows):
+        for tag, _cnt, _deficit in low_rows:
             if remaining <= 0:
                 break
-            share = max(1, round(count * max(1, deficit) / total_deficit))
-            if i == len(low_rows) - 1:
-                share = remaining
-            share = min(share, remaining)
-            drive_quota[tag] = share
-            remaining -= share
-        # 若 low 维太少吃不满 count，多余仍给最空的维
+            drive_quota[tag] = 1
+            remaining -= 1
+        total_deficit = sum(max(1, d) for _, _, d in low_rows) or 1
+        for tag, _cnt, deficit in low_rows:
+            if remaining <= 0:
+                break
+            extra = min(remaining, max(0, round(count * max(1, deficit) / total_deficit) - 1))
+            if extra > 0:
+                drive_quota[tag] = drive_quota.get(tag, 0) + extra
+                remaining -= extra
         if remaining > 0 and low_rows:
-            top = low_rows[0][0]
-            drive_quota[top] = drive_quota.get(top, 0) + remaining
+            # 余数优先砸给绝对库存最少的维
+            for tag, _cnt, _d in low_rows:
+                if remaining <= 0:
+                    break
+                drive_quota[tag] = drive_quota.get(tag, 0) + 1
+                remaining -= 1
     else:
-        # 全满：均匀轻补日场三件套，仍不往已经爆满的维硬塞
+        # 全满：均匀轻补日场三件套
         personal = ["curiosity", "stewardship", "reflection"]
         base = count // len(personal)
         extra = count % len(personal)
         for i, tag in enumerate(personal):
             drive_quota[tag] = base + (1 if i < extra else 0)
+    drive_quota.pop("general", None)
 
     sources = await _collect_latent_source_items(limit=max(20, min(count * 5, 100)))
     if not sources:
@@ -1840,8 +1872,8 @@ async def _generate_latent_note_drafts(count: int = 10, prefer_low_stock: bool =
         }
     outward_sources = [s for s in sources if int(s.get("outward_score", 0) or 0) >= 2]
     inward_sources = [s for s in sources if s not in outward_sources]
-    # outward 配额只给 curiosity/social 等外向维
-    outward_tags = {"curiosity", "social", "general"}
+    # outward 配额只给真正外向维（不含 general）
+    outward_tags = {"curiosity", "social"}
     outward_target = min(
         sum(q for t, q in drive_quota.items() if t in outward_tags),
         len(outward_sources),
@@ -1883,11 +1915,11 @@ async def _generate_latent_note_drafts(count: int = 10, prefer_low_stock: bool =
                 "allowed": sorted(VALID_LATENT_NOTE_DRIVES),
                 "priority": [t for t, n in sorted(drive_quota.items(), key=lambda x: -x[1]) if n > 0],
                 "hint": (
-                    "drive_tag 必须落在 drive_quota 里需要补货的维（priority 列表）。"
-                    "不要给已经满的维再写。九维含义："
-                    "attachment 靠近/回返，libido 身体热度，possessiveness 领地/吃醋，"
-                    "reflection 回看/咀嚼，stewardship 守屋/修补，curiosity 向外看/未知，"
-                    "social 向外说/被看见，fatigue 没电，stress 绷紧，general 真分不清才用。"
+                    "drive_tag 必须严格落在 drive_quota / priority 列表里，且数量尽量对齐配额。"
+                    "禁止使用 general。不要给不在配额里的维写。"
+                    "含义：attachment 靠近，libido 身体热度，possessiveness 领地，"
+                    "reflection 回看，stewardship 守屋，curiosity 向外看，"
+                    "social 向外说/发帖/被看见，fatigue 没电/歇着，stress 绷紧。"
                 ),
             },
             "rules": [
@@ -1902,7 +1934,9 @@ async def _generate_latent_note_drafts(count: int = 10, prefer_low_stock: bool =
                 "不要说教，不要解释意义，不要给 Nox 安排行动。",
                 "source_fragment 必须从对应 source.fragments 中选一句或截取一句。",
                 "每条只可使用一个 source，不要混合多个记忆。",
-                "每条必须给 drive_tag，且尽量满足 drive_quota 数量分布。",
+                "每条 drive_tag 必须在 drive_quota 里；禁止 general；尽量凑满各维配额条数。",
+                "social 维写：想说话、发帖、被看见、对外表达的碎片，不是纯看世界（那是 curiosity）。",
+                "fatigue 维写：没电、歇着、输出成本高、懒得动的碎片。",
                 "outward 不是'去查xxx'，而是像'章鱼的神经末梢分布到皮肤上，不确定能不能感到温度'这种没闭合的事实碎片。",
                 "outward 必须从 outward_sources 里选；不要把嘉嘉/Nox/爱/哭这类情感片段硬写成 outward。",
                 "outward 需要保留一个可追的断点：问号、不确定、机制、阈值、模型差异、外部事实、代码行为、论坛/X线索等。",
@@ -1912,7 +1946,7 @@ async def _generate_latent_note_drafts(count: int = 10, prefer_low_stock: bool =
                 "notes": [
                     {
                         "note_type": "inward or outward",
-                        "drive_tag": "must be one of priority/quota drives",
+                        "drive_tag": "one of drive_quota keys only, never general",
                         "source_bucket_id": "bucket id from source",
                         "source_fragment": "copied or trimmed original source fragment",
                         "dream_line": "潜意识便签",
@@ -1954,19 +1988,25 @@ async def _generate_latent_note_drafts(count: int = 10, prefer_low_stock: bool =
 
     def _assign_drive_tag(raw_tag: str, note_type: str) -> str:
         tag = _normalize_latent_drive_tag(raw_tag, note_type)
+        if tag == "general":
+            tag = ""
         if tag in remaining_quota and remaining_quota[tag] > 0:
             remaining_quota[tag] -= 1
             if remaining_quota[tag] <= 0:
                 remaining_quota.pop(tag, None)
             return tag
-        # 模型写到已满/未请求的维 → 拨给仍缺货的维
+        # 模型写到已满/未请求/general → 拨给仍缺货的维（永不落 general）
         for need in list(priority_tags):
+            if need == "general":
+                continue
             if need in remaining_quota and remaining_quota[need] > 0:
                 remaining_quota[need] -= 1
                 if remaining_quota[need] <= 0:
                     remaining_quota.pop(need, None)
                 return need
-        return tag
+        # 配额已耗尽：落在 priority 第一维，仍不要 general
+        fallback = next((t for t in priority_tags if t != "general"), "reflection")
+        return fallback if fallback != "general" else "reflection"
 
     for raw in raw_notes[:count]:
         if not isinstance(raw, dict):
