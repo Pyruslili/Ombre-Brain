@@ -45,15 +45,17 @@ def test_activation_uses_each_drive_own_baseline():
 
 
 def test_intent_threshold_uses_activation_not_raw_value():
+    from desire_engine import INTENT_THRESHOLD
+
     drives = _baseline_drives()
-    drives["stewardship"] = 0.52  # activation 0.40 before fatigue
+    drives["stewardship"] = 0.52  # sqrt headroom act ≈ 0.63
     state = DriveState(drives=drives)
 
     intent = pick_intent(state, refractory={})
 
     assert intent is not None
     assert intent["drive_key"] == "stewardship"
-    assert intent["score"] >= 0.55
+    assert intent["score"] >= INTENT_THRESHOLD
 
 
 def test_delta_coupling_scales_with_actual_tick_movement():

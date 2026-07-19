@@ -935,18 +935,23 @@ Latent Notes 生成前会先从 bucket / marks / domain 中挑候选源。
 
 ### 8.3 Subcurrent
 
-`Subcurrent` 只从 Latent Notes / 潜流池抽取。
+`Subcurrent` 只从**前端同一份** Latent Notes / 潜流池的 `approved` 条抽取。
 
-Latent Notes 的来源候选会先打标签：
+Latent Notes 生成链路：
 
-`bucket / marks / domain -> source kind + score + wander_mode + marks + outward_score -> draft note -> front-end chips -> approved latent pool -> Subcurrent`
+`bucket / marks / domain -> source kind + score + wander_mode + marks + outward_score -> draft note（带 drive_tag）-> front-end chips / 九维 tab -> approved latent pool -> Subcurrent`
 
-暂时不做过紧的主 Drive + 副 Drive + 最近事件组合生成，因为无关角度有时反而能让 Nox 自己串联。
-也暂时不做系统级近似去重和随机扩散；如果潜流池里话题太近，优先由嘉嘉清理和分区。
+投递规则（2026-07 拧过）：
+
+- Pulse 主角 = **Undertow** = 最高 drive（`pressure = raw − baseline`）。展示与 latent 的 `drive_key` 同一把尺子。
+- 有 `drive_key` 时：**只抽 exact `drive_tag`**。不静默掉进 general，不跨维。
+- 同 tag 全在 recent exclude 里时：放宽 exclude 复用同 tag，仍不跨维。
+- approved 没命中：**宁可空**，不再掉进 marks / old_memory 桶捞兜底（那条河和前端池不是同一个嘴）。
+- 草稿生成时要求模型给出九维 `drive_tag`，避免全糊成 reflection / curiosity。
 
 触发格式类似：
 
-`Free Roam 🧡 Nox Pulse · Undertow：attachment 0.62 · Subcurrent：「潜流文案」`
+`Free Roam 🧡 Nox Pulse · Undertow：attachment +0.62 · Subcurrent：「潜流文案」`
 
 Nox 收到后可以：
 

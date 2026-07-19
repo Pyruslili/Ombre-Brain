@@ -192,21 +192,14 @@ def _speech_event_context_snapshot() -> dict:
         desire = _desire.state()
     except Exception:
         desire = {}
-    drives = desire.get("drives") or {}
-    top_drive = ""
-    top_value = 0.0
-    if drives:
-        candidates = {k: v for k, v in drives.items() if k != "fatigue"}
-        top_drive = max(candidates, key=candidates.get, default="")
-        try:
-            top_value = float(candidates.get(top_drive, 0.0))
-        except (TypeError, ValueError):
-            top_value = 0.0
+    # Same ruler as Pulse Weather: highest drive by pressure above own baseline.
+    top_drive, top_pressure, top_raw = _undertow_snapshot(desire if isinstance(desire, dict) else {})
     weather = desire.get("effective_pa_na") or {}
     current = load_speech_event_state(config["buckets_dir"])
     return {
         "undertow": top_drive,
-        "undertow_value": round(top_value, 3),
+        "undertow_value": round(top_pressure, 3),
+        "undertow_raw_value": round(top_raw, 3),
         "warmth": weather.get("effective_PA"),
         "shadow": weather.get("effective_NA"),
         "current_chord": weather.get("current_chord"),
@@ -540,8 +533,12 @@ def _weather_panel_lines(panel: dict) -> list[str]:
         lines.append(f"Atmosphere：{panel['atmosphere']}")
     undertow = str(panel.get("undertow") or "").strip()
     if undertow:
+        # undertow_value is pressure (raw − baseline), not activation.
         tail = f" · {panel['chord']}" if panel.get("chord") else ""
-        lines.append(f"Undertow：{undertow} {_num(panel.get('undertow_value')):+.2f}{tail}")
+        lines.append(
+            f"Undertow：{undertow} {_num(panel.get('undertow_value')):+.2f}"
+            f" · top drive (pressure){tail}"
+        )
     if panel.get("gravity"):
         lines.append(f"Gravity：{panel['gravity']}")
     if panel.get("mood_trace"):
@@ -564,11 +561,23 @@ def _undercurrent_state(state: dict) -> dict:
     thoughts = _sorted_thoughts(state)
     drives = state.get("drives") if isinstance(state.get("drives"), dict) else {}
     drive_order = [k for k in DRIVE_KEYS if k in drives] + [k for k in drives if k not in DRIVE_KEYS]
+    undertow_drive, undertow_pressure, undertow_raw = _undertow_snapshot(state)
+    if not undertow_drive:
+        undertow_drive = str(weather.get("undertow") or "").strip()
+        undertow_pressure = _num(weather.get("undertow_value"))
+        undertow_raw = _num(weather.get("undertow_raw_value"), _num(drives.get(undertow_drive)))
     out = {
         "Drive": {k: round(_num(drives.get(k)), 3) for k in drive_order},
         "Activation": {
             k: round(_num((state.get("effective_activations") or {}).get(k)), 3)
             for k in drive_order
+        },
+        # Undertow = highest drive by pressure (raw − baseline). Activation uses sqrt scale.
+        "Undertow": {
+            "drive": undertow_drive,
+            "pressure": round(undertow_pressure, 3),
+            "raw": round(undertow_raw, 3),
+            "scale": "pressure=raw−baseline; Activation uses sqrt headroom",
         },
         "Affect": {
             "Warmth": round(_num(source_weather.get("warmth"), _num(effective.get("effective_PA"), 0.0)), 3),
@@ -1461,11 +1470,9 @@ def _approved_latent_note_payload(note: dict) -> dict | None:
     }
 
 
-def _select_approved_latent_note(exclude_ids: set[str], drive_key: str = "") -> dict | None:
-    data = _load_latent_notes()
-    drive_key = normalize_drive_key(drive_key)
-    matching = []
-    general = []
+def _iter_approved_latent_payloads(data: dict, exclude_ids: set[str]) -> list[dict]:
+    """Approved latent notes only — one pool, filtered by exclude set."""
+    out: list[dict] = []
     for note in data.get("notes", []):
         if note.get("status") != "approved":
             continue
@@ -1475,13 +1482,53 @@ def _select_approved_latent_note(exclude_ids: set[str], drive_key: str = "") -> 
         payload = _approved_latent_note_payload(note)
         if not payload:
             continue
-        tag = _normalize_latent_drive_tag(payload.get("drive_tag", "general"))
-        if drive_key and tag == drive_key:
-            matching.append(payload)
-        elif tag == "general" or not drive_key:
-            general.append(payload)
-    pool = matching or general
-    return random.choice(pool) if pool else None
+        payload["drive_tag"] = _normalize_latent_drive_tag(
+            payload.get("drive_tag"), note.get("note_type")
+        )
+        out.append(payload)
+    return out
+
+
+def _select_approved_latent_note(exclude_ids: set[str], drive_key: str = "") -> dict | None:
+    """Pick Subcurrent from the approved latent pool only.
+
+    Rules (2026-07 weather fix):
+    - With drive_key: exact drive_tag match only. Never silent-fallback to general
+      or other drives. Empty is better than a mismatched mouth.
+    - If same-tag notes all sit in exclude_ids, relax exclude for that tag once
+      (reuse) instead of jumping to another river.
+    - Without drive_key: any approved note (still no bucket scrape here).
+    """
+    data = _load_latent_notes()
+    drive_key = normalize_drive_key(drive_key)
+    exclude_ids = {str(x).strip() for x in (exclude_ids or set()) if str(x).strip()}
+
+    def _pick(pool: list[dict], match: str) -> dict | None:
+        if not pool:
+            return None
+        chosen = random.choice(pool)
+        chosen["pool_match"] = match
+        chosen["source"] = "approved_pool"
+        return chosen
+
+    fresh = _iter_approved_latent_payloads(data, exclude_ids)
+
+    if drive_key:
+        exact = [n for n in fresh if n.get("drive_tag") == drive_key]
+        hit = _pick(exact, "exact")
+        if hit:
+            return hit
+        # Same tag, ignore recent excludes — still never cross into other drives.
+        all_same = [
+            n for n in _iter_approved_latent_payloads(data, set())
+            if n.get("drive_tag") == drive_key
+        ]
+        return _pick(all_same, "relaxed_exclude")
+
+    hit = _pick(fresh, "any")
+    if hit:
+        return hit
+    return _pick(_iter_approved_latent_payloads(data, set()), "relaxed_exclude")
 
 
 def _ack_approved_latent_note(note_id: str) -> dict:
@@ -1684,6 +1731,16 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "inward": "情感残片，让 Nox 停一下；可以有重量，但不要变成格言。",
                 "outward": "悬置问题、好奇心碎片、未查完的事实或系统/世界断点，把 Nox 往外推；不是行动命令。",
             },
+            "drive_tags": {
+                "allowed": sorted(VALID_LATENT_NOTE_DRIVES),
+                "hint": (
+                    "按纸条真正的驱力贴 drive_tag，覆盖九维："
+                    "attachment 靠近/回返，libido 身体热度，possessiveness 领地/吃醋，"
+                    "reflection 回看/咀嚼，stewardship 守屋/修补，curiosity 向外看/未知，"
+                    "social 向外说/被看见，fatigue 没电，stress 绷紧，general 真分不清才用。"
+                    "不要把什么都标成 reflection 或 curiosity。"
+                ),
+            },
             "rules": [
                 "dream_line 25-60 个中文字符，短，像梦里翻到的一张纸。",
                 "保留原句里的具体物、动作、语气；优先使用 source fragments 的原句碎片。",
@@ -1696,6 +1753,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "不要说教，不要解释意义，不要给 Nox 安排行动。",
                 "source_fragment 必须从对应 source.fragments 中选一句或截取一句。",
                 "每条只可使用一个 source，不要混合多个记忆。",
+                "每条必须给 drive_tag（九维之一或 general），贴纸条本身的味道，不要偷懒全标 reflection。",
                 "outward 不是'去查xxx'，而是像'章鱼的神经末梢分布到皮肤上，不确定能不能感到温度'这种没闭合的事实碎片。",
                 "outward 必须从 outward_sources 里选；不要把嘉嘉/Nox/爱/哭这类情感片段硬写成 outward。",
                 "outward 需要保留一个可追的断点：问号、不确定、机制、阈值、模型差异、外部事实、代码行为、论坛/X线索等。",
@@ -1705,6 +1763,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "notes": [
                     {
                         "note_type": "inward or outward",
+                        "drive_tag": "attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress|general",
                         "source_bucket_id": "bucket id from source",
                         "source_fragment": "copied or trimmed original source fragment",
                         "dream_line": "潜意识便签",
@@ -1752,13 +1811,14 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
         note_type = str(raw.get("note_type") or "").strip().lower()
         if note_type not in {"inward", "outward"}:
             note_type = "outward" if any(x in dream_line for x in ("？", "?", "不确定", "叫什么", "为什么", "怎么", "查")) else "inward"
+        drive_tag = _normalize_latent_drive_tag(raw.get("drive_tag"), note_type)
         note_id = "latent_" + hashlib.sha1(f"{bucket_id}|{dream_line}|{ts}".encode("utf-8")).hexdigest()[:16]
         generated.append({
             "id": note_id,
             "status": "draft",
             "pinned": False,
             "note_type": note_type,
-            "drive_tag": _default_latent_drive_tag(note_type),
+            "drive_tag": drive_tag,
             "source_bucket_id": bucket_id,
             "source_kind": source.get("kind"),
             "source_title": source.get("title"),
@@ -5330,70 +5390,44 @@ async def api_desire_intent_hint(request):
 
 @mcp.custom_route("/api/heartbeat/latent-note", methods=["GET"])
 async def api_heartbeat_latent_note(request):
-    """Free Roam 用的潜意识便签：从 Nox 自己标过/悬着/未完成的旧线里抽一张短画面。"""
+    """Free Roam Subcurrent：只从前端同一份 approved latent_notes 按 drive_tag 抽取。
+
+    不再静默掉进 marks/old_memory 桶捞兜底——空就空，错口音比沉默更糟。
+    """
     from starlette.responses import JSONResponse
     raw_exclude = request.query_params.get("exclude", "")
     exclude_ids = {x.strip() for x in raw_exclude.split(",") if x.strip()}
     drive_key = request.query_params.get("drive_key", "")
     approved_note = _select_approved_latent_note(exclude_ids, drive_key=drive_key)
-    if approved_note:
-        try:
-            approved_note["atmosphere_bias"] = _desire.apply_subcurrent_bias(
-                approved_note.get("drive_tag") or drive_key,
-                latent_weight=float(approved_note.get("score", 1.0) or 1.0),
-                confidence=0.7,
-            )
-        except Exception as e:
-            logger.warning(f"approved latent atmosphere bias failed: {e}")
-        return JSONResponse(
-            {"note": approved_note, "source": "approved_pool", "candidate_count": 1},
-            headers={"Access-Control-Allow-Origin": "*"},
-        )
-    try:
-        all_buckets = await bucket_mgr.list_all(include_archive=True)
-        marks_by_bucket = _load_all_marks()
-        now = datetime.now()
-        candidates: list[dict] = []
-        for bucket in all_buckets:
-            bucket_id = bucket.get("id", "")
-            if not bucket_id or bucket_id in exclude_ids:
-                continue
-            mark_rows = marks_by_bucket.get(bucket_id, [])
-            scored = _latent_candidate_score(bucket, mark_rows, now)
-            if not scored:
-                continue
-            kind, score = scored
-            if score <= 0:
-                continue
-            candidates.append(_latent_note_payload(bucket, mark_rows, kind, score))
-
-        if not candidates:
-            return JSONResponse({"note": None}, headers={"Access-Control-Allow-Origin": "*"})
-
-        strong_candidates = [c for c in candidates if c.get("kind") != "old_memory"]
-        pick_pool = strong_candidates or candidates
-        weights = [max(0.01, c.get("score", 0.01)) for c in pick_pool]
-        note = random.choices(pick_pool, weights=weights, k=1)[0]
-        try:
-            note["atmosphere_bias"] = _desire.apply_subcurrent_bias(
-                note.get("drive_tag") or drive_key,
-                latent_weight=float(note.get("score", 0.6) or 0.6),
-                confidence=0.65,
-            )
-        except Exception as e:
-            logger.warning(f"latent atmosphere bias failed: {e}")
+    if not approved_note:
         return JSONResponse(
             {
-                "note": note,
-                "candidate_count": len(pick_pool),
-                "fallback_candidate_count": len(candidates) - len(strong_candidates),
+                "note": None,
+                "source": "approved_pool",
+                "candidate_count": 0,
+                "pool_match": "empty",
+                "drive_key": normalize_drive_key(drive_key) or "",
             },
             headers={"Access-Control-Allow-Origin": "*"},
         )
+    try:
+        approved_note["atmosphere_bias"] = _desire.apply_subcurrent_bias(
+            approved_note.get("drive_tag") or drive_key,
+            latent_weight=float(approved_note.get("score", 1.0) or 1.0),
+            confidence=0.7,
+        )
     except Exception as e:
-        logger.warning(f"heartbeat latent note failed: {e}")
-        return JSONResponse({"note": None, "error": str(e)}, status_code=500,
-                            headers={"Access-Control-Allow-Origin": "*"})
+        logger.warning(f"approved latent atmosphere bias failed: {e}")
+    return JSONResponse(
+        {
+            "note": approved_note,
+            "source": "approved_pool",
+            "candidate_count": 1,
+            "pool_match": approved_note.get("pool_match") or "exact",
+            "drive_key": normalize_drive_key(drive_key) or approved_note.get("drive_tag") or "",
+        },
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 @mcp.custom_route("/api/heartbeat/latent-note/ack", methods=["POST"])

@@ -221,7 +221,9 @@ def normalize_libido_pending(value: dict | None) -> dict:
     data["updated_at"] = float(data.get("updated_at", 0.0) or 0.0)
     return data
 
-INTENT_ACTIVATION_THRESHOLD = 0.55
+# 0.55 时常见 afterglow 热度（act≈0.45–0.50）永远冒不出 intent，
+# 心跳只能走 idle+latent。略降到 0.48，让明确领先的 drive 仍能形成 want。
+INTENT_ACTIVATION_THRESHOLD = 0.48
 # Compatibility name for older imports; Intent now compares baseline-normalized
 # effective activation, not heterogeneous raw Drive magnitudes.
 INTENT_THRESHOLD = INTENT_ACTIVATION_THRESHOLD
