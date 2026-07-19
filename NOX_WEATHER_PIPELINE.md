@@ -976,8 +976,9 @@ Latent Notes 生成链路：
 - Pulse 主角 = **Undertow** = 最高 drive（`pressure = raw − baseline`）。展示与 latent 的 `drive_key` 同一把尺子。
 - 有 `drive_key` 时：**只抽 exact `drive_tag`**。不静默掉进 general，不跨维。
 - 同 tag 全在 recent exclude 里时：放宽 exclude 复用同 tag，仍不跨维。
-- approved 没命中：**宁可空**，不再掉进 marks / old_memory 桶捞兜底（那条河和前端池不是同一个嘴）。
-- 草稿生成时要求模型给出九维 `drive_tag`，避免全糊成 reflection / curiosity。
+- approved 没命中：**不显示 Subcurrent**，只留唤醒 hook（Undertow / Rhythm），不硬塞「本维空」文案。
+- 同维挑选：一次性新条优先；**pinned 只是常驻可复用，不是最高优先**。
+- 生成「补空池」：按各维 approved 库存找将空的 drive，配额只补那些维，不往已满的池继续堆。
 
 触发格式类似：
 

@@ -2518,7 +2518,7 @@ html[data-theme="sakura-milk"] ::selection { background: rgba(216,132,159,.28); 
       </div>
       <div class="latent-actions">
         <button class="btn-primary" onclick="startLatentNoteCreate()">手动添加</button>
-        <button class="btn-primary" id="latent-generate-btn" onclick="generateLatentNotes()">重新生成 15 条</button>
+        <button class="btn-primary" id="latent-generate-btn" onclick="generateLatentNotes()" title="优先补 approved 将空的 drive 池">补空池 15 条</button>
       </div>
     </div>
     <div class="latent-tabs" id="latent-note-tabs">
@@ -6751,17 +6751,24 @@ async function generateLatentNotes() {
   if (btn) {
     btn.disabled = true;
     btn.classList.add('latent-generating');
-    btn.textContent = '生成中';
+    btn.textContent = '补空中…';
   }
   try {
     const res = await fetch(BASE + '/api/latent-notes/generate', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ count: 15 })
+      body: JSON.stringify({ count: 15, prefer_low_stock: true })
     });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       return alert('生成失败：' + (error.error || res.status));
+    }
+    const payload = await res.json().catch(() => ({}));
+    const low = Array.isArray(payload.low_stock) ? payload.low_stock : [];
+    const quota = payload.drive_quota || {};
+    const filled = Object.entries(quota).filter(([, n]) => Number(n) > 0).map(([k, n]) => `${k}×${n}`).join(' · ');
+    if (filled) {
+      console.info('[latent] 补空池', filled, low);
     }
     latentCreating = false;
     latentEditingId = '';
@@ -6771,7 +6778,7 @@ async function generateLatentNotes() {
     if (btn) {
       btn.disabled = false;
       btn.classList.remove('latent-generating');
-      btn.textContent = '重新生成 15 条';
+      btn.textContent = '补空池 15 条';
     }
   }
 }

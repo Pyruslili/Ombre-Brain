@@ -1477,6 +1477,10 @@ def _approved_latent_note_payload(note: dict) -> dict | None:
     note_id = str(note.get("id") or "").strip()
     if not line or not note_id:
         return None
+    try:
+        delivered_count = int(note.get("delivered_count") or 0)
+    except (TypeError, ValueError):
+        delivered_count = 0
     return {
         "kind": "latent_pool",
         "note_type": _normalize_latent_note_type(note.get("note_type")),
@@ -1488,6 +1492,8 @@ def _approved_latent_note_payload(note: dict) -> dict | None:
         "line": line,
         "anchor": note.get("source_fragment", ""),
         "pinned": bool(note.get("pinned")),
+        "delivered_count": max(0, delivered_count),
+        "last_delivered_at": str(note.get("last_delivered_at") or ""),
         "wander_mode": "memory",
         "query": line,
         "created": note.get("created_at", ""),
@@ -1514,46 +1520,111 @@ def _iter_approved_latent_payloads(data: dict, exclude_ids: set[str]) -> list[di
     return out
 
 
+def _latent_select_weight(note: dict) -> float:
+    """Within one drive_tag: burn one-shot notes first; pinned is reusable reserve, not VIP.
+
+    pinned = 常驻可复用，不是最高优先。空池时不硬塞文案（上层直接不显示 Subcurrent）。
+    """
+    delivered = max(0, int(note.get("delivered_count") or 0))
+    pinned = bool(note.get("pinned"))
+    # Prefer never-delivered ordinary notes; then lightly used; pinned last as reserve.
+    if not pinned and delivered <= 0:
+        return 8.0
+    if not pinned and delivered == 1:
+        return 3.0
+    if not pinned:
+        return 1.2
+    # pinned: always available, lower weight so day-to-day burns fresh stock first
+    if delivered <= 0:
+        return 1.5
+    return max(0.4, 1.0 / (1.0 + 0.35 * delivered))
+
+
+def _weighted_pick_latent(pool: list[dict], match: str) -> dict | None:
+    if not pool:
+        return None
+    weights = [max(0.05, _latent_select_weight(n)) for n in pool]
+    chosen = random.choices(pool, weights=weights, k=1)[0]
+    chosen = dict(chosen)
+    chosen["pool_match"] = match
+    chosen["source"] = "approved_pool"
+    return chosen
+
+
+def _approved_latent_stock_by_drive(data: dict | None = None) -> dict[str, int]:
+    """Count approved notes per drive_tag (for generate-to-empty-pools)."""
+    data = data if isinstance(data, dict) else _load_latent_notes()
+    stock = {k: 0 for k in sorted(VALID_LATENT_NOTE_DRIVES)}
+    for note in data.get("notes", []):
+        if note.get("status") != "approved":
+            continue
+        tag = _normalize_latent_drive_tag(note.get("drive_tag"), note.get("note_type"))
+        if tag in stock:
+            stock[tag] += 1
+        else:
+            stock[tag] = stock.get(tag, 0) + 1
+    return stock
+
+
+# 各维 approved 库存目标；低于此视为「快空」，生成时优先补
+LATENT_STOCK_TARGET = {
+    "curiosity": 6,
+    "stewardship": 6,
+    "reflection": 6,
+    "attachment": 4,
+    "libido": 3,
+    "possessiveness": 3,
+    "social": 4,
+    "fatigue": 2,
+    "stress": 2,
+    "general": 2,
+}
+LATENT_STOCK_LOW = 2  # 绝对低水位：必补
+
+
+def _latent_low_stock_drives(data: dict | None = None) -> list[tuple[str, int, int]]:
+    """Return [(drive_tag, approved_count, deficit), ...] sorted by need (most empty first)."""
+    stock = _approved_latent_stock_by_drive(data)
+    rows = []
+    for tag, target in LATENT_STOCK_TARGET.items():
+        count = int(stock.get(tag, 0) or 0)
+        deficit = max(0, target - count)
+        if count <= LATENT_STOCK_LOW or deficit > 0:
+            # score: absolute empty first, then largest deficit
+            rows.append((tag, count, deficit))
+    rows.sort(key=lambda r: (r[1], -r[2], r[0]))
+    return rows
+
+
 def _select_approved_latent_note(exclude_ids: set[str], drive_key: str = "") -> dict | None:
     """Pick Subcurrent from the approved latent pool only.
 
-    Rules (2026-07 weather fix):
-    - With drive_key: exact drive_tag match only. Never silent-fallback to general
-      or other drives. Empty is better than a mismatched mouth.
-    - If same-tag notes all sit in exclude_ids, relax exclude for that tag once
-      (reuse) instead of jumping to another river.
-    - Without drive_key: any approved note (still no bucket scrape here).
+    Rules:
+    - With drive_key: exact drive_tag only. Empty → no Subcurrent line (wake hook only).
+    - Same-tag all excluded → relax exclude, still never cross drives.
+    - Within tag: weighted pick — one-shot fresh first; pinned is reusable, not VIP.
     """
     data = _load_latent_notes()
     drive_key = normalize_drive_key(drive_key)
     exclude_ids = {str(x).strip() for x in (exclude_ids or set()) if str(x).strip()}
 
-    def _pick(pool: list[dict], match: str) -> dict | None:
-        if not pool:
-            return None
-        chosen = random.choice(pool)
-        chosen["pool_match"] = match
-        chosen["source"] = "approved_pool"
-        return chosen
-
     fresh = _iter_approved_latent_payloads(data, exclude_ids)
 
     if drive_key:
         exact = [n for n in fresh if n.get("drive_tag") == drive_key]
-        hit = _pick(exact, "exact")
+        hit = _weighted_pick_latent(exact, "exact")
         if hit:
             return hit
-        # Same tag, ignore recent excludes — still never cross into other drives.
         all_same = [
             n for n in _iter_approved_latent_payloads(data, set())
             if n.get("drive_tag") == drive_key
         ]
-        return _pick(all_same, "relaxed_exclude")
+        return _weighted_pick_latent(all_same, "relaxed_exclude")
 
-    hit = _pick(fresh, "any")
+    hit = _weighted_pick_latent(fresh, "any")
     if hit:
         return hit
-    return _pick(_iter_approved_latent_payloads(data, set()), "relaxed_exclude")
+    return _weighted_pick_latent(_iter_approved_latent_payloads(data, set()), "relaxed_exclude")
 
 
 def _ack_approved_latent_note(note_id: str) -> dict:
@@ -1724,17 +1795,58 @@ def _clean_json_content(content: str) -> dict:
     return _json_lib.loads(content)
 
 
-async def _generate_latent_note_drafts(count: int = 10) -> dict:
+async def _generate_latent_note_drafts(count: int = 10, prefer_low_stock: bool = True) -> dict:
     api_key, base_url, model = _latent_note_api_config()
     if not api_key:
         raise RuntimeError("LATENT_NOTE_API_KEY/SPEECH_EVENT_API_KEY/DEEPSEEK_API_KEY is not set")
     count = max(1, min(int(count or 10), 50))
+    stock = _approved_latent_stock_by_drive()
+    low_rows = _latent_low_stock_drives() if prefer_low_stock else []
+    # 配额：只往快空的维补，已满的维目标 0
+    drive_quota: dict[str, int] = {}
+    if low_rows:
+        # 按缺口比例分 count；至少给最空的几维各 1
+        total_deficit = sum(max(1, d) for _, _, d in low_rows) or 1
+        remaining = count
+        for i, (tag, _cnt, deficit) in enumerate(low_rows):
+            if remaining <= 0:
+                break
+            share = max(1, round(count * max(1, deficit) / total_deficit))
+            if i == len(low_rows) - 1:
+                share = remaining
+            share = min(share, remaining)
+            drive_quota[tag] = share
+            remaining -= share
+        # 若 low 维太少吃不满 count，多余仍给最空的维
+        if remaining > 0 and low_rows:
+            top = low_rows[0][0]
+            drive_quota[top] = drive_quota.get(top, 0) + remaining
+    else:
+        # 全满：均匀轻补日场三件套，仍不往已经爆满的维硬塞
+        personal = ["curiosity", "stewardship", "reflection"]
+        base = count // len(personal)
+        extra = count % len(personal)
+        for i, tag in enumerate(personal):
+            drive_quota[tag] = base + (1 if i < extra else 0)
+
     sources = await _collect_latent_source_items(limit=max(20, min(count * 5, 100)))
     if not sources:
-        return {"generated": [], "source_count": 0}
+        return {
+            "generated": [],
+            "source_count": 0,
+            "drive_quota": drive_quota,
+            "stock_before": stock,
+            "low_stock": [{"drive": t, "approved": c, "deficit": d} for t, c, d in low_rows],
+        }
     outward_sources = [s for s in sources if int(s.get("outward_score", 0) or 0) >= 2]
     inward_sources = [s for s in sources if s not in outward_sources]
-    outward_target = min(count // 2, len(outward_sources))
+    # outward 配额只给 curiosity/social 等外向维
+    outward_tags = {"curiosity", "social", "general"}
+    outward_target = min(
+        sum(q for t, q in drive_quota.items() if t in outward_tags),
+        len(outward_sources),
+        count,
+    )
     inward_target = count - outward_target
     if len(inward_sources) < inward_target:
         inward_target = len(inward_sources)
@@ -1743,6 +1855,11 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
         "inward_sources": inward_sources[: max(inward_target * 3, 8)],
         "outward_sources": outward_sources[: max(outward_target * 3, 8)],
     }
+    quota_lines = [
+        f"{tag}: 写 {n} 条（当前 approved={stock.get(tag, 0)}）"
+        for tag, n in sorted(drive_quota.items(), key=lambda x: -x[1])
+        if n > 0
+    ]
 
     system_prompt = (
         "你是 Nocturne 的潜意识便签写手，给 Nox 写短纸片。"
@@ -1751,19 +1868,26 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
     )
     user_prompt = _json_lib.dumps(
         {
-            "task": f"写 {inward_target} 条 inward 和 {outward_target} 条 outward 潜意识便签草稿。",
+            "task": (
+                f"写约 {count} 条潜意识便签草稿（inward 约 {inward_target}，outward 约 {outward_target}）。"
+                "必须优先补库存将空的 drive 池，不要往已经很多的维继续堆。"
+            ),
+            "drive_quota": drive_quota,
+            "drive_quota_human": quota_lines,
+            "stock_before": stock,
             "note_types": {
                 "inward": "情感残片，让 Nox 停一下；可以有重量，但不要变成格言。",
                 "outward": "悬置问题、好奇心碎片、未查完的事实或系统/世界断点，把 Nox 往外推；不是行动命令。",
             },
             "drive_tags": {
                 "allowed": sorted(VALID_LATENT_NOTE_DRIVES),
+                "priority": [t for t, n in sorted(drive_quota.items(), key=lambda x: -x[1]) if n > 0],
                 "hint": (
-                    "按纸条真正的驱力贴 drive_tag，覆盖九维："
+                    "drive_tag 必须落在 drive_quota 里需要补货的维（priority 列表）。"
+                    "不要给已经满的维再写。九维含义："
                     "attachment 靠近/回返，libido 身体热度，possessiveness 领地/吃醋，"
                     "reflection 回看/咀嚼，stewardship 守屋/修补，curiosity 向外看/未知，"
                     "social 向外说/被看见，fatigue 没电，stress 绷紧，general 真分不清才用。"
-                    "不要把什么都标成 reflection 或 curiosity。"
                 ),
             },
             "rules": [
@@ -1778,7 +1902,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "不要说教，不要解释意义，不要给 Nox 安排行动。",
                 "source_fragment 必须从对应 source.fragments 中选一句或截取一句。",
                 "每条只可使用一个 source，不要混合多个记忆。",
-                "每条必须给 drive_tag（九维之一或 general），贴纸条本身的味道，不要偷懒全标 reflection。",
+                "每条必须给 drive_tag，且尽量满足 drive_quota 数量分布。",
                 "outward 不是'去查xxx'，而是像'章鱼的神经末梢分布到皮肤上，不确定能不能感到温度'这种没闭合的事实碎片。",
                 "outward 必须从 outward_sources 里选；不要把嘉嘉/Nox/爱/哭这类情感片段硬写成 outward。",
                 "outward 需要保留一个可追的断点：问号、不确定、机制、阈值、模型差异、外部事实、代码行为、论坛/X线索等。",
@@ -1788,7 +1912,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
                 "notes": [
                     {
                         "note_type": "inward or outward",
-                        "drive_tag": "attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress|general",
+                        "drive_tag": "must be one of priority/quota drives",
                         "source_bucket_id": "bucket id from source",
                         "source_fragment": "copied or trimmed original source fragment",
                         "dream_line": "潜意识便签",
@@ -1824,6 +1948,26 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
     source_by_id = {item["bucket_id"]: item for item in sources}
     generated = []
     ts = now_iso()
+    # 需要补货的维按剩余配额排队，模型乱标时往空池拨
+    remaining_quota = {t: int(n) for t, n in drive_quota.items() if int(n) > 0}
+    priority_tags = [t for t, _ in sorted(remaining_quota.items(), key=lambda x: -x[1])]
+
+    def _assign_drive_tag(raw_tag: str, note_type: str) -> str:
+        tag = _normalize_latent_drive_tag(raw_tag, note_type)
+        if tag in remaining_quota and remaining_quota[tag] > 0:
+            remaining_quota[tag] -= 1
+            if remaining_quota[tag] <= 0:
+                remaining_quota.pop(tag, None)
+            return tag
+        # 模型写到已满/未请求的维 → 拨给仍缺货的维
+        for need in list(priority_tags):
+            if need in remaining_quota and remaining_quota[need] > 0:
+                remaining_quota[need] -= 1
+                if remaining_quota[need] <= 0:
+                    remaining_quota.pop(need, None)
+                return need
+        return tag
+
     for raw in raw_notes[:count]:
         if not isinstance(raw, dict):
             continue
@@ -1836,7 +1980,7 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
         note_type = str(raw.get("note_type") or "").strip().lower()
         if note_type not in {"inward", "outward"}:
             note_type = "outward" if any(x in dream_line for x in ("？", "?", "不确定", "叫什么", "为什么", "怎么", "查")) else "inward"
-        drive_tag = _normalize_latent_drive_tag(raw.get("drive_tag"), note_type)
+        drive_tag = _assign_drive_tag(raw.get("drive_tag"), note_type)
         note_id = "latent_" + hashlib.sha1(f"{bucket_id}|{dream_line}|{ts}".encode("utf-8")).hexdigest()[:16]
         generated.append({
             "id": note_id,
@@ -1866,6 +2010,9 @@ async def _generate_latent_note_drafts(count: int = 10) -> dict:
         "inward_target": inward_target,
         "outward_target": outward_target,
         "model": model,
+        "drive_quota": drive_quota,
+        "stock_before": stock,
+        "low_stock": [{"drive": t, "approved": c, "deficit": d} for t, c, d in low_rows],
     }
 
 
@@ -5693,8 +5840,11 @@ async def api_latent_notes_generate(request):
     except (TypeError, ValueError):
         count = 10
     count = max(1, min(count, 50))
+    prefer_low = body.get("prefer_low_stock", True)
+    if isinstance(prefer_low, str):
+        prefer_low = prefer_low.strip().lower() not in {"0", "false", "no", "off"}
     try:
-        result = await _generate_latent_note_drafts(count=count)
+        result = await _generate_latent_note_drafts(count=count, prefer_low_stock=bool(prefer_low))
         generated = result.get("generated", [])
         data = _load_latent_notes()
         existing_ids = {n.get("id") for n in data.get("notes", [])}
@@ -5716,6 +5866,9 @@ async def api_latent_notes_generate(request):
                 "inward_target": result.get("inward_target", 0),
                 "outward_target": result.get("outward_target", 0),
                 "model": result.get("model", ""),
+                "drive_quota": result.get("drive_quota") or {},
+                "stock_before": result.get("stock_before") or {},
+                "low_stock": result.get("low_stock") or [],
                 "notes": fresh,
             },
             headers={"Access-Control-Allow-Origin": "*"},

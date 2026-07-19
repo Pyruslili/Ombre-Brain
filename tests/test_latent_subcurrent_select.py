@@ -4,18 +4,31 @@ import pytest
 
 pytest.importorskip("mcp.server.fastmcp")
 
-from server import _select_approved_latent_note
+from server import (
+    _latent_low_stock_drives,
+    _latent_select_weight,
+    _select_approved_latent_note,
+)
 
 
-def _note(note_id: str, drive_tag: str, line: str, status: str = "approved") -> dict:
+def _note(
+    note_id: str,
+    drive_tag: str,
+    line: str,
+    status: str = "approved",
+    *,
+    pinned: bool = False,
+    delivered_count: int = 0,
+) -> dict:
     return {
         "id": note_id,
         "status": status,
-        "pinned": False,
+        "pinned": pinned,
         "note_type": "inward",
         "drive_tag": drive_tag,
         "dream_line": line,
         "created_at": "2026-07-19T00:00:00",
+        "delivered_count": delivered_count,
     }
 
 
@@ -77,3 +90,37 @@ def test_draft_notes_never_deliver(monkeypatch):
 
     hit = _select_approved_latent_note(set(), drive_key="stewardship")
     assert hit["line"] == "已确认的修屋。"
+
+
+def test_pinned_is_reusable_not_vip_weight():
+    fresh = {"pinned": False, "delivered_count": 0}
+    pinned = {"pinned": True, "delivered_count": 0}
+    assert _latent_select_weight(fresh) > _latent_select_weight(pinned)
+
+
+def test_fresh_one_shot_preferred_over_pinned(monkeypatch):
+    data = {
+        "notes": [
+            _note("p1", "curiosity", "常驻那句。", pinned=True),
+            _note("f1", "curiosity", "新鲜一次。", pinned=False),
+        ]
+    }
+    monkeypatch.setattr("server._load_latent_notes", lambda: data)
+    picks = [_select_approved_latent_note(set(), drive_key="curiosity")["line"] for _ in range(40)]
+    # Weighted: fresh should dominate; allow rare pin draws
+    assert picks.count("新鲜一次。") > picks.count("常驻那句。")
+
+
+def test_low_stock_lists_empty_drives_first(monkeypatch):
+    data = {
+        "notes": [
+            *[_note(f"c{i}", "curiosity", f"c{i}") for i in range(8)],
+            _note("s1", "stewardship", "只一条"),
+        ]
+    }
+    monkeypatch.setattr("server._load_latent_notes", lambda: data)
+    rows = _latent_low_stock_drives(data)
+    tags = [r[0] for r in rows]
+    # curiosity is full-ish; stewardship low should appear and rank earlier than curiosity
+    assert "stewardship" in tags
+    assert tags.index("stewardship") < tags.index("curiosity") if "curiosity" in tags else True
