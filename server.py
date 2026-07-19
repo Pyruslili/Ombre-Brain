@@ -169,6 +169,13 @@ _desire_db = os.path.join(
     "desire.db"
 )
 _desire = DesireEngine(db_path=_desire_db)
+try:
+    # 一次性清掉历史 analyzer 代写念头（dp_memory 不再 mint）
+    _purged = _desire.purge_thoughts_by_source("dp_memory")
+    if _purged.get("removed"):
+        logger.info(f"purged legacy dp_memory thoughts: {_purged['removed']}")
+except Exception as _purge_exc:
+    logger.warning(f"purge dp_memory thoughts failed: {_purge_exc}")
 _last_signal_ts: list = [0.0]  # 最近一次嘉嘉输入信号时间戳
 
 # Rhythm — phone / watch 外场节律（MCP + HTTP + Bark 主动推送）
@@ -5942,9 +5949,13 @@ async def api_desire_feed(request):
             event_result = {"ok": False, "error": str(e)}
 
     feed_source = str(body.get("source") or (event_body or {}).get("source") or "cli").strip()[:80] or "cli"
+    # dp_memory 不入 Thought Pool（与 dialogue_residue 一致）；只走 Drive/Weather。
     add_thoughts = (
-        not (event_result and event_result.get("suppressed"))
-        or feed_source == "analyze_nocturne_entry"
+        feed_source not in {"dp_memory"}
+        and (
+            not (event_result and event_result.get("suppressed"))
+            or feed_source == "analyze_nocturne_entry"
+        )
     )
     added = _add_feed_thoughts(thoughts, source=feed_source) if add_thoughts else 0
     if event_result and event_result.get("suppressed"):
@@ -6283,32 +6294,17 @@ async def api_analyzer_dp_memory(request):
                 event_result = _desire.apply_drive_event(event)
             else:
                 event_result = {"ok": False, "reason": "no_primary_drive"}
-            added = 0
+            # 只染 Drive/Weather/和弦；不再把 analyzer 代写念头塞进 Thought Pool。
             applied_chords = set()
             entry_chord = str(entry.get("chord") or "").strip()
             if entry_chord:
-                _desire.apply_chord_echo(entry_chord, source="thought")
+                _desire.apply_chord_echo(entry_chord, source="memory")
                 applied_chords.add(entry_chord)
-            for thought in event.get("thoughts", []) if isinstance(event.get("thoughts"), list) else []:
-                text = str(thought.get("text") or "").strip()
-                if not text:
-                    continue
-                _desire.add_thought(
-                    text,
-                    normalize_drive_key(thought.get("drive"), event.get("primary_drive") or "reflection"),
-                    strength=float(thought.get("strength", 0.45) or 0.45),
-                    source="dp_memory",
-                    source_bucket=entry.get("id", ""),
-                    source_type=entry.get("type", ""),
-                    source_created=entry.get("created", ""),
-                )
-                _desire.store.add_echo(text, normalize_drive_key(thought.get("drive"), "reflection"))
-                thought_chord = str(thought.get("chord") or "").strip()
-                if thought_chord and thought_chord not in applied_chords:
-                    _desire.apply_chord_echo(thought_chord, source="thought")
-                    applied_chords.add(thought_chord)
-                added += 1
-            feed_result = {"event": event_result, "thoughts_added": added}
+            feed_result = {
+                "event": event_result,
+                "thoughts_added": 0,
+                "thoughts_disabled": "dp_memory_no_mint",
+            }
         return JSONResponse({"ok": True, "event": event, "feed": feed_result},
                            headers={"Access-Control-Allow-Origin": "*"})
     except Exception as e:

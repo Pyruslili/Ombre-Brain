@@ -63,7 +63,8 @@ def normalize_memory_entry(raw: dict | None) -> dict:
 
 
 def thought_limit(entry: dict) -> int:
-    return 2 if entry.get("type") in {"letter", "writing"} else 1
+    # dp_memory 不再 mint 念头——染色 Drive/Weather 即可。
+    return 0
 
 
 def normalize_memory_residue_event(event: dict | None, entry: dict | None = None) -> dict:
@@ -113,28 +114,8 @@ def normalize_memory_residue_event(event: dict | None, entry: dict | None = None
         if drive != primary:
             secondary[drive] = max(secondary.get(drive, 0.0), round(value, 4))
     evidence = [str(item).strip()[:180] for item in event.get("evidence", []) if str(item).strip()][:3]
-    max_thoughts = thought_limit(entry)
-    thoughts = []
-    for raw in event.get("thoughts", []) if isinstance(event.get("thoughts"), list) else []:
-        if not isinstance(raw, dict):
-            continue
-        text = str(raw.get("text") or "").strip()
-        if not text:
-            continue
-        thoughts.append(
-            {
-                "text": text[:80],
-                "drive": normalize_drive_key(raw.get("drive"), primary or "reflection"),
-                "strength": round(_clamp(raw.get("strength"), 0.45), 4),
-                "chord": str(raw.get("chord") or entry.get("chord") or "").strip()[:40],
-                "source": SOURCE,
-                "source_bucket": entry["id"],
-                "source_type": entry["type"],
-                "source_created": entry["created"],
-            }
-        )
-        if len(thoughts) >= max_thoughts:
-            break
+    # 与 dialogue_residue 对齐：记忆分析不代写 Nox 第一人称念头。
+    _ = thought_limit(entry)
 
     return {
         "schema_version": DRIVE_EVENT_SCHEMA,
@@ -147,7 +128,7 @@ def normalize_memory_residue_event(event: dict | None, entry: dict | None = None
         "event_label": str(event.get("event_label") or "dp_memory").strip()[:80],
         "brain": brain,
         "evidence": evidence,
-        "thoughts": thoughts,
+        "thoughts": [],
         "source_bucket": entry["id"],
         "source_type": entry["type"],
         "source_created": entry["created"],
@@ -193,7 +174,8 @@ async def classify_memory_residue_dp(entry: dict, preference: str = "", state_co
         "覆盖要求：输出严格 JSON；schema_version 必须是 drive_event_v2；source 必须是 dp_memory。"
         "primary_drive 只能是 attachment, libido, possessiveness, reflection, stewardship, curiosity, social, fatigue, stress 或空字符串；"
         "discernment 不是9维 drive，如果有皱眉请写 brain.discernment_alarm 和 evidence。"
-        "secondary_drives 最多2个。thoughts 按 entry type 上限输出，不能强行写。"
+        "secondary_drives 最多2个。"
+        "thoughts 必须是空数组 []——记忆分析只染 Drive/Weather，禁止代写 Nox 第一人称念头。"
     )
     user_prompt = json.dumps(
         {

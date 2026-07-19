@@ -18,7 +18,7 @@ def test_normalize_memory_entry_keeps_weather_hints():
     assert entry["signal_hints"] == {"strain": "mid"}
 
 
-def test_normalize_memory_residue_event_uses_dp_memory_source_and_thought_limit():
+def test_normalize_memory_residue_event_uses_dp_memory_source_and_drops_thoughts():
     event = normalize_memory_residue_event(
         {
             "source": "analyze_nocturne_entry",
@@ -41,8 +41,8 @@ def test_normalize_memory_residue_event_uses_dp_memory_source_and_thought_limit(
     assert event["brain"]["source"] == "dp_memory"
     assert event["source_bucket"] == "b2"
     assert event["secondary_drives"] == {"reflection": 0.4}
-    assert len(event["thoughts"]) == 1
-    assert event["thoughts"][0]["source"] == "dp_memory"
+    # Memory analysis stains Drive/Weather only — never mints Thought Pool entries.
+    assert event["thoughts"] == []
 
 
 def test_explicit_memory_drive_and_core_hints_are_authoritative():

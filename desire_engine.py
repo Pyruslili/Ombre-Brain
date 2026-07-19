@@ -4075,6 +4075,15 @@ class DesireStore:
             cur = conn.execute("DELETE FROM thoughts WHERE tid=?", (tid,))
             return cur.rowcount > 0
 
+    def purge_thoughts_by_source(self, source: str) -> int:
+        """Remove analyzer-minted thoughts (e.g. legacy dp_memory) from the pool."""
+        source = str(source or "").strip()
+        if not source:
+            return 0
+        with self._conn() as conn:
+            cur = conn.execute("DELETE FROM thoughts WHERE source=?", (source,))
+            return int(cur.rowcount or 0)
+
     # ─── 回声池 ──────────────────────────────────────────────────────────
     def add_echo(self, text: str, drive: str):
         """CLI分析feel提炼出的念头，同时存档进回声池，供autofeed日后抽取。"""
@@ -5217,6 +5226,10 @@ class DesireEngine:
     def delete_thought(self, tid: str) -> dict:
         ok = self.store.delete_thought(tid)
         return {"ok": ok, "tid": tid}
+
+    def purge_thoughts_by_source(self, source: str) -> dict:
+        removed = self.store.purge_thoughts_by_source(source)
+        return {"ok": True, "source": source, "removed": removed}
 
     def add_unsourced(self, drive: str, text: str = ""):
         """
