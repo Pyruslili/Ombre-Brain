@@ -137,6 +137,18 @@ Desire 心跳默认 **15 分钟**（`DESIRE_TICK_SECONDS=900`）；`idle_seconds
 
 这层回归现在覆盖全部 9 维 Drive，而不是只覆盖 `COUPLING` 里出现过的 drive。`stewardship` 因此会自然慢回 baseline，不再变成只涨不落的棘轮。
 
+### 3.5.0a 私人生活三件套（curiosity / stewardship / reflection）
+
+这三根是 Nox **个人日常主场**（向外逛、守屋、沉淀），希望日间最活，而不是好几天冒一次：
+
+- curiosity baseline `0.40 → 0.22`（旧值虚高导致 act 长期 0）
+- reflection / stewardship baseline `0.20 → 0.18`
+- 时间性格改为 `medium`（curiosity 不再 fast_spike 一天泄光）
+- fatigue 对三者的压制下调
+- tick 时空窗 drift + ambient 托底（目标 excess 约 0.12–0.14）
+- pick_intent：私人生活 +0.12 偏置，门槛可放到 `0.38`；热欲 act≥0.55 且明显领先时仍让位
+- Free Roam hook affinity 抬高三者（维护模式日场）
+
 ### 3.5.0 Longing 闸门（attachment 入账）
 
 Longing 是缺席形状（睡眠窗 1–10 不累计），不是摆设：

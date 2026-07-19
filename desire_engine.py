@@ -52,13 +52,31 @@ DRIVE_BASELINES = {
     "attachment": 0.30,
     "libido":     0.20,
     "possessiveness": 0.08,
-    "reflection": 0.20,
-    "stewardship": 0.20,
-    "curiosity":  0.40,
+    "reflection": 0.18,
+    "stewardship": 0.18,
+    # 私人生活主场：基线别虚高，否则 act 永远贴 0、好几天冒不了头
+    "curiosity":  0.22,
     "social":     0.25,
     "fatigue":    0.10,
     "stress":     0.15,
 }
+
+# Nox 个人日常三件套：向外看 / 守屋 / 沉淀——希望每天最活
+PERSONAL_LIFE_DRIVES = frozenset({"curiosity", "stewardship", "reflection"})
+# 静息之上维持的「日常活气」excess（raw − baseline 目标底）
+# 目标：act 约 0.40–0.45，加上 intent 偏置后日间容易过门槛
+PERSONAL_AMBIENT_EXCESS = {
+    "curiosity": 0.14,
+    "stewardship": 0.12,
+    "reflection": 0.12,
+}
+# 每 tick-equivalent 朝 ambient 合拢的比例（15m 一拍也能较快坐上活气底）
+PERSONAL_AMBIENT_LIFT = 0.38
+# pick_intent 给私人生活的激活偏置（热欲明显领先时仍让位）
+PERSONAL_INTENT_BIAS = 0.12
+# 私人生活 intent 门槛略松，避免「好几天才冒一次」
+PERSONAL_INTENT_THRESHOLD = 0.38
+HEAT_DRIVES = frozenset({"libido", "attachment", "possessiveness"})
 
 DRIVE_ACTIONS = {
     "attachment": "想嘉嘉，冒出一句话去找她",
@@ -88,9 +106,10 @@ DRIVE_TIME_MODES = {
     "attachment": "slow",
     "libido": "fast_spike",
     "possessiveness": "fast_spike + slow",
+    # 私人生活：别 fast_spike 一天泄光，留作日间主场
     "reflection": "medium",
-    "stewardship": "slow",
-    "curiosity": "fast_spike",
+    "stewardship": "medium",
+    "curiosity": "medium",
     "social": "medium",
     "fatigue": "cumulative",
     "stress": "fast_spike",
@@ -236,9 +255,10 @@ FATIGUE_SENSITIVITY = {
     "attachment": 0.12,
     "libido":     0.08,
     "possessiveness": 0.14,
-    "reflection": 0.50,
-    "stewardship": 0.45,
-    "curiosity":  0.72,
+    # 私人生活别被 fatigue 一刀切——累也要能逛、能修、能想
+    "reflection": 0.32,
+    "stewardship": 0.30,
+    "curiosity":  0.38,
     "social":     0.78,
     "fatigue":    0.0,
     "stress":     0.30,
@@ -2896,10 +2916,13 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0,
     libido_pending = tick_libido_pending(state.libido_pending, now_ts)
 
     idle_h = idle_seconds / 3600.0
-    # attachment 不再靠 idle 偷偷涨——缺席形状交给 longing，日常加分走闸门。
+    # attachment 不再靠 idle 偷偷涨——缺席形状交给 longing。
+    # 私人生活三件套：空窗时慢慢冒头，每天都该有机会出去逛/修屋/沉淀。
     drift = {
         "attachment": 0.0,
-        "curiosity":  0.002 * idle_h,
+        "curiosity":  0.014 * idle_h,
+        "stewardship": 0.010 * idle_h,
+        "reflection": 0.010 * idle_h,
         "stress":    -0.001 * idle_h,
         "fatigue":    0.001 * idle_h,
     }
@@ -2910,7 +2933,8 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0,
         new_drives["attachment"] = max(new_drives["attachment"], target)
 
     elapsed = now_ts - float(state.last_ts or 0.0)
-    tick_scale = _clamp(elapsed / 1800.0, 0.25, 4.0) if elapsed > 0 else 1.0
+    ref_sec = float(DESIRE_TICK_SECONDS) if DESIRE_TICK_SECONDS else 900.0
+    tick_scale = _clamp(elapsed / ref_sec, 0.25, 4.0) if elapsed > 0 else 1.0
     for src, tgt, coeff, mode in COUPLING:
         if mode == "level":
             delta = coeff * (new_drives[src] - DRIVE_BASELINES[src]) * tick_scale
@@ -2924,6 +2948,13 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0,
         base_rate = drive_damping_rate(k)
         rate = 1.0 - math.pow(1.0 - base_rate, tick_scale)
         new_drives[k] = _clamp(new_drives[k] + rate * (DRIVE_BASELINES[k] - new_drives[k]))
+
+    # 私人生活 ambient：阻尼后若掉到「日常活气」以下，轻轻托回底，保证日间有货
+    lift_frac = 1.0 - math.pow(1.0 - PERSONAL_AMBIENT_LIFT, tick_scale)
+    for k in PERSONAL_LIFE_DRIVES:
+        floor = DRIVE_BASELINES[k] + PERSONAL_AMBIENT_EXCESS.get(k, 0.08)
+        if new_drives[k] < floor:
+            new_drives[k] = _clamp(new_drives[k] + (floor - new_drives[k]) * lift_frac)
     new_drives, _idle_return = apply_attachment_idle_return(
         new_drives,
         now_ts,
@@ -3117,6 +3148,7 @@ def pick_intent(state: DriveState, refractory: dict,
         }
 
     scores = {}
+    raw_eff = {}
     for k in DRIVE_KEYS:
         if k == "fatigue":
             continue
@@ -3128,21 +3160,37 @@ def pick_intent(state: DriveState, refractory: dict,
         # 刚被拒绝过→有效分打折
         if k in recently_refused:
             eff = max(0.0, eff - intent_penalties.get(k, REFUSAL_PENALTY))
+        raw_eff[k] = eff
         scores[k] = eff
 
     if not scores:
         return None
 
+    heat_peak = max((raw_eff.get(k, 0.0) for k in HEAT_DRIVES if k in raw_eff), default=0.0)
+    # 私人生活日场偏置：热欲没明显压过时，给 curiosity/stewardship/reflection 抬一手
+    for k in PERSONAL_LIFE_DRIVES:
+        if k not in scores:
+            continue
+        if heat_peak >= 0.55 and raw_eff.get(k, 0.0) + 0.05 < heat_peak:
+            continue  # 热浪真的大，让位
+        scores[k] = scores[k] + PERSONAL_INTENT_BIAS
+
     best_key = max(scores, key=lambda k: scores[k])
     best_score = scores[best_key]
 
-    if best_score < INTENT_THRESHOLD:
+    threshold = (
+        min(INTENT_THRESHOLD, PERSONAL_INTENT_THRESHOLD)
+        if best_key in PERSONAL_LIFE_DRIVES
+        else INTENT_THRESHOLD
+    )
+    if best_score < threshold:
         return None
 
     raw_val = state.drives.get(best_key, 0.0)
     local_fat = state.local_fatigue.get(best_key, 0.0)
     eff_before_penalty = effective_drive_activation(best_key, raw_val, local_fat)
     penalty_note = f"，-{round(intent_penalties.get(best_key, REFUSAL_PENALTY), 3)} pass/refuse折扣" if best_key in recently_refused else ""
+    personal_note = "，私人生活偏置" if best_key in PERSONAL_LIFE_DRIVES and scores[best_key] > raw_eff.get(best_key, 0.0) else ""
 
     return {
         "drive_key": best_key,
@@ -3151,7 +3199,7 @@ def pick_intent(state: DriveState, refractory: dict,
         "raw_drive": round(raw_val, 3),
         "local_fatigue": round(local_fat, 3),
         "recently_refused": best_key in recently_refused,
-        "reason": f"激活度最高（raw {round(raw_val,2)} / baseline {DRIVE_BASELINES[best_key]:.2f}，fatigue {round(local_fat,2)} → {round(eff_before_penalty,2)}{penalty_note}，最终{round(best_score,2)}）",
+        "reason": f"激活度最高（raw {round(raw_val,2)} / baseline {DRIVE_BASELINES[best_key]:.2f}，fatigue {round(local_fat,2)} → {round(eff_before_penalty,2)}{penalty_note}{personal_note}，最终{round(best_score,2)}）",
     }
 
 
