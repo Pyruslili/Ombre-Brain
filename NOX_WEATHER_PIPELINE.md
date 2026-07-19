@@ -128,11 +128,29 @@ Drive 不是单一来源计算，而是多个来源叠加：
 
 - `fast_spike`：回落更快，适合 stress / curiosity 这类短峰。
 - `medium`：默认回归速率。
-- `slow`：回落更慢，适合 attachment / stewardship 这类慢变量。
+- `slow`：回落更慢，适合 stewardship 这类慢变量。
+- `attachment`：单独 `0.80 × DAMPING`（比 slow 快一截，约一天量级把 excess 吸一半）。
 - `cumulative`：几乎不主动泄掉，适合 fatigue 这类累计量。
 - `fast_spike + slow`：给 possessiveness 这种“短警报 + 慢基线”的混合通道。
 
+Desire 心跳默认 **15 分钟**（`DESIRE_TICK_SECONDS=900`）；`idle_seconds` / `has_signal` 窗口必须与间隔对齐。
+
 这层回归现在覆盖全部 9 维 Drive，而不是只覆盖 `COUPLING` 里出现过的 drive。`stewardship` 因此会自然慢回 baseline，不再变成只涨不落的棘轮。
+
+### 3.5.0 Longing 闸门（attachment 入账）
+
+Longing 是缺席形状（睡眠窗 1–10 不累计），不是摆设：
+
+- 计时用 **awake absence hours**（排除 quiet hours），不是纯墙钟。
+- 曲线仍：`longing = f(awake_hours, attachment_capacity)`。
+- **attachment 所有正向增量**（pulse / drive_event）先乘 `attachment_gain_scale(longing)`：
+  - content `<0.15` → ×0.30
+  - stirring `<0.35` → ×0.55
+  - protest `<0.70` → ×1.00
+  - despair+ → ×1.20
+- 缺席本身主要涨 longing，不靠 idle drift 偷偷顶 attachment。
+- 重逢（mark_user_signal）用当时 longing 算 reunion boost，然后清零计时。
+- 网页 dashboard 展示 longing / phase / awake h / att gate；**不写进 weather_panel 注入文案**，观察期先只给前端。
 
 ### 3.5.1 Raw / Activation / Intent
 

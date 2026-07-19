@@ -279,8 +279,12 @@ def test_reunion_boost_threshold_and_detachment_multiplier():
     assert reunion_boost_for_return(600, 0.9, "detachment") == 0.21
 
 
-def test_reunion_boost_is_one_shot_on_next_state(tmp_path):
+def test_reunion_boost_is_one_shot_on_next_state(tmp_path, monkeypatch):
     import time
+    from desire_engine import awake_absence_hours
+
+    # Absence clock excludes sleep; tests pin "always awake" for stable hours.
+    monkeypatch.setattr("desire_engine.is_quiet_hours", lambda now_ts=None: False)
 
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
     now = time.time()
@@ -293,8 +297,9 @@ def test_reunion_boost_is_one_shot_on_next_state(tmp_path):
     engine.mark_user_signal(now)
     engine.pulse("attachment", 0.01)
     boosted = engine.store.load_state()
-    expected_longing = longing_value(600, 1.0)
-    expected_boost = reunion_boost_for_return(600, expected_longing, "detachment")
+    awake_h = awake_absence_hours(now - 600 * 3600, now)
+    expected_longing = longing_value(awake_h, 1.0)
+    expected_boost = reunion_boost_for_return(awake_h, expected_longing, "detachment")
     assert abs(boosted.reunion_pa_boost - expected_boost) < 1e-6
     assert boosted.last_user_message_at == now
 
@@ -369,8 +374,10 @@ def test_invalid_pulse_drive_returns_error(tmp_path):
     assert result["error"] == "invalid drive_key"
 
 
-def test_attachment_rebound_after_absence(tmp_path):
+def test_attachment_rebound_after_absence(tmp_path, monkeypatch):
     import time
+
+    monkeypatch.setattr("desire_engine.is_quiet_hours", lambda now_ts=None: False)
 
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
     now = time.time()
@@ -424,8 +431,10 @@ def test_legacy_return_rumination_is_hidden_from_thought_pool(tmp_path):
     assert thoughts[0].source == "manual"
 
 
-def test_settle_attachment_clears_rebound_floor(tmp_path):
+def test_settle_attachment_clears_rebound_floor(tmp_path, monkeypatch):
     import time
+
+    monkeypatch.setattr("desire_engine.is_quiet_hours", lambda now_ts=None: False)
 
     engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
     now = time.time()

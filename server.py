@@ -696,6 +696,16 @@ def _compact_desire_state(state: dict) -> dict:
         "drive_outputs": state.get("drive_outputs", {}),
         "discernment": state.get("discernment", {}),
         "intent": compact_intent,
+        # longing 只给网页前端观察，不进 weather_panel / 注入文案
+        "longing": round(_num(state.get("longing"), _num(weather.get("longing"))), 3),
+        "longing_phase": state.get("longing_phase") or weather.get("longing_phase") or "",
+        "hours_awake_absent": round(_num(state.get("hours_awake_absent"), _num(weather.get("hours_awake_absent"))), 3),
+        "hours_since_last_message": round(
+            _num(state.get("hours_since_last_message"), _num(weather.get("hours_since_last_message"))), 3
+        ),
+        "attachment_gain_scale": round(
+            _num(state.get("attachment_gain_scale"), _num(weather.get("attachment_gain_scale"), 1.0)), 3
+        ),
         "weather_panel": _weather_panel_from_state(state),
         "pulse_weather": {
             "undertow": weather.get("undertow"),
@@ -724,6 +734,14 @@ def _compact_desire_state(state: dict) -> dict:
             "derived_texture": weather.get("derived_texture", {}),
             "gravity": _short_state_text(weather.get("gravity") or weather.get("gravity_line"), 160),
             "gravity_decisive": bool(weather.get("gravity_decisive", False)),
+            "longing": round(_num(state.get("longing"), _num(weather.get("longing"))), 3),
+            "longing_phase": state.get("longing_phase") or weather.get("longing_phase") or "",
+            "hours_awake_absent": round(
+                _num(state.get("hours_awake_absent"), _num(weather.get("hours_awake_absent"))), 3
+            ),
+            "attachment_gain_scale": round(
+                _num(state.get("attachment_gain_scale"), _num(weather.get("attachment_gain_scale"), 1.0)), 3
+            ),
         },
         "weather_residue": {
             "warmth": weather.get("warmth_residue"),
@@ -5257,7 +5275,7 @@ async def api_dialogue_residue_state(request):
 @mcp.custom_route("/api/desire/state", methods=["GET"])
 async def api_desire_state(request):
     """只读：当前drive/intent/pa_na等快照，不tick。
-    tick的节奏完全交给_desire_heartbeat_loop(1800s)——
+    tick的节奏完全交给_desire_heartbeat_loop(DESIRE_TICK_SECONDS)——
     否则dashboard刷新/打开页面会偷偷多走一拍，tick_count/escape_streak/grief
     的计数节奏会被"谁在看"污染。"""
     from starlette.responses import JSONResponse
@@ -5351,7 +5369,11 @@ async def api_desire_state(request):
             "shadow_crystal": weather.get("shadow_crystal"),
             "base_warmth": round(float(weather.get("base_PA", 0.0)), 3),
             "base_shadow": round(float(weather.get("base_NA", 0.0)), 3),
-            "longing": round(float(state.get("longing", 0)), 3),
+            "longing": round(float(state.get("longing", 0) or 0), 3),
+            "longing_phase": state.get("longing_phase") or "",
+            "hours_awake_absent": round(float(state.get("hours_awake_absent", 0) or 0), 3),
+            "hours_since_last_message": round(float(state.get("hours_since_last_message", 0) or 0), 3),
+            "attachment_gain_scale": round(float(state.get("attachment_gain_scale", 1) or 1), 3),
             "nox_now": climate,
             "mood_trace": mood_trace,
             "mood_trace_born_at": mood_trace_born_at,
@@ -6914,13 +6936,18 @@ if __name__ == "__main__":
 
         async def _desire_heartbeat_loop():
             await asyncio.sleep(60)  # 等服务器完全启动
+            try:
+                from desire_engine import DESIRE_TICK_SECONDS as _tick_sec
+            except Exception:
+                _tick_sec = 900
+            tick_sec = float(_tick_sec or 900)
 
             while True:
                 try:
                     now = time.time()
-                    # has_signal：上一个tick周期（1800s）内是否有嘉嘉输入信号
-                    has_signal = (now - _last_signal_ts[0]) < 1800
-                    _desire.tick(idle_seconds=1800, has_signal=has_signal)
+                    # has_signal / idle 必须与 tick 间隔对齐，否则加速 tick 会 mag 漂移
+                    has_signal = (now - _last_signal_ts[0]) < tick_sec
+                    _desire.tick(idle_seconds=tick_sec, has_signal=has_signal)
 
                     # 节律状态日志
                     try:
@@ -6940,7 +6967,7 @@ if __name__ == "__main__":
                     logger.info("Desire heartbeat tick")
                 except Exception as e:
                     logger.warning(f"Desire heartbeat failed: {e}")
-                await asyncio.sleep(1800)
+                await asyncio.sleep(tick_sec)
 
         def _start_desire_heartbeat():
             loop = asyncio.new_event_loop()

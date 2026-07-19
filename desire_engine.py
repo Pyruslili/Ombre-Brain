@@ -299,6 +299,10 @@ DRIVE_TIME_MODE_DAMPING = {
 
 
 def drive_damping_rate(drive_key: str) -> float:
+    # attachment 单独略快回落：入口已有 longing 闸，出口也别黏两天。
+    # 倍率常量写在下面 Longing 段；这里用字面量避免前向引用。
+    if drive_key == "attachment":
+        return DAMPING * 0.80
     mode = DRIVE_TIME_MODES.get(drive_key, "medium")
     return DAMPING * DRIVE_TIME_MODE_DAMPING.get(mode, DRIVE_TIME_MODE_DAMPING["medium"])
 
@@ -317,6 +321,17 @@ LONGING_ALPHA = 0.8
 LONGING_TAU_BASE_HOURS = 36.0
 LONGING_DETACHMENT_HOURS = 504.0  # 21 days
 LONGING_REUNION_THRESHOLD_HOURS = 2.0
+# Attachment 入账闸：longing 低时日常增量打折，高时才允许大幅灌。
+ATTACHMENT_GAIN_BY_LONGING = (
+    (0.15, 0.30),   # content
+    (0.35, 0.55),   # stirring
+    (0.70, 1.00),   # protest
+    (1.01, 1.20),   # despair+
+)
+# attachment 回落：略快于 slow(0.35)，约一天量级把 excess 吸一半
+ATTACHMENT_DAMPING_MULT = 0.80
+# Desire 心跳墙钟间隔（秒）；idle_seconds / has_signal 窗口必须对齐
+DESIRE_TICK_SECONDS = 900
 
 LONGING_FEELINGS = {
     "stirring": {"word": "挂念", "valence": -0.05, "arousal": 0.525},
@@ -2593,11 +2608,41 @@ class WeatherResidueStore:
         return state
 
 
+def awake_absence_hours(last_message_at: float, now_ts: float | None = None) -> float:
+    """Hours since last real message, excluding quiet/sleep windows (default 1–10)."""
+    now_ts = time.time() if now_ts is None else float(now_ts)
+    start = float(last_message_at or now_ts)
+    if start >= now_ts:
+        return 0.0
+    step = 900.0  # 15min samples — matches desire tick grain
+    awake = 0.0
+    t = start
+    while t < now_ts:
+        t_next = min(t + step, now_ts)
+        mid = (t + t_next) / 2.0
+        if not is_quiet_hours(mid):
+            awake += t_next - t
+        t = t_next
+    return max(0.0, awake / 3600.0)
+
+
+def attachment_gain_scale(longing: float) -> float:
+    """How much of an attachment delta is allowed given current longing.
+
+    Low longing (always together) → lean daily growth.
+    High longing (been away, coming back) → full / reunion-scale growth.
+    """
+    longing = _clamp(float(longing or 0.0))
+    for threshold, scale in ATTACHMENT_GAIN_BY_LONGING:
+        if longing < threshold:
+            return float(scale)
+    return float(ATTACHMENT_GAIN_BY_LONGING[-1][1])
+
+
 def longing_value(hours_since_last_message: float, attachment: float) -> float:
     """
-    Stage 6 v1 longing curve.
-    v1 simplification: current attachment drive stands in for intimacy. A fuller
-    Sternberg intimacy/passion/commitment + attachment-style model can replace it.
+    Longing curve from awake absence hours (sleep excluded upstream).
+    v1 simplification: current attachment drive stands in for intimacy capacity.
     """
     t = max(0.0, float(hours_since_last_message or 0.0))
     attachment = _clamp(float(attachment or 0.0))
@@ -2851,8 +2896,9 @@ def tick_drives(state: DriveState, now_ts: float, idle_seconds: float = 0,
     libido_pending = tick_libido_pending(state.libido_pending, now_ts)
 
     idle_h = idle_seconds / 3600.0
+    # attachment 不再靠 idle 偷偷涨——缺席形状交给 longing，日常加分走闸门。
     drift = {
-        "attachment": 0.003 * idle_h,
+        "attachment": 0.0,
         "curiosity":  0.002 * idle_h,
         "stress":    -0.001 * idle_h,
         "fatigue":    0.001 * idle_h,
@@ -4252,14 +4298,28 @@ class DesireEngine:
 
     def _longing_context(self, state: DriveState, now: float = None) -> dict:
         now = now if now is not None else time.time()
-        hours = max(0.0, (now - state.last_user_message_at) / 3600.0)
+        wall_hours = max(0.0, (now - float(state.last_user_message_at or now)) / 3600.0)
+        # Sleep windows do not accrue longing — 夜里是自由时间，不欠一场想念戏。
+        hours = awake_absence_hours(state.last_user_message_at, now)
         longing = longing_value(hours, state.drives.get("attachment", 0.0))
         phase = longing_phase(longing, hours)
         return {
             "longing": round(longing, 3),
             "longing_phase": phase,
-            "hours_since_last_message": round(hours, 3),
+            "hours_since_last_message": round(wall_hours, 3),
+            "hours_awake_absent": round(hours, 3),
+            "attachment_gain_scale": round(attachment_gain_scale(longing), 3),
+            "quiet_hours": is_quiet_hours(now),
         }
+
+    def _attachment_delta_with_longing_gate(
+        self, state: DriveState, delta: float, now: float | None = None
+    ) -> tuple[float, float, float]:
+        """Return (scaled_delta, scale, longing) for attachment gains."""
+        now = time.time() if now is None else now
+        ctx = self._longing_context(state, now)
+        scale = float(ctx["attachment_gain_scale"])
+        return max(0.0, float(delta or 0.0) * scale), scale, float(ctx["longing"])
 
     def _pa_na_readout(self, state: DriveState, now: float = None,
                        consume_reunion: bool = False) -> dict:
@@ -4604,7 +4664,7 @@ class DesireEngine:
         )
 
     def _mark_real_user_message(self, state: DriveState, now: float) -> DriveState:
-        hours = max(0.0, (now - state.last_user_message_at) / 3600.0)
+        hours = awake_absence_hours(state.last_user_message_at, now)
         longing_before = longing_value(hours, state.drives.get("attachment", 0.0))
         phase_before = longing_phase(longing_before, hours)
         state.reunion_pa_boost = reunion_boost_for_return(
@@ -4632,7 +4692,14 @@ class DesireEngine:
 
         new_thoughts, boosts = tick_thoughts(thoughts)
         for drive_key, boost in boosts:
-            state = pulse_drive(state, drive_key, boost * 0.7)
+            if drive_key == "attachment":
+                gated, _scale, _longing = self._attachment_delta_with_longing_gate(
+                    state, boost * 0.7, now
+                )
+                if gated > 0:
+                    state = pulse_attachment_nonlinear(state, gated)
+            else:
+                state = pulse_drive(state, drive_key, boost * 0.7)
 
         self.store.tick_refractory()
         state = tick_drives(state, now, idle_seconds, has_signal=has_signal)
@@ -4666,9 +4733,15 @@ class DesireEngine:
         previous_chord = ""
         if chord.strip():
             previous_chord = self.weather.load(now=now, decay=True).get("active_chord", "")
-        # attachment使用非线性跳变
+        longing_gate = 1.0
+        longing_now = 0.0
+        applied_delta = float(delta)
+        # attachment使用非线性跳变 + longing 闸（日常瘦、重逢才肥）
         if drive_key == "attachment":
-            state = pulse_attachment_nonlinear(state, delta)
+            applied_delta, longing_gate, longing_now = self._attachment_delta_with_longing_gate(
+                state, delta, now
+            )
+            state = pulse_attachment_nonlinear(state, applied_delta)
         else:
             state = pulse_drive(state, drive_key, delta)
         if drive_key == "attachment":
@@ -4694,6 +4767,11 @@ class DesireEngine:
             "new_value": round(state.drives[drive_key], 3),
             "local_fatigue": round(state.local_fatigue.get(drive_key, 0.0), 3),
         }
+        if drive_key == "attachment":
+            result["raw_delta"] = round(float(delta), 4)
+            result["applied_delta"] = round(applied_delta, 4)
+            result["longing_gate"] = round(longing_gate, 3)
+            result["longing"] = round(longing_now, 3)
         if chord_echo:
             active_chord = chord_echo.get("active_chord") or ""
             if active_chord and active_chord != previous_chord:
@@ -4970,20 +5048,34 @@ class DesireEngine:
                 if delta <= 0:
                     continue
                 before = state.drives.get(drive_key, DRIVE_BASELINES[drive_key])
-                state = pulse_drive(state, drive_key, delta)
+                raw_delta = float(delta)
+                longing_gate = 1.0
+                if drive_key == "attachment":
+                    delta, longing_gate, _longing = self._attachment_delta_with_longing_gate(
+                        state, delta, now
+                    )
+                    if delta <= 0:
+                        continue
+                    state = pulse_attachment_nonlinear(state, delta)
+                else:
+                    state = pulse_drive(state, drive_key, delta)
                 if drive_key == "possessiveness":
                     state.possessiveness_channels = apply_possessiveness_channel_delta(
-                        state.possessiveness_channels, delta, source, brain, now
+                        state.possessiveness_channels, raw_delta, source, brain, now
                     )
                     state.drives["possessiveness"] = combined_possessiveness(state.possessiveness_channels)
                 after = state.drives.get(drive_key, before)
                 if abs(after - before) > 1e-6:
-                    applied[drive_key] = {
+                    entry = {
                         "delta": round(after - before, 4),
-                        "raw_delta": round(delta, 4),
+                        "raw_delta": round(raw_delta, 4),
                         "before": round(before, 4),
                         "after": round(after, 4),
                     }
+                    if drive_key == "attachment" and longing_gate != 1.0:
+                        entry["longing_gate"] = round(longing_gate, 3)
+                        entry["gated_delta"] = round(delta, 4)
+                    applied[drive_key] = entry
             released_drives, overflow_release = apply_attachment_overflow_release(state.drives)
             if overflow_release:
                 before_attachment = state.drives.get("attachment", DRIVE_BASELINES["attachment"])

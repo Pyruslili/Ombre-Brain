@@ -3332,6 +3332,9 @@ async function loadDesire(button) {
     const shadowResidue = finiteNumber(weather.shadow_residue ?? d.weather_residue?.shadow);
     const shadowBase = finiteNumber(weather.base_shadow ?? d.weather_residue?.base_shadow ?? d.effective_pa_na?.base_NA, shadowNow - shadowResidue);
     const longingNow = finiteNumber(weather.longing ?? d.longing);
+    const longingPhase = String(weather.longing_phase || d.longing_phase || '').trim();
+    const hoursAwake = finiteNumber(weather.hours_awake_absent ?? d.hours_awake_absent);
+    const attachGate = finiteNumber(weather.attachment_gain_scale ?? d.attachment_gain_scale, 1);
     const undertowEl = document.getElementById('desire-undertow');
     if (undertowEl) {
       const chord = String(panel.chord || weather.chord_display || weather.current_chord || '').trim();
@@ -3340,7 +3343,18 @@ async function loadDesire(button) {
     setWeatherMetric('warmth', warmthNow, warmthBase, warmthResidue);
     setWeatherMetric('shadow', shadowNow, shadowBase, shadowResidue);
     document.getElementById('desire-longing').textContent = longingNow.toFixed(2);
-    document.getElementById('desire-longing-current').textContent = longingNow.toFixed(2);
+    const longingBreak = document.getElementById('desire-longing-breakdown');
+    if (longingBreak) {
+      longingBreak.innerHTML = [
+        `<span><i>current</i><b id="desire-longing-current">${longingNow.toFixed(2)}</b></span>`,
+        longingPhase ? `<span><i>phase</i><b>${esc(longingPhase)}</b></span>` : '',
+        `<span><i>awake h</i><b>${hoursAwake.toFixed(1)}</b></span>`,
+        `<span><i>att gate</i><b>×${attachGate.toFixed(2)}</b></span>`,
+      ].filter(Boolean).join('');
+    } else {
+      const cur = document.getElementById('desire-longing-current');
+      if (cur) cur.textContent = longingNow.toFixed(2);
+    }
     setWeatherProgress('longing', longingNow);
     renderChordChemistry(weather);
     document.getElementById('desire-now').textContent = panel.atmosphere || weather.atmosphere_display || d.atmosphere_display || d.weather_residue?.atmosphere_display || weather.climate_display || d.climate_display || d.weather_residue?.climate_display || weather.climate || weather.nox_now || d.climate || d.mood_word || d.rhythm?.label || '—';
