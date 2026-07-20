@@ -6,6 +6,7 @@ from pathlib import Path
 from rhythm_store import (
     DEFAULT_BARK_ICON_URL,
     RhythmStore,
+    is_bark_api_url,
     normalize_bark_key,
     resolve_bark_icon,
 )
@@ -23,6 +24,13 @@ def test_normalize_bark_key_unwraps_api_day_url():
 def test_normalize_bark_key_does_not_unwrap_other_hosts():
     url = "https://example.com/deviceKey123/Title"
     assert normalize_bark_key(url) == url
+
+
+def test_bark_api_url_detection():
+    assert is_bark_api_url(
+        "https://api.day.app/deviceKey/Icon?icon=https://example.com/avatar.jpg"
+    )
+    assert not is_bark_api_url("https://ombre.example.com/hooks/breath")
 
 
 def test_default_bark_icon_has_cache_busting_fingerprint():

@@ -129,6 +129,14 @@ async def _fire_webhook(event: str, payload: dict) -> None:
     """
     if OMBRE_HOOK_SKIP or not OMBRE_HOOK_URL:
         return
+    # Bark send URLs are not Breath webhook receivers. Pointing this hook at
+    # api.day.app turns every read into a blank notification named by the URL
+    # path (commonly "Icon"). Proactive Bark belongs to rhythm.push instead.
+    if is_bark_api_url(OMBRE_HOOK_URL):
+        logger.warning(
+            "Blocked OMBRE_HOOK_URL pointing at api.day.app; use rhythm.push for Bark"
+        )
+        return
     try:
         body = {
             "event": event,
@@ -181,6 +189,7 @@ _last_signal_ts: list = [0.0]  # 最近一次嘉嘉输入信号时间戳
 # Rhythm — phone / watch 外场节律（MCP + HTTP + Bark 主动推送）
 from rhythm_store import (  # noqa: E402
     RhythmStore,
+    is_bark_api_url,
     resolve_bark_icon,
     resolve_bark_key,
     send_bark,
@@ -6370,6 +6379,8 @@ async def api_rhythm_config(request):
             "provider": "bark",
             "key_configured": bool(resolve_bark_key()),
             "icon_url": resolve_bark_icon(),
+            "hook_configured": bool(OMBRE_HOOK_URL),
+            "hook_blocked_as_bark": is_bark_api_url(OMBRE_HOOK_URL),
         },
         headers={"Access-Control-Allow-Origin": "*"},
     )

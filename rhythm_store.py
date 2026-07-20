@@ -311,6 +311,17 @@ def normalize_bark_key(value: str = "") -> str:
     return raw
 
 
+def is_bark_api_url(value: str = "") -> bool:
+    try:
+        parsed = urlparse((value or "").strip())
+    except ValueError:
+        return False
+    return (
+        parsed.scheme in {"http", "https"}
+        and (parsed.hostname or "").lower() == "api.day.app"
+    )
+
+
 def resolve_bark_key(explicit: str = "") -> str:
     key = normalize_bark_key(explicit)
     if key:
