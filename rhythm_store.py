@@ -333,11 +333,12 @@ def send_bark(
                 icon = p.read_text(encoding="utf-8").strip().splitlines()[0].strip()
         except Exception:
             icon = ""
-    # 默认 Nox 黑猫（GH raw）；可被 BARK_ICON_URL / ~/.config/nox/bark_icon_url 覆盖
+    # 默认 Nox 人形 + 黑猫头像（GH raw）；可被 BARK_ICON_URL /
+    # ~/.config/nox/bark_icon_url 覆盖。头像换文件名时可避开 Bark/CDN 的旧图缓存。
     if not icon:
         icon = (
             "https://raw.githubusercontent.com/Pyruslili/Ombre-Brain/"
-            "main/docs/assets/nox-bark-icon.png"
+            "main/docs/assets/nox-bark-avatar.png"
         )
     if icon:
         payload["icon"] = icon

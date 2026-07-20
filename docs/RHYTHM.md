@@ -17,7 +17,7 @@
 
 - `OMBRE_RHYTHM_TOKEN`（或 `RHYTHM_TOKEN`）：写入/推送鉴权；未设则开放（仅本机调试）
 - `BARK_KEY` 或 `~/.bark_device_key`：Bark device key
-- `BARK_ICON_URL`：可选图标
+- `BARK_ICON_URL`：可选图标；默认使用 `docs/assets/nox-bark-avatar.png`
 - 本地心跳：`NOX_RHYTHM_BARK=0` 可关掉手机弹窗（仍注入 Rhythm 行）
 
 ## iOS 快捷指令（一 app 一自动化，推荐）
