@@ -16,7 +16,7 @@
 ## 环境变量
 
 - `OMBRE_RHYTHM_TOKEN`（或 `RHYTHM_TOKEN`）：写入/推送鉴权；未设则开放（仅本机调试）
-- `BARK_KEY` 或 `~/.bark_device_key`：Bark device key
+- `BARK_KEY` 或 `~/.bark_device_key`：Bark device key；也接受完整的 `https://api.day.app/<key>/...` URL（只提取 Bark 域名下的首段 key）
 - `BARK_ICON_URL`：可选图标；默认使用 `docs/assets/nox-bark-avatar.png`
 - 本地心跳：`NOX_RHYTHM_BARK=0` 可关掉手机弹窗（仍注入 Rhythm 行）
 

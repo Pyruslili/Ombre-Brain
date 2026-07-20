@@ -3,7 +3,21 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from rhythm_store import RhythmStore
+from rhythm_store import RhythmStore, normalize_bark_key
+
+
+def test_normalize_bark_key_accepts_plain_key():
+    assert normalize_bark_key("deviceKey123") == "deviceKey123"
+
+
+def test_normalize_bark_key_unwraps_api_day_url():
+    url = "https://api.day.app/deviceKey123/Title?icon=https://example.com/avatar.jpg"
+    assert normalize_bark_key(url) == "deviceKey123"
+
+
+def test_normalize_bark_key_does_not_unwrap_other_hosts():
+    url = "https://example.com/deviceKey123/Title"
+    assert normalize_bark_key(url) == url
 
 
 def test_append_and_read_phone_watch(tmp_path: Path):

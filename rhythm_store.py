@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 
 DEFAULT_MAX_EVENTS = 400
@@ -283,17 +284,37 @@ class RhythmStore:
         return " · ".join(parts) if parts else ""
 
 
+def normalize_bark_key(value: str = "") -> str:
+    """Accept a device key or a full api.day.app notification URL.
+
+    Bark examples often present the key inside a send URL.  Only unwrap URLs on
+    Bark's own host; an arbitrary URL must never be silently treated as trusted.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    try:
+        parsed = urlparse(raw)
+    except ValueError:
+        return raw
+    if parsed.scheme in {"http", "https"} and (parsed.hostname or "").lower() == "api.day.app":
+        parts = [unquote(part).strip() for part in parsed.path.split("/") if part.strip()]
+        return parts[0] if parts else ""
+    return raw
+
+
 def resolve_bark_key(explicit: str = "") -> str:
-    key = (explicit or "").strip()
+    key = normalize_bark_key(explicit)
     if key:
         return key
-    key = os.environ.get("BARK_KEY", "").strip()
+    key = normalize_bark_key(os.environ.get("BARK_KEY", ""))
     if key:
         return key
     path = Path(os.path.expanduser("~/.bark_device_key"))
     try:
         if path.exists():
-            return path.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+            stored = path.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+            return normalize_bark_key(stored)
     except Exception:
         pass
     return ""
