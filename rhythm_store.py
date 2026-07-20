@@ -21,6 +21,13 @@ DEFAULT_MAX_EVENTS = 400
 DEFAULT_READ_MINUTES = 180
 DEFAULT_READ_LIMIT = 5  # 读快照默认最近 5 条，别拉一长串
 BARK_PUSH_URL = "https://api.day.app/push"
+# Bark's Notification Service Extension caches icon bytes forever by the full
+# URL. Keep a version fingerprint here so a failed/stale first download cannot
+# pin the default Bark app icon indefinitely on the phone.
+DEFAULT_BARK_ICON_URL = (
+    "https://raw.githubusercontent.com/Pyruslili/Ombre-Brain/"
+    "main/docs/assets/nox-bark-avatar.png?v=20260720-1627"
+)
 # 写入噪声：这些名字通常是调试残留，不当「在刷什么」
 NOISE_APPS = {
     "bark",
@@ -240,6 +247,7 @@ class RhythmStore:
                     "kind": e.get("kind"),
                     "event": e.get("event"),
                     "value": e.get("value"),
+                    "meta": e.get("meta") if isinstance(e.get("meta"), dict) else None,
                     "at": e.get("at"),
                 }
                 for e in other_events[:limit]
@@ -320,6 +328,24 @@ def resolve_bark_key(explicit: str = "") -> str:
     return ""
 
 
+def resolve_bark_icon(explicit: str = "") -> str:
+    icon = (explicit or "").strip()
+    if icon:
+        return icon
+    icon = (os.environ.get("BARK_ICON_URL") or "").strip()
+    if icon:
+        return icon
+    try:
+        path = Path(os.path.expanduser("~/.config/nox/bark_icon_url"))
+        if path.exists():
+            icon = path.read_text(encoding="utf-8").strip().splitlines()[0].strip()
+            if icon:
+                return icon
+    except Exception:
+        pass
+    return DEFAULT_BARK_ICON_URL
+
+
 def send_bark(
     *,
     title: str,
@@ -345,22 +371,9 @@ def send_bark(
         "body": body,
         "group": group or "NoxRhythm",
     }
-    if not icon:
-        icon = (os.environ.get("BARK_ICON_URL") or "").strip()
-    if not icon:
-        try:
-            p = Path(os.path.expanduser("~/.config/nox/bark_icon_url"))
-            if p.exists():
-                icon = p.read_text(encoding="utf-8").strip().splitlines()[0].strip()
-        except Exception:
-            icon = ""
     # 默认 Nox 人形 + 黑猫头像（GH raw）；可被 BARK_ICON_URL /
-    # ~/.config/nox/bark_icon_url 覆盖。头像换文件名时可避开 Bark/CDN 的旧图缓存。
-    if not icon:
-        icon = (
-            "https://raw.githubusercontent.com/Pyruslili/Ombre-Brain/"
-            "main/docs/assets/nox-bark-avatar.png"
-        )
+    # ~/.config/nox/bark_icon_url 覆盖。版本指纹用来避开 Bark 永久本地缓存。
+    icon = resolve_bark_icon(icon)
     if icon:
         payload["icon"] = icon
 

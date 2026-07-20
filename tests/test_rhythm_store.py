@@ -3,7 +3,12 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from rhythm_store import RhythmStore, normalize_bark_key
+from rhythm_store import (
+    DEFAULT_BARK_ICON_URL,
+    RhythmStore,
+    normalize_bark_key,
+    resolve_bark_icon,
+)
 
 
 def test_normalize_bark_key_accepts_plain_key():
@@ -18,6 +23,19 @@ def test_normalize_bark_key_unwraps_api_day_url():
 def test_normalize_bark_key_does_not_unwrap_other_hosts():
     url = "https://example.com/deviceKey123/Title"
     assert normalize_bark_key(url) == url
+
+
+def test_default_bark_icon_has_cache_busting_fingerprint():
+    assert DEFAULT_BARK_ICON_URL.startswith("https://raw.githubusercontent.com/")
+    assert "nox-bark-avatar.png?v=" in DEFAULT_BARK_ICON_URL
+
+
+def test_bark_icon_explicit_and_env_precedence(monkeypatch):
+    monkeypatch.setenv("BARK_ICON_URL", "https://example.com/env.png")
+    assert resolve_bark_icon() == "https://example.com/env.png"
+    assert resolve_bark_icon("https://example.com/explicit.png") == (
+        "https://example.com/explicit.png"
+    )
 
 
 def test_append_and_read_phone_watch(tmp_path: Path):
@@ -78,3 +96,15 @@ def test_default_read_limit_five(tmp_path: Path):
     snap = store.read()  # default limit 5
     assert snap["count"] == 5
     assert len(snap["phone"]["recent"]) == 5
+
+
+def test_other_events_keep_safe_push_metadata(tmp_path: Path):
+    store = RhythmStore(tmp_path / "rhythm.json")
+    store.append(
+        source="push",
+        event="bark",
+        kind="proactive",
+        meta={"title": "Nox", "body": "still here"},
+    )
+    snap = store.read(limit=5)
+    assert snap["other"][0]["meta"] == {"title": "Nox", "body": "still here"}

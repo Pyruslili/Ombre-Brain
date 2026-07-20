@@ -179,7 +179,12 @@ except Exception as _purge_exc:
 _last_signal_ts: list = [0.0]  # 最近一次嘉嘉输入信号时间戳
 
 # Rhythm — phone / watch 外场节律（MCP + HTTP + Bark 主动推送）
-from rhythm_store import RhythmStore, send_bark  # noqa: E402
+from rhythm_store import (  # noqa: E402
+    RhythmStore,
+    resolve_bark_icon,
+    resolve_bark_key,
+    send_bark,
+)
 
 _RHYTHM_PATH = _bucket_path("rhythm.json")
 _rhythm_store = RhythmStore(_RHYTHM_PATH)
@@ -6353,6 +6358,21 @@ async def api_rhythm_read(request):
         limit = 5
     snap = _rhythm_store.read(minutes=minutes, limit=limit)
     return JSONResponse(snap, headers={"Access-Control-Allow-Origin": "*"})
+
+
+@mcp.custom_route("/api/rhythm/config", methods=["GET"])
+async def api_rhythm_config(request):
+    """Safe Bark diagnostics: never return the device key itself."""
+    from starlette.responses import JSONResponse
+
+    return JSONResponse(
+        {
+            "provider": "bark",
+            "key_configured": bool(resolve_bark_key()),
+            "icon_url": resolve_bark_icon(),
+        },
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 @mcp.custom_route("/api/rhythm/push", methods=["POST"])
