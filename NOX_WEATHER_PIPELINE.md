@@ -831,8 +831,12 @@ actor 权重：
 
 它通常来自：
 
-- Nox 自己手动存的念头
+- Nox 自己在 drive 动作上留下的 `thought`（`stir` / `settle` / `break` / `pass`）
 - CLI 分析出的念头
+
+四个 drive 动作共用 `thought` 主通道：有字自动进池（source 分别为 `stir`/`settle`/`break`/`pass`）。空字不进，避免默认句污染。没有单独的 `reason`——拒绝/流过那句话本身就是念头。
+
+`settle` 回落的是 drive 张力，不是念头本身。
 
 不再进入的来源：
 

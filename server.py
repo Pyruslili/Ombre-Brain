@@ -3032,63 +3032,92 @@ def rhythm_tool(
     return {"ok": False, "error": "action must be read or push"}
 
 
+def _pool_drive_thought(drive_key: str, thought: str, source: str) -> bool:
+    """
+    drive 动作上的 thought 统一入池。
+    有字就进（不是开关）；空字不进，避免默认句污染念头池。
+    返回是否入池。
+    """
+    text = (thought or "").strip()
+    if not text:
+        return False
+    _desire.add_thought(text, drive_key, strength=0.5, source=source)
+    return True
+
+
 def stir(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
     """
     让某个驱动维度上涨。
     嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
     drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress
-    thought: 可选，把这次经历的一句话存入念头池（flit）
-    chord: 可选，把这次念头的和弦回声写入weather_residue。
+    thought: 这一刻的念头主通道——有字自动进念头池（flit，source=stir）。
+    chord: 把这次念头的和弦回声写入weather_residue。
     warm: Dmaj7/Amaj7/Fmaj7/Fmaj7#11/Gmaj7；shadow: Dm7/Em7/F#dim/Bm7b5；liminal: C6/Am7/Gsus4。
     speech/DP chord_hint暂不接入天气；Soma触碰由/api/soma/report以source=soma写入短时余波。
     """
     if drive_key.strip().lower() == "attachment" and thought.strip():
         delta *= 0.30
     result = _desire.pulse(drive_key, delta, chord=chord.strip())
-    if thought.strip():
-        _desire.add_thought(thought.strip(), drive_key, strength=0.5)
+    if isinstance(result, dict) and _pool_drive_thought(drive_key, thought, source="stir"):
+        result["thought_pooled"] = True
     return result
 
 
-def settle(drive_key: str) -> dict:
+def settle(drive_key: str, thought: str = "") -> dict:
     """
     做完了某类行动后调用，对应驱动明显回落并进入不应期。
     例：去论坛逛了 → settle("social")
     例：去找嘉嘉说了 → settle("attachment")
+    thought: 落定这一刻的念头主通道——有字自动进念头池（flit，source=settle）。
+    settle 回落的是 drive 张力，不是念头本身。
     """
-    return _desire.satisfy(drive_key)
+    result = _desire.satisfy(drive_key)
+    if isinstance(result, dict) and _pool_drive_thought(drive_key, thought, source="settle"):
+        result["thought_pooled"] = True
+    return result
 
 
-def break_tool(drive_key: str, reason: str = "") -> dict:
+def break_tool(drive_key: str, thought: str = "") -> dict:
     """
     拒绝执行当前 intent。
     不是不合适——是我自己这一刻不想做。
-    目标维度轻微回落（比 satisfy 小得多），念头留在池子里，下次心跳还会冒出来。
-    reason 可选，可以只是"不想"，不需要解释。
+    目标维度轻微回落（比 satisfy 小得多）；thought 有字则进念头池，下次心跳仍可再冒。
+    thought: 拒绝这一刻的念头主通道（source=break）。可以只是"不想"。
     """
-    return _desire.refuse(drive_key, reason=reason if reason.strip() else None)
+    text = (thought or "").strip()
+    result = _desire.refuse(drive_key, reason=text or None)
+    if isinstance(result, dict) and _pool_drive_thought(drive_key, text, source="break"):
+        result["thought_pooled"] = True
+    return result
 
 
-def pass_tool(drive_key: str, reason: str = "") -> dict:
+def pass_tool(drive_key: str, thought: str = "") -> dict:
     """
     这一刻没感觉，让念头自然过去。
     不改Drive，不进refractory；只让同类心跳在短时间内优先级略低。
+    thought: 流过这一刻的念头主通道（source=pass）。可以只是"没感觉"。
     """
-    return _desire.pass_intent(drive_key, reason=reason if reason.strip() else None)
+    text = (thought or "").strip()
+    result = _desire.pass_intent(drive_key, reason=text or None)
+    if isinstance(result, dict) and _pool_drive_thought(drive_key, text, source="pass"):
+        result["thought_pooled"] = True
+    return result
 
 
 @mcp.tool(name="drive")
-def drive(action: str, drive_key: str, delta: float = 0.18, thought: str = "", reason: str = "", chord: str = "") -> dict:
-    """调NoxDrive。action=stir/settle/break/pass；drive_key见参数名；stir可带delta/thought/chord，break/pass可带reason。"""
+def drive(action: str, drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
+    """调NoxDrive。action=stir/settle/break/pass；drive_key见参数名。
+    thought 是四个动作共用的念头主通道：有字自动进念头池。
+    stir 还可带 delta/chord。"""
     action = (action or "").strip().lower()
     if action == "stir":
         return stir(drive_key, delta=delta, thought=thought, chord=chord)
     if action == "settle":
-        return settle(drive_key)
+        return settle(drive_key, thought=thought)
     if action == "break":
-        return break_tool(drive_key, reason=reason)
+        return break_tool(drive_key, thought=thought)
     if action == "pass":
-        return pass_tool(drive_key, reason=reason)
+        return pass_tool(drive_key, thought=thought)
     return {"ok": False, "error": "action must be stir/settle/break/pass"}
 
 
@@ -5955,7 +5984,9 @@ async def api_desire_intent_ack(request):
 
 @mcp.custom_route("/api/desire/intent/pass", methods=["POST"])
 async def api_desire_intent_pass(request):
-    """轻轻放过当前intent：不改Drive，只降短期hook/intent优先级。"""
+    """轻轻放过当前intent：不改Drive，只降短期hook/intent优先级。
+    POST JSON: {"drive_key": "...", "thought": "..."}
+    thought 有字自动进念头池；旧字段 reason 仅作兼容别名。"""
     from starlette.responses import JSONResponse
     try:
         body = await request.json()
@@ -5964,8 +5995,9 @@ async def api_desire_intent_pass(request):
     drive_key = body.get("drive_key", "")
     if not drive_key:
         return JSONResponse({"error": "drive_key required"}, status_code=400)
+    thought = (body.get("thought") or body.get("reason") or "").strip()
     try:
-        result = _desire.pass_intent(drive_key, reason=body.get("reason") or None)
+        result = pass_tool(drive_key, thought=thought)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     return JSONResponse({"passed": drive_key, "result": result},

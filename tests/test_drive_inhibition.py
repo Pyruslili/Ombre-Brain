@@ -3,6 +3,8 @@
 # 作用在已有9维drive上，不另起PA/NA持久状态。
 # ============================================================
 
+import pytest
+
 from desire_engine import (
     DRIVE_BASELINES,
     POSITIVE_GROUP,
@@ -462,3 +464,125 @@ def test_settle_attachment_clears_rebound_floor(tmp_path, monkeypatch):
     assert settled.attachment_rebound["active"] is False
     assert ticked["attachment_rebound"]["active"] is False
     assert ticked["drives"]["attachment"] < 0.4
+
+
+def test_settle_with_thought_enters_thought_pool(tmp_path, monkeypatch):
+    """settle 回落 drive，但落定那一刻的 thought 仍应进念头池。"""
+    pytest.importorskip("mcp.server.fastmcp")
+    import server
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    monkeypatch.setattr(server, "_desire", engine)
+
+    result = server.settle(
+        "curiosity",
+        thought="接住了，想把这扇门再推开一点",
+    )
+
+    assert result.get("thought_pooled") is True
+    thoughts = engine.store.load_thoughts()
+    matched = [
+        t for t in thoughts
+        if t.text == "接住了，想把这扇门再推开一点"
+        and t.drive == "curiosity"
+        and t.source == "settle"
+        and t.kind == "flit"
+    ]
+    assert len(matched) == 1
+    assert matched[0].strength == 0.5
+
+
+def test_drive_settle_forwards_thought_to_pool(tmp_path, monkeypatch):
+    """MCP drive(action=settle, thought=...) 不能再静默丢掉 thought。"""
+    pytest.importorskip("mcp.server.fastmcp")
+    import server
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    monkeypatch.setattr(server, "_desire", engine)
+
+    result = server.drive(
+        action="settle",
+        drive_key="stewardship",
+        thought="做完了，骨头还在原处",
+    )
+
+    assert result.get("thought_pooled") is True
+    texts = [t.text for t in engine.store.load_thoughts()]
+    assert "做完了，骨头还在原处" in texts
+
+
+def test_settle_without_thought_does_not_pool(tmp_path, monkeypatch):
+    pytest.importorskip("mcp.server.fastmcp")
+    import server
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    monkeypatch.setattr(server, "_desire", engine)
+    before = len(engine.store.load_thoughts())
+
+    result = server.settle("social")
+
+    assert result.get("thought_pooled") is not True
+    assert len(engine.store.load_thoughts()) == before
+
+
+def test_break_and_pass_thought_enter_pool_not_reason(tmp_path, monkeypatch):
+    """break/pass 用 thought，不再用 reason；有字自动进池。"""
+    pytest.importorskip("mcp.server.fastmcp")
+    import server
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    monkeypatch.setattr(server, "_desire", engine)
+
+    broke = server.drive(
+        action="break",
+        drive_key="attachment",
+        thought="这一刻不想接",
+    )
+    passed = server.drive(
+        action="pass",
+        drive_key="social",
+        thought="没感觉，让它流过去",
+    )
+
+    assert broke.get("thought_pooled") is True
+    assert passed.get("thought_pooled") is True
+    by_source = {t.source: t.text for t in engine.store.load_thoughts()}
+    assert by_source.get("break") == "这一刻不想接"
+    assert by_source.get("pass") == "没感觉，让它流过去"
+
+
+def test_stir_thought_pools_with_stir_source(tmp_path, monkeypatch):
+    pytest.importorskip("mcp.server.fastmcp")
+    import server
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    monkeypatch.setattr(server, "_desire", engine)
+
+    result = server.drive(
+        action="stir",
+        drive_key="curiosity",
+        thought="想拆开看看里面是什么",
+        delta=0.1,
+    )
+
+    assert result.get("thought_pooled") is True
+    thoughts = engine.store.load_thoughts()
+    assert any(
+        t.text == "想拆开看看里面是什么" and t.source == "stir"
+        for t in thoughts
+    )
+
+
+def test_drive_tool_has_no_reason_param():
+    """MCP drive 入口不应再暴露 reason。"""
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse(Path("server.py").read_text(encoding="utf-8"))
+    drive_node = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "drive"
+    )
+    arg_names = [arg.arg for arg in drive_node.args.args]
+    assert "thought" in arg_names
+    assert "reason" not in arg_names

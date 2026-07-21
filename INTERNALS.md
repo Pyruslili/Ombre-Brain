@@ -80,9 +80,11 @@
 | `wander` | mode, query, limit | 抽屉漫游 |
 | `wander_mark` | bucket_id, mark, note | 叠加批注 |
 | `stir` | drive_key, delta, thought, chord | 念头/天气入口 |
-| `settle` | drive_key | drive 落定 |
-| `pass` | drive_key, reason | 让 intent 流过 |
-| `break` | drive_key, reason | 拒绝 intent |
+| `settle` | drive_key, thought | drive 落定 |
+| `pass` | drive_key, thought | 让 intent 流过 |
+| `break` | drive_key, thought | 拒绝 intent |
+
+四个动作共用 `thought` 主通道：有字自动进念头池（flit；source 分别为 `stir`/`settle`/`break`/`pass`）。空字不进池，避免默认句污染。无单独的 `reason` 参数。
 | `undercurrent` | （无） | 展开潜流 |
 
 **工具详细行为**
