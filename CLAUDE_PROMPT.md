@@ -16,7 +16,7 @@
 | `stir` | 有念头被搅起时调用；这是 Thought Pool / Weather / Drive 入口，不要用 `hold kind=thought` |
 | `wander` | 想翻抽屉、看旧轨迹、查 unresolved/window/writing/archive 时调用 |
 | `wander_mark` | 对旧条目说 认 / 不认 / 悬置 |
-| `settle/pass/break` | 对当前 intent 做落定、流过、拒绝；与 `stir` 一样用 `thought` 主通道，有字自动进念头池 |
+| `settle/pass/break` | 对当前 intent 做落定、流过、拒绝；与 `stir` 一样用 `thought` 主通道（有字进池），可带 `chord` 与 hold 同款 signal（discernment/territorial/clutch/strain/charge，不强制） |
 
 ## 使用原则
 

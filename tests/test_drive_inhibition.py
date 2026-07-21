@@ -585,4 +585,54 @@ def test_drive_tool_has_no_reason_param():
     )
     arg_names = [arg.arg for arg in drive_node.args.args]
     assert "thought" in arg_names
+    assert "chord" in arg_names
+    assert "discernment" in arg_names
+    assert "territorial" in arg_names
+    assert "clutch" in arg_names
+    assert "strain" in arg_names
+    assert "charge" in arg_names
     assert "reason" not in arg_names
+
+
+def test_settle_chord_applies_thought_echo(tmp_path, monkeypatch):
+    """settle 带 chord 应写入 Thought Chord Echo，不只 stir 能染。"""
+    pytest.importorskip("mcp.server.fastmcp")
+    import server
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    monkeypatch.setattr(server, "_desire", engine)
+
+    result = server.settle(
+        "curiosity",
+        thought="接住了，门还留一条缝",
+        chord="Am7",
+    )
+
+    assert result.get("thought_pooled") is True
+    assert result.get("chord_echo") is True
+    weather = engine.weather.load(decay=False)
+    active = str(weather.get("active_chord") or "")
+    assert "Am7" in active or active.endswith("Am7") or weather.get("chord_impulses")
+
+
+def test_break_discernment_signal_without_autofill(tmp_path, monkeypatch):
+    """break 可选手感；写了 discernment 才走 signal weather，不自动填。"""
+    pytest.importorskip("mcp.server.fastmcp")
+    import server
+
+    engine = DesireEngine(db_path=str(tmp_path / "desire.db"))
+    monkeypatch.setattr(server, "_desire", engine)
+
+    bare = server.break_tool("attachment", thought="不想接")
+    assert bare.get("thought_pooled") is True
+    assert bare.get("signal_weather") is not True
+
+    with_signal = server.break_tool(
+        "attachment",
+        thought="这句不像我，先不接",
+        discernment="high",
+        chord="Em7",
+    )
+    assert with_signal.get("thought_pooled") is True
+    assert with_signal.get("chord_echo") is True
+    assert with_signal.get("signal_weather") is True

@@ -79,12 +79,17 @@
 | `hold` | content, kind, tags, importance, pinned, feel, source_bucket, valence, arousal, chord, domain, signal, created_at | 存储沉淀 |
 | `wander` | mode, query, limit | 抽屉漫游 |
 | `wander_mark` | bucket_id, mark, note | 叠加批注 |
-| `stir` | drive_key, delta, thought, chord | 念头/天气入口 |
-| `settle` | drive_key, thought | drive 落定 |
-| `pass` | drive_key, thought | 让 intent 流过 |
-| `break` | drive_key, thought | 拒绝 intent |
+| `stir` | drive_key, delta, thought, chord, signals | 抬 drive + 念头/天气 |
+| `settle` | drive_key, thought, chord, signals | drive 落定 |
+| `pass` | drive_key, thought, chord, signals | 让 intent 流过 |
+| `break` | drive_key, thought, chord, signals | 拒绝 intent |
 
-四个动作共用 `thought` 主通道：有字自动进念头池（flit；source 分别为 `stir`/`settle`/`break`/`pass`）。空字不进池，避免默认句污染。无单独的 `reason` 参数。
+四个动作共用：
+
+- `thought` 主通道：有字自动进念头池（flit；source=`stir`/`settle`/`break`/`pass`）
+- `chord`：Thought Chord Echo，染 weather residue（与 hold 同层，不强制）
+- `discernment/territorial/clutch/strain/charge`：可选手感，语义对齐 hold；有感觉就写。break 常是 discernment，但不自动填
+- 手势（pulse/satisfy/refuse/pass）负责主 Drive 变化；signal 事件避免把手势 drive 再猛推一遍
 | `undercurrent` | （无） | 展开潜流 |
 
 **工具详细行为**

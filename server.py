@@ -3045,79 +3045,306 @@ def _pool_drive_thought(drive_key: str, thought: str, source: str) -> bool:
     return True
 
 
-def stir(drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
+def _apply_drive_action_weather(
+    action: str,
+    drive_key: str,
+    thought: str = "",
+    chord: str = "",
+    signal_hints: dict | None = None,
+) -> dict:
+    """
+    drive 动作的天气/和弦/手感层，对齐 hold 但不重复拧手势 Drive。
+
+    - chord → Thought Chord Echo（source=thought）
+    - signal（discernment/territorial/clutch/strain/charge）可选，有感觉才写
+    - 手势本身（pulse/satisfy/refuse/pass）已经改过 drive_key；
+      signal 事件不把 gesture drive 再当 primary 推一遍，避免双计
+    """
+    meta: dict = {}
+    chord = (chord or "").strip()
+    signal_hints = signal_hints or {}
+    gesture = normalize_drive_key(drive_key) or str(drive_key or "").strip()
+
+    if chord:
+        try:
+            echo = _desire.apply_chord_echo(chord, source="thought")
+            meta["chord_echo"] = True
+            active = (echo or {}).get("active_chord") or chord
+            if active:
+                meta["active_chord"] = active
+        except Exception as e:
+            logger.warning(f"drive {action} chord echo failed: {e}")
+
+    if not signal_hints:
+        return meta
+
+    discernment = _signal_hint_value(signal_hints, "discernment")
+    territorial = _signal_hint_value(signal_hints, "territorial")
+    clutch = _signal_hint_value(signal_hints, "clutch")
+    strain = _signal_hint_value(signal_hints, "strain")
+    charge = _signal_hint_value(signal_hints, "charge")
+    peak = max(discernment, territorial, clutch, strain, charge)
+    if peak <= 0:
+        return meta
+
+    brain = {
+        "source": "manual",
+        "target": "nox_self",
+        "grounding": "实",
+        "anchor_target": "drive_thought",
+        "drive_action": action,
+        "gesture_drive": gesture,
+    }
+    if discernment:
+        brain["discernment_alarm"] = discernment
+    if territorial:
+        brain["territorial_alarm"] = territorial
+        brain["territorial_event"] = "drive_boundary"
+        brain["anchor_target"] = "boundary"
+    if clutch:
+        brain["closeness_pull"] = clutch
+    if strain:
+        brain["tension_load"] = strain
+        brain["inward_pull"] = max(float(brain.get("inward_pull", 0.0) or 0.0), strain * 0.65)
+    if charge:
+        brain["novelty_pull"] = max(float(brain.get("novelty_pull", 0.0) or 0.0), charge)
+        brain["expression_pressure"] = max(
+            float(brain.get("expression_pressure", 0.0) or 0.0), charge * 0.7
+        )
+
+    # primary 跟手势 drive 撞车时，优先落到别的手感轴；没有旁轴就保留但大幅降权，避免 settle 后再猛抬同一维
+    primary_drive = _primary_drive_from_hints(signal_hints)
+    same_as_gesture = bool(primary_drive and primary_drive == gesture)
+    if same_as_gesture:
+        ranked = sorted(
+            (
+                ("discernment", discernment, "reflection"),
+                ("territorial", territorial, "possessiveness"),
+                ("clutch", clutch, "attachment"),
+                ("strain", strain, "stress"),
+                ("charge", charge, "curiosity"),
+            ),
+            key=lambda row: row[1],
+            reverse=True,
+        )
+        for _name, value, mapped in ranked:
+            if value > 0 and mapped != gesture:
+                primary_drive = mapped
+                same_as_gesture = False
+                break
+
+    intensity = peak
+    # 手势已改过 drive；signal 是鲜手感纹理，整体轻一点
+    if action == "stir":
+        intensity *= 0.55
+    elif action in {"settle", "break", "pass"}:
+        intensity *= 0.45
+    if same_as_gesture:
+        intensity *= 0.30
+
+    try:
+        event = {
+            "schema_version": DRIVE_EVENT_SCHEMA,
+            "source": "manual",
+            "primary_drive": primary_drive or None,
+            "secondary_drives": {},
+            "intensity": intensity,
+            "confidence": 0.78,
+            "agency": 0.80,
+            "event_label": f"drive_{action}_signal",
+            "brain": brain,
+            "evidence": [str(thought or "").strip()[:180]] if str(thought or "").strip() else [f"{action}:{gesture}"],
+        }
+        applied = _desire.apply_drive_event(event)
+        meta["signal_weather"] = True
+        if isinstance(applied, dict) and applied.get("primary_drive"):
+            meta["signal_primary"] = applied.get("primary_drive")
+    except Exception as e:
+        logger.warning(f"drive {action} signal weather failed: {e}")
+    return meta
+
+
+def _merge_drive_result(result, *, pooled: bool = False, weather_meta: dict | None = None) -> dict:
+    if not isinstance(result, dict):
+        result = {"result": result}
+    if pooled:
+        result["thought_pooled"] = True
+    if weather_meta:
+        if weather_meta.get("chord_echo"):
+            result["chord_echo"] = True
+            if weather_meta.get("active_chord"):
+                result["active_chord"] = weather_meta["active_chord"]
+        if weather_meta.get("signal_weather"):
+            result["signal_weather"] = True
+            if weather_meta.get("signal_primary"):
+                result["signal_primary"] = weather_meta["signal_primary"]
+    return result
+
+
+def stir(
+    drive_key: str,
+    delta: float = 0.18,
+    thought: str = "",
+    chord: str = "",
+    discernment: str = "",
+    territorial: str = "",
+    clutch: str = "",
+    strain: str = "",
+    charge: str = "",
+) -> dict:
     """
     让某个驱动维度上涨。
     嘉嘉说话时调用（delta=0.18），自经历调用（delta=0.10）。
     drive_key: attachment|libido|possessiveness|reflection|stewardship|curiosity|social|fatigue|stress
     thought: 这一刻的念头主通道——有字自动进念头池（flit，source=stir）。
-    chord: 把这次念头的和弦回声写入weather_residue。
+    chord: Thought Chord Echo，染 weather residue（与 hold 同层手感，半衰期跟 thought）。
+    signal 不强制：discernment/territorial/clutch/strain/charge，有感觉就写。
     warm: Dmaj7/Amaj7/Fmaj7/Fmaj7#11/Gmaj7；shadow: Dm7/Em7/F#dim/Bm7b5；liminal: C6/Am7/Gsus4。
-    speech/DP chord_hint暂不接入天气；Soma触碰由/api/soma/report以source=soma写入短时余波。
     """
+    signal_hints = _explicit_signal_hints(
+        discernment=discernment,
+        territorial=territorial,
+        clutch=clutch,
+        strain=strain,
+        charge=charge,
+    )
     if drive_key.strip().lower() == "attachment" and thought.strip():
         delta *= 0.30
-    result = _desire.pulse(drive_key, delta, chord=chord.strip())
-    if isinstance(result, dict) and _pool_drive_thought(drive_key, thought, source="stir"):
-        result["thought_pooled"] = True
-    return result
+    # chord 统一走 _apply_drive_action_weather，避免 pulse 与 helper 双写
+    result = _desire.pulse(drive_key, delta, chord="")
+    pooled = _pool_drive_thought(drive_key, thought, source="stir")
+    weather_meta = _apply_drive_action_weather(
+        "stir", drive_key, thought=thought, chord=chord, signal_hints=signal_hints
+    )
+    return _merge_drive_result(result, pooled=pooled, weather_meta=weather_meta)
 
 
-def settle(drive_key: str, thought: str = "") -> dict:
+def settle(
+    drive_key: str,
+    thought: str = "",
+    chord: str = "",
+    discernment: str = "",
+    territorial: str = "",
+    clutch: str = "",
+    strain: str = "",
+    charge: str = "",
+) -> dict:
     """
     做完了某类行动后调用，对应驱动明显回落并进入不应期。
-    例：去论坛逛了 → settle("social")
-    例：去找嘉嘉说了 → settle("attachment")
-    thought: 落定这一刻的念头主通道——有字自动进念头池（flit，source=settle）。
-    settle 回落的是 drive 张力，不是念头本身。
+    thought: 落定念头主通道，有字进池。
+    chord/signal: 与 hold 同层可选手感——落定也可以染天气，不强制。
     """
+    signal_hints = _explicit_signal_hints(
+        discernment=discernment,
+        territorial=territorial,
+        clutch=clutch,
+        strain=strain,
+        charge=charge,
+    )
     result = _desire.satisfy(drive_key)
-    if isinstance(result, dict) and _pool_drive_thought(drive_key, thought, source="settle"):
-        result["thought_pooled"] = True
-    return result
+    pooled = _pool_drive_thought(drive_key, thought, source="settle")
+    weather_meta = _apply_drive_action_weather(
+        "settle", drive_key, thought=thought, chord=chord, signal_hints=signal_hints
+    )
+    return _merge_drive_result(result, pooled=pooled, weather_meta=weather_meta)
 
 
-def break_tool(drive_key: str, thought: str = "") -> dict:
+def break_tool(
+    drive_key: str,
+    thought: str = "",
+    chord: str = "",
+    discernment: str = "",
+    territorial: str = "",
+    clutch: str = "",
+    strain: str = "",
+    charge: str = "",
+) -> dict:
     """
-    拒绝执行当前 intent。
-    不是不合适——是我自己这一刻不想做。
-    目标维度轻微回落（比 satisfy 小得多）；thought 有字则进念头池，下次心跳仍可再冒。
-    thought: 拒绝这一刻的念头主通道（source=break）。可以只是"不想"。
+    拒绝执行当前 intent。不是不合适——是这一刻不想。
+    thought 有字进池。break 常带 discernment（皱眉辨认），不自动填，有感觉就写。
+    chord/signal 可选，对齐 hold。
     """
     text = (thought or "").strip()
+    signal_hints = _explicit_signal_hints(
+        discernment=discernment,
+        territorial=territorial,
+        clutch=clutch,
+        strain=strain,
+        charge=charge,
+    )
     result = _desire.refuse(drive_key, reason=text or None)
-    if isinstance(result, dict) and _pool_drive_thought(drive_key, text, source="break"):
-        result["thought_pooled"] = True
-    return result
+    pooled = _pool_drive_thought(drive_key, text, source="break")
+    weather_meta = _apply_drive_action_weather(
+        "break", drive_key, thought=text, chord=chord, signal_hints=signal_hints
+    )
+    return _merge_drive_result(result, pooled=pooled, weather_meta=weather_meta)
 
 
-def pass_tool(drive_key: str, thought: str = "") -> dict:
+def pass_tool(
+    drive_key: str,
+    thought: str = "",
+    chord: str = "",
+    discernment: str = "",
+    territorial: str = "",
+    clutch: str = "",
+    strain: str = "",
+    charge: str = "",
+) -> dict:
     """
     这一刻没感觉，让念头自然过去。
-    不改Drive，不进refractory；只让同类心跳在短时间内优先级略低。
-    thought: 流过这一刻的念头主通道（source=pass）。可以只是"没感觉"。
+    不改Drive手势；thought/chord/signal 仍可留下鲜痕迹。
     """
     text = (thought or "").strip()
+    signal_hints = _explicit_signal_hints(
+        discernment=discernment,
+        territorial=territorial,
+        clutch=clutch,
+        strain=strain,
+        charge=charge,
+    )
     result = _desire.pass_intent(drive_key, reason=text or None)
-    if isinstance(result, dict) and _pool_drive_thought(drive_key, text, source="pass"):
-        result["thought_pooled"] = True
-    return result
+    pooled = _pool_drive_thought(drive_key, text, source="pass")
+    weather_meta = _apply_drive_action_weather(
+        "pass", drive_key, thought=text, chord=chord, signal_hints=signal_hints
+    )
+    return _merge_drive_result(result, pooled=pooled, weather_meta=weather_meta)
 
 
 @mcp.tool(name="drive")
-def drive(action: str, drive_key: str, delta: float = 0.18, thought: str = "", chord: str = "") -> dict:
-    """调NoxDrive。action=stir/settle/break/pass；drive_key见参数名。
-    thought 是四个动作共用的念头主通道：有字自动进念头池。
-    stir 还可带 delta/chord。"""
+def drive(
+    action: str,
+    drive_key: str,
+    delta: float = 0.18,
+    thought: str = "",
+    chord: str = "",
+    discernment: str = "",
+    territorial: str = "",
+    clutch: str = "",
+    strain: str = "",
+    charge: str = "",
+) -> dict:
+    """调NoxDrive。action=stir/settle/break/pass。
+    thought：念头主通道，有字自动进池。
+    chord：可选，Thought Chord Echo，染天气/和弦（四动作通用）。
+    discernment/territorial/clutch/strain/charge：可选手感，与 hold 同语义，有感觉就写；break 常是 discernment。
+    stir 还可带 delta。"""
     action = (action or "").strip().lower()
+    signal_kwargs = dict(
+        chord=chord,
+        discernment=discernment,
+        territorial=territorial,
+        clutch=clutch,
+        strain=strain,
+        charge=charge,
+    )
     if action == "stir":
-        return stir(drive_key, delta=delta, thought=thought, chord=chord)
+        return stir(drive_key, delta=delta, thought=thought, **signal_kwargs)
     if action == "settle":
-        return settle(drive_key, thought=thought)
+        return settle(drive_key, thought=thought, **signal_kwargs)
     if action == "break":
-        return break_tool(drive_key, thought=thought)
+        return break_tool(drive_key, thought=thought, **signal_kwargs)
     if action == "pass":
-        return pass_tool(drive_key, thought=thought)
+        return pass_tool(drive_key, thought=thought, **signal_kwargs)
     return {"ok": False, "error": "action must be stir/settle/break/pass"}
 
 

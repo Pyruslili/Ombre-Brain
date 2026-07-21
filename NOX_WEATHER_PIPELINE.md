@@ -834,7 +834,19 @@ actor 权重：
 - Nox 自己在 drive 动作上留下的 `thought`（`stir` / `settle` / `break` / `pass`）
 - CLI 分析出的念头
 
-四个 drive 动作共用 `thought` 主通道：有字自动进池（source 分别为 `stir`/`settle`/`break`/`pass`）。空字不进，避免默认句污染。没有单独的 `reason`——拒绝/流过那句话本身就是念头。
+四个 drive 动作共用：
+
+- `thought` 主通道：有字自动进池（source 分别为 `stir`/`settle`/`break`/`pass`）
+- `chord`：Thought Chord Echo，染 Warmth/Shadow residue 与 Active Chord（与 hold 同层，半衰期走 thought 组件）
+- `discernment / territorial / clutch / strain / charge`：可选手感，语义对齐 hold；不强制。break 常带 discernment，但不自动填
+
+没有单独的 `reason`——拒绝/流过那句话本身就是念头。
+
+分层：
+
+- 手势（pulse / satisfy / refuse / pass）改主 Drive
+- chord / signal 改天气与手感纹理；signal 事件会避开把手势同一维再猛推一遍
+- 纯 thought 字不自动抽 chord（没有隐性 LLM 染色）
 
 `settle` 回落的是 drive 张力，不是念头本身。
 
