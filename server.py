@@ -498,9 +498,17 @@ def _weather_panel_from_state(state: dict, soma: dict | None = None) -> dict:
     drives = state.get("drives") if isinstance(state.get("drives"), dict) else {}
     intent = state.get("intent") if isinstance(state.get("intent"), dict) else {}
 
-    calculated_undertow, calculated_pressure, _ = _undertow_snapshot(state)
+    calculated_undertow, _, calculated_raw = _undertow_snapshot(state)
     undertow = str(weather.get("undertow") or calculated_undertow).strip()
-    undertow_value = _num(weather.get("undertow_value"), calculated_pressure)
+    activations = (
+        state.get("effective_activations")
+        or state.get("drive_activations")
+        or {}
+    )
+    undertow_value = _num(
+        activations.get(undertow) if isinstance(activations, dict) else None,
+        _num(weather.get("undertow_raw_value"), calculated_raw),
+    )
     warmth = _num(weather.get("warmth"), _num(effective.get("effective_PA"), _num(state.get("pa_na", {}).get("PA") if isinstance(state.get("pa_na"), dict) else None, 0.5)))
     shadow = abs(_num(weather.get("shadow"), _num(effective.get("effective_NA"), _num(state.get("pa_na", {}).get("NA") if isinstance(state.get("pa_na"), dict) else None, 0.2))))
     atmosphere = (
@@ -554,12 +562,8 @@ def _weather_panel_lines(panel: dict) -> list[str]:
         lines.append(f"Atmosphere：{panel['atmosphere']}")
     undertow = str(panel.get("undertow") or "").strip()
     if undertow:
-        # undertow_value is pressure (raw − baseline), not activation.
         tail = f" · {panel['chord']}" if panel.get("chord") else ""
-        lines.append(
-            f"Undertow：{undertow} {_num(panel.get('undertow_value')):+.2f}"
-            f" · top drive (pressure){tail}"
-        )
+        lines.append(f"Undertow：{undertow} {_num(panel.get('undertow_value')):.2f}{tail}")
     if panel.get("gravity"):
         lines.append(f"Gravity：{panel['gravity']}")
     if panel.get("mood_trace"):
@@ -2952,7 +2956,16 @@ async def breath() -> str:
             warmth = float(weather.get("effective_PA", 0.5))
             shadow = float(weather.get("effective_NA", 0.2))
 
-            top_drive, undertow_value, undertow_raw_value = _undertow_snapshot(_dstate)
+            top_drive, _, undertow_raw_value = _undertow_snapshot(_dstate)
+            _activations = (
+                _dstate.get("effective_activations")
+                or _dstate.get("drive_activations")
+                or {}
+            )
+            undertow_value = _num(
+                _activations.get(top_drive) if isinstance(_activations, dict) else None,
+                undertow_raw_value,
+            )
             mood_trace, mood_trace_born_at = _fresh_mood_trace({"thoughts": _thought_list})
             atmosphere = weather.get("climate_display") or climate_transition_display(weather.get("atmosphere"))
             gravity_decisive = _gravity_is_decisive(weather)
@@ -5767,7 +5780,16 @@ async def api_desire_state(request):
         shadow = float(weather.get("effective_NA", state.get("pa_na", {}).get("NA", 0.2)))
         latest_thought = _latest_thought_text(state)
         mood_trace, mood_trace_born_at = _fresh_mood_trace(state)
-        top_drive, undertow_value, undertow_raw_value = _undertow_snapshot(state)
+        top_drive, _, undertow_raw_value = _undertow_snapshot(state)
+        _activations = (
+            state.get("effective_activations")
+            or state.get("drive_activations")
+            or {}
+        )
+        undertow_value = _num(
+            _activations.get(top_drive) if isinstance(_activations, dict) else None,
+            undertow_raw_value,
+        )
         state["latest_thought"] = latest_thought
         state["mood_trace"] = mood_trace
         climate = str(weather.get("climate") or "Drift").strip()

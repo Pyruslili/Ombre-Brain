@@ -3324,7 +3324,7 @@ async function loadDesire(button) {
     const latestThought = thoughts.find(t => String(t.text || '').trim())?.text || d.latest_thought || '';
     const latestTrace = panel.mood_trace || latestThought || weather.mood_trace || d.mood_trace || '';
     const undertow = panel.undertow || weather.undertow || d.intent?.drive_key || topDrive[0] || '—';
-    const undertowValue = panel.undertow_value ?? weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
+    const undertowValue = effectiveActivations[undertow] ?? driveActivations[undertow] ?? panel.undertow_value ?? weather.undertow_value ?? d.drives?.[undertow] ?? topDrive[1] ?? 0;
     const warmthNow = finiteNumber(panel.warmth ?? weather.warmth ?? d.effective_pa_na?.effective_PA ?? d.pa_na?.PA);
     const warmthResidue = finiteNumber(weather.warmth_residue ?? d.weather_residue?.warmth);
     const warmthBase = finiteNumber(weather.base_warmth ?? d.weather_residue?.base_warmth ?? d.effective_pa_na?.base_PA, warmthNow - warmthResidue);
