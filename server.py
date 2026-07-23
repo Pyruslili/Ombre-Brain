@@ -4383,10 +4383,11 @@ async def _refresh_dream_cache(exclude_bucket_ids: set[str] | None = None):
         logger.error(f"Dream cache refresh failed to list buckets: {e}")
         return "", [], [], None
 
-    exclude_bucket_ids = exclude_bucket_ids or set()
+    # Dream Veil deliberately reuses the newest memory field even when Breath
+    # surfaced some of the same buckets. A dream is a recomposition of recent
+    # life, not a second diversity sampler.
     candidates = [
         b for b in (_breath_memory_candidates(all_buckets) + _breath_feel_candidates(all_buckets))
-        if b.get("id") not in exclude_bucket_ids
     ]
     candidates.sort(key=lambda b: b["metadata"].get("created", ""), reverse=True)
     recent_pool = candidates[:10]
@@ -4414,7 +4415,7 @@ async def _refresh_dream_cache(exclude_bucket_ids: set[str] | None = None):
         header = f"[{created}] {name}{resolved_tag}" if name else f"[{created}]{resolved_tag}"
         parts.append(
             f"{header}\n"
-            f"{readable[:500]}"
+            f"{readable}"
         )
 
     # --- DeepSeek dream generation ---
@@ -4463,6 +4464,31 @@ async def _refresh_dream_cache(exclude_bucket_ids: set[str] | None = None):
             pass
 
     return dream_text, parts, recent, all_buckets
+
+
+@mcp.custom_route("/api/dream/refresh", methods=["POST"])
+async def api_dream_refresh(request):
+    """Generate and persist the shared Dream Veil used by every Nox body."""
+    from starlette.responses import JSONResponse
+    err = _require_auth(request)
+    if err:
+        return err
+    dream_text, _, recent, all_buckets = await _refresh_dream_cache()
+    if all_buckets is None:
+        return JSONResponse(
+            {"ok": False, "error": "memory unavailable"},
+            status_code=503,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    return JSONResponse(
+        {
+            "ok": True,
+            "dream": dream_text,
+            "ts": time.time(),
+            "fragments": [b.get("id") for b in recent],
+        },
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 async def dream() -> str:
